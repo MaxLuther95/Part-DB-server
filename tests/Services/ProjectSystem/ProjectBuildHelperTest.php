@@ -24,10 +24,12 @@ namespace App\Tests\Services\ProjectSystem;
 
 use App\Entity\Parts\Part;
 use App\Entity\Parts\PartLot;
+use App\Entity\Parts\StorageLocation;
 use App\Entity\ProjectSystem\Project;
 use App\Entity\ProjectSystem\ProjectBOMEntry;
 use App\Entity\PriceInformations\Orderdetail;
 use App\Entity\PriceInformations\Pricedetail;
+use App\Helpers\Projects\ProjectBuildLocationFilter;
 use App\Services\ProjectSystem\ProjectBuildHelper;
 use Brick\Math\BigDecimal;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
@@ -75,6 +77,35 @@ final class ProjectBuildHelperTest extends WebTestCase
         $lot1->setAmount(0);
         //We have 5 parts in stock, so we can build 0 times the project (5 / 10 = 0.5)
         $this->assertSame(0, $this->service->getMaximumBuildableCountForBOMEntry($project_bom_entry));
+    }
+
+    public function testGetMaximumBuildableCountUsesLocationFilter(): void
+    {
+        $allowedLocation = new class extends StorageLocation {
+            public function getID(): ?int
+            {
+                return 10;
+            }
+        };
+        $blockedLocation = new class extends StorageLocation {
+            public function getID(): ?int
+            {
+                return 11;
+            }
+        };
+
+        $part = new Part();
+        $allowedLot = (new PartLot())->setStorageLocation($allowedLocation)->setAmount(20);
+        $blockedLot = (new PartLot())->setStorageLocation($blockedLocation)->setAmount(100);
+        $part->addPartLot($allowedLot);
+        $part->addPartLot($blockedLot);
+        $entry = (new ProjectBOMEntry())->setPart($part)->setQuantity(10);
+
+        $filter = new ProjectBuildLocationFilter(false, [10 => true], false);
+
+        self::assertSame(2, $this->service->getMaximumBuildableCountForBOMEntry($entry, $filter));
+        self::assertTrue($this->service->isBOMEntryBuildable($entry, 2, $filter));
+        self::assertFalse($this->service->isBOMEntryBuildable($entry, 3, $filter));
     }
 
     public function testGetMaximumBuildableCount(): void

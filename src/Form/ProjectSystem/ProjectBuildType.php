@@ -49,8 +49,10 @@ class ProjectBuildType extends AbstractType implements DataMapperInterface
     {
         $resolver->setDefaults([
             'compound' => true,
-            'data_class' => ProjectBuildRequest::class
+            'data_class' => ProjectBuildRequest::class,
+            'location_filter_valid' => true,
         ]);
+        $resolver->setAllowedTypes('location_filter_valid', 'bool');
     }
 
     public function buildForm(FormBuilderInterface $builder, array $options): void
@@ -59,7 +61,7 @@ class ProjectBuildType extends AbstractType implements DataMapperInterface
 
         $builder->add('submit', SubmitType::class, [
             'label' => 'project.build.btn_build',
-            'disabled' => !$this->security->isGranted('@parts_stock.withdraw'),
+            'disabled' => !$this->security->isGranted('@parts_stock.withdraw') || !$options['location_filter_valid'],
         ]);
 
         $builder->add('dontCheckQuantity', CheckboxType::class, [

@@ -9,7 +9,7 @@
 
 {% block card_content %}
     {% set bom_empty = project.bomEntries | length == 0 %}
-    {% set can_build = not bom_empty and buildHelper.projectBuildable(project, number_of_builds) %}
+    {% set can_build = not bom_empty and buildHelper.projectBuildable(project, number_of_builds, location_filter) %}
     {% import "components/projects.macro.html.twig" as project_macros %}
 
     {% if project.status is not empty and project.status != "in_production" %}
@@ -25,8 +25,8 @@
             <h5><i class="fa-solid fa-circle-exclamation fa-fw"></i> {% trans %}project.builds.build_not_possible{% endtrans %}</h5>
             <b>{% trans with {"%number_of_builds%": number_of_builds} %}project.builds.following_bom_entries_miss_instock_n{% endtrans %}</b>
             <ul>
-                {% for bom_entry in buildHelper.nonBuildableProjectBomEntries(project, number_of_builds) %}
-                    <li>{{ project_macros.project_bom_entry_with_missing_instock(bom_entry, number_of_builds) }}</li>
+                {% for bom_entry in buildHelper.nonBuildableProjectBomEntries(project, number_of_builds, location_filter) %}
+                    <li>{{ project_macros.project_bom_entry_with_missing_instock(bom_entry, number_of_builds, buildHelper.availableAmountForPart(bom_entry.part, location_filter)) }}</li>
                 {% endfor %}
             </ul>
         {% else %}
@@ -36,6 +36,12 @@
     </div>
 
     <p class="text-muted">{% trans %}project.build.help{% endtrans %}</p>
+
+    {% include 'projects/build/_location_filter.html.twig' %}
+
+    {% for filter_error in location_filter_errors %}
+        <div class="alert alert-danger" role="alert">{{ filter_error | trans }}</div>
+    {% endfor %}
 
     {% include 'projects/build/_form.html.twig' %}
 

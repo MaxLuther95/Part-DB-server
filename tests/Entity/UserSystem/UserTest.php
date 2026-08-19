@@ -120,6 +120,24 @@ final class UserTest extends TestCase
         $this->assertGreaterThan($old_value, $user->getTrustedTokenVersion());
     }
 
+    public function testProjectBuildLocationFilterCanBeStoredPerUser(): void
+    {
+        $user = new User();
+
+        self::assertSame([
+            'default' => true,
+            'unassigned' => false,
+            'locations' => [],
+        ], $user->getProjectBuildLocationFilterSettings());
+
+        $user->setProjectBuildLocationFilterSettings(false, null, [12 => true, 13 => false]);
+        self::assertSame([
+            'default' => false,
+            'unassigned' => null,
+            'locations' => [12 => true, 13 => false],
+        ], $user->getProjectBuildLocationFilterSettings());
+    }
+
     public function testIsWebauthnEnabled(): void
     {
         $user = new User();

@@ -14261,5 +14261,23 @@ Buerklin-API Authentication server:
         <target>OAuth2 client updated successfully!</target>
       </segment>
     </unit>
+    <unit id="buildLocEdit" name="project.build.location_filter.edit"><segment state="translated"><source>project.build.location_filter.edit</source><target>Edit storage location filter</target></segment></unit>
+    <unit id="buildLocSummary" name="project.build.location_filter.summary"><segment state="translated"><source>project.build.location_filter.summary</source><target>Default: %default%, %count% explicit rules</target></segment></unit>
+    <unit id="buildLocTitle" name="project.build.location_filter.title"><segment state="translated"><source>project.build.location_filter.title</source><target>Storage location filter</target></segment></unit>
+    <unit id="buildLocHelp" name="project.build.location_filter.help"><segment state="translated"><source>project.build.location_filter.help</source><target>Each storage location inherits its state from the closest configured parent. Explicit rules override inherited states.</target></segment></unit>
+    <unit id="buildLocDefault" name="project.build.location_filter.default"><segment state="translated"><source>project.build.location_filter.default</source><target>Global default</target></segment></unit>
+    <unit id="buildLocFilterSavedHelp" name="project.build.location_filter.filter_saved_help"><segment state="translated"><source>project.build.location_filter.filter_saved_help</source><target>The complete filter is saved to your user account when you apply it.</target></segment></unit>
+    <unit id="buildLocExpand" name="project.build.location_filter.expand_all"><segment state="translated"><source>project.build.location_filter.expand_all</source><target>Expand all</target></segment></unit>
+    <unit id="buildLocCollapse" name="project.build.location_filter.collapse_all"><segment state="translated"><source>project.build.location_filter.collapse_all</source><target>Collapse all</target></segment></unit>
+    <unit id="buildLocInvert" name="project.build.location_filter.invert"><segment state="translated"><source>project.build.location_filter.invert</source><target>Swap allowed/denied</target></segment></unit>
+    <unit id="buildLocUnassigned" name="project.build.location_filter.unassigned"><segment state="translated"><source>project.build.location_filter.unassigned</source><target>Without storage location</target></segment></unit>
+    <unit id="buildLocEmpty" name="project.build.location_filter.empty"><segment state="translated"><source>project.build.location_filter.empty</source><target>No storage locations available.</target></segment></unit>
+    <unit id="buildLocAllowed" name="project.build.location_filter.allowed"><segment state="translated"><source>project.build.location_filter.allowed</source><target>Allowed</target></segment></unit>
+    <unit id="buildLocDenied" name="project.build.location_filter.denied"><segment state="translated"><source>project.build.location_filter.denied</source><target>Not allowed</target></segment></unit>
+    <unit id="buildLocInherit" name="project.build.location_filter.inherit"><segment state="translated"><source>project.build.location_filter.inherit</source><target>Inherit</target></segment></unit>
+    <unit id="buildLocApply" name="project.build.location_filter.apply"><segment state="translated"><source>project.build.location_filter.apply</source><target>Apply</target></segment></unit>
+    <unit id="buildLocInvalidState" name="project.build.location_filter.invalid_state"><segment state="translated"><source>project.build.location_filter.invalid_state</source><target>The storage location filter contains an invalid state.</target></segment></unit>
+    <unit id="buildLocInvalidLocations" name="project.build.location_filter.invalid_locations"><segment state="translated"><source>project.build.location_filter.invalid_locations</source><target>The storage location filter has an invalid format.</target></segment></unit>
+    <unit id="buildLocInvalidLocation" name="project.build.location_filter.invalid_location"><segment state="translated"><source>project.build.location_filter.invalid_location</source><target>The storage location filter references an unknown or unavailable location.</target></segment></unit>
   </file>
 </xliff>

@@ -49,16 +49,23 @@ final class ProjectBuildRequest
 
     private bool $dont_check_quantity = false;
 
+    private readonly ?ProjectBuildLocationFilter $location_filter;
+
     /**
      * @param  Project  $project  The project that should be build
      * @param  int  $number_of_builds The number of builds that should be created
      */
-    public function __construct(private readonly Project $project, int $number_of_builds)
+    public function __construct(
+        private readonly Project $project,
+        int $number_of_builds,
+        ?ProjectBuildLocationFilter $locationFilter = null,
+    )
     {
         if ($number_of_builds < 1) {
             throw new \InvalidArgumentException('Number of builds must be at least 1!');
         }
         $this->number_of_builds = $number_of_builds;
+        $this->location_filter = $locationFilter;
 
         $this->initializeArray();
 
@@ -242,8 +249,12 @@ final class ProjectBuildRequest
             return null;
         }
 
-        //Filter out all lots which have unknown instock
-        return $projectBOMEntry->getPart()->getPartLots()->filter(fn (PartLot $lot) => !$lot->isInstockUnknown())->toArray();
+        // Unknown stock cannot be used for a build. If a location filter is
+        // active, excluded lots must not reach the form or validator.
+        return $projectBOMEntry->getPart()->getPartLots()->filter(
+            fn (PartLot $lot) => !$lot->isInstockUnknown()
+                && ($this->location_filter === null || $this->location_filter->isLotAllowed($lot))
+        )->toArray();
     }
 
     /**
@@ -288,6 +299,11 @@ final class ProjectBuildRequest
     public function getNumberOfBuilds(): int
     {
         return $this->number_of_builds;
+    }
+
+    public function getLocationFilter(): ?ProjectBuildLocationFilter
+    {
+        return $this->location_filter;
     }
 
     /**

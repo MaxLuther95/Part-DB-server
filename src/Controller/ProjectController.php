@@ -24,13 +24,17 @@ namespace App\Controller;
 
 use App\DataTables\ProjectBomEntriesDataTable;
 use App\Entity\Parts\Part;
+use App\Entity\Parts\StorageLocation;
 use App\Entity\ProjectSystem\Project;
 use App\Entity\ProjectSystem\ProjectBOMEntry;
+use App\Entity\UserSystem\User;
 use App\Form\ProjectSystem\ProjectAddPartsType;
 use App\Form\ProjectSystem\ProjectBuildType;
+use App\Helpers\Projects\ProjectBuildLocationFilter;
 use App\Helpers\Projects\ProjectBuildRequest;
 use App\Services\ImportExportSystem\BOMImporter;
 use App\Services\ProjectSystem\ProjectBuildHelper;
+use App\Services\Trees\NodesListBuilder;
 use App\Settings\BehaviorSettings\TableSettings;
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\ORM\EntityManagerInterface;
@@ -84,7 +88,13 @@ class ProjectController extends AbstractController
     }
 
     #[Route(path: '/{id}/build', name: 'project_build', requirements: ['id' => '\d+'])]
-    public function build(Project $project, Request $request, ProjectBuildHelper $buildHelper, EntityManagerInterface $entityManager): Response
+    public function build(
+        Project $project,
+        Request $request,
+        ProjectBuildHelper $buildHelper,
+        EntityManagerInterface $entityManager,
+        NodesListBuilder $nodesListBuilder,
+    ): Response
     {
         $this->denyAccessUnlessGranted('read', $project);
 
@@ -94,10 +104,64 @@ class ProjectController extends AbstractController
             $number_of_builds = 1;
         }
 
-        $projectBuildRequest = new ProjectBuildRequest($project, $number_of_builds);
-        $form = $this->createForm(ProjectBuildType::class, $projectBuildRequest);
+        /** @var StorageLocation[] $storageLocations */
+        $storageLocations = $this->isGranted('@storelocations.read')
+            ? $nodesListBuilder->typeToNodesList(StorageLocation::class)
+            : [];
+        $authenticatedUser = $this->getUser();
+        // Guest filters remain request-local. Only real user accounts have a
+        // personal filter configuration that can be loaded and persisted.
+        $user = $authenticatedUser instanceof User
+            && $authenticatedUser->getID() !== User::ID_ANONYMOUS
+                ? $authenticatedUser
+                : null;
+        $savedLocationFilter = $user instanceof User
+            ? $this->createSavedBuildLocationFilter($user, $storageLocations)
+            : new ProjectBuildLocationFilter();
+        [$locationFilter, $locationFilterErrors] = $this->createBuildLocationFilter(
+            $request,
+            $storageLocations,
+            $savedLocationFilter,
+        );
 
-        $form->handleRequest($request);
+        // Applying a valid filter stores the complete configuration for this
+        // user. It becomes the initial filter for their future builds.
+        if ($request->query->has('location_filter')
+            && $locationFilterErrors === []
+            && $user instanceof User
+        ) {
+            $storedFilter = $user->getProjectBuildLocationFilterSettings();
+            $appliedFilter = [
+                'default' => $locationFilter->isDefaultAllowed(),
+                'unassigned' => $locationFilter->getUnassignedAllowed(),
+                'locations' => $locationFilter->getExplicitStates(),
+            ];
+            if ($storedFilter !== $appliedFilter) {
+                $user->setProjectBuildLocationFilterSettings(
+                    $appliedFilter['default'],
+                    $appliedFilter['unassigned'],
+                    $appliedFilter['locations'],
+                );
+                $entityManager->flush();
+            }
+        }
+
+        $storageLocationTree = $this->createStorageLocationTree($storageLocations);
+
+        $projectBuildRequest = new ProjectBuildRequest($project, $number_of_builds, $locationFilter);
+        $form = $this->createForm(ProjectBuildType::class, $projectBuildRequest, [
+            'action' => $this->generateUrl('project_build', [
+                'id' => $project->getID(),
+                'n' => $number_of_builds,
+                'location_filter' => $locationFilter->toQueryParameters(),
+            ]),
+            'location_filter_valid' => $locationFilterErrors === [],
+        ]);
+
+        // Invalid location IDs or states must never fall through to a build.
+        if ($locationFilterErrors === []) {
+            $form->handleRequest($request);
+        }
         if ($form->isSubmitted()) {
             if ($form->isValid()) {
                 //Ensure that the user can withdraw stock from all parts
@@ -127,9 +191,171 @@ class ProjectController extends AbstractController
             'buildHelper' => $buildHelper,
             'project' => $project,
             'build_request' => $projectBuildRequest,
+            'location_filter' => $locationFilter,
+            'location_filter_errors' => $locationFilterErrors,
+            'storage_location_tree' => $storageLocationTree,
             'number_of_builds' => $number_of_builds,
             'form' => $form,
         ]);
+    }
+
+    /**
+     * @param StorageLocation[] $storageLocations
+     * @return array{ProjectBuildLocationFilter, list<string>}
+     */
+    private function createBuildLocationFilter(
+        Request $request,
+        array $storageLocations,
+        ProjectBuildLocationFilter $savedFilter,
+    ): array
+    {
+        $hasSubmittedFilter = $request->query->has('location_filter');
+        if (!$hasSubmittedFilter) {
+            return [$savedFilter, []];
+        }
+
+        $errors = [];
+        $rawFilter = $request->query->all()['location_filter'] ?? [];
+        if (!is_array($rawFilter)) {
+            $errors[] = 'project.build.location_filter.invalid_locations';
+            $rawFilter = [];
+        }
+        $raw = $rawFilter;
+
+        $parseState = static function (mixed $value, bool $allowInheritance) use (&$errors): ?bool {
+            if ($value === 'true') {
+                return true;
+            }
+            if ($value === 'false') {
+                return false;
+            }
+            if ($allowInheritance && in_array($value, ['indeterminate', 'null', ''], true)) {
+                return null;
+            }
+
+            $errors[] = 'project.build.location_filter.invalid_state';
+            return null;
+        };
+
+        $defaultAllowed = $parseState(
+            $raw['default'] ?? ($savedFilter->isDefaultAllowed() ? 'true' : 'false'),
+            false,
+        ) ?? $savedFilter->isDefaultAllowed();
+        $unassignedAllowed = $parseState(
+            $raw['unassigned'] ?? 'indeterminate',
+            true,
+        );
+
+        $knownIds = [];
+        foreach ($storageLocations as $storageLocation) {
+            if ($storageLocation->getID() !== null) {
+                $knownIds[$storageLocation->getID()] = true;
+            }
+        }
+
+        $explicitStates = [];
+        $rawLocations = $raw['locations'] ?? [];
+        if (!is_array($rawLocations)) {
+            $errors[] = 'project.build.location_filter.invalid_locations';
+            $rawLocations = [];
+        }
+
+        foreach ($rawLocations as $id => $rawState) {
+            if (!is_string($id) && !is_int($id)) {
+                $errors[] = 'project.build.location_filter.invalid_location';
+                continue;
+            }
+
+            $locationId = filter_var($id, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+            if ($locationId === false || !isset($knownIds[$locationId])) {
+                $errors[] = 'project.build.location_filter.invalid_location';
+                continue;
+            }
+
+            $state = $parseState($rawState, true);
+            if ($state !== null) {
+                $explicitStates[$locationId] = $state;
+            }
+        }
+
+        return [
+            new ProjectBuildLocationFilter($defaultAllowed, $explicitStates, $unassignedAllowed),
+            array_values(array_unique($errors)),
+        ];
+    }
+
+    /**
+     * Recreate the user's saved filter while silently dropping locations that
+     * have since been deleted or are no longer visible to the user.
+     *
+     * @param StorageLocation[] $storageLocations
+     */
+    private function createSavedBuildLocationFilter(User $user, array $storageLocations): ProjectBuildLocationFilter
+    {
+        $settings = $user->getProjectBuildLocationFilterSettings();
+        $knownIds = [];
+        foreach ($storageLocations as $storageLocation) {
+            if ($storageLocation->getID() !== null) {
+                $knownIds[$storageLocation->getID()] = true;
+            }
+        }
+
+        return new ProjectBuildLocationFilter(
+            $settings['default'],
+            array_intersect_key($settings['locations'], $knownIds),
+            $settings['unassigned'],
+        );
+    }
+
+    /**
+     * Build stable presentation metadata without relying on the entity's
+     * transient cached level value.
+     *
+     * @param StorageLocation[] $storageLocations
+     * @return list<array{location: StorageLocation, id: int, parent_id: int|null, level: int, has_children: bool}>
+     */
+    private function createStorageLocationTree(array $storageLocations): array
+    {
+        $knownIds = [];
+        $parentIds = [];
+
+        foreach ($storageLocations as $location) {
+            $id = $location->getID();
+            if ($id !== null) {
+                $knownIds[$id] = true;
+            }
+        }
+
+        foreach ($storageLocations as $location) {
+            $parentId = $location->getParent()?->getID();
+            if ($parentId !== null && isset($knownIds[$parentId])) {
+                $parentIds[$parentId] = true;
+            }
+        }
+
+        $tree = [];
+        foreach ($storageLocations as $location) {
+            $id = $location->getID();
+            if ($id === null) {
+                continue;
+            }
+
+            $pathIds = array_filter(
+                array_map(static fn (StorageLocation $element): ?int => $element->getID(), $location->getPathArray()),
+                static fn (?int $pathId): bool => $pathId !== null && isset($knownIds[$pathId]),
+            );
+            $parentId = $location->getParent()?->getID();
+
+            $tree[] = [
+                'location' => $location,
+                'id' => $id,
+                'parent_id' => $parentId !== null && isset($knownIds[$parentId]) ? $parentId : null,
+                'level' => max(0, count($pathIds) - 1),
+                'has_children' => isset($parentIds[$id]),
+            ];
+        }
+
+        return $tree;
     }
 
     #[Route(

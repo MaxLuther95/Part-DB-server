@@ -26,6 +26,7 @@ use App\Entity\Parts\Part;
 use App\Entity\ProjectSystem\Project;
 use App\Entity\ProjectSystem\ProjectBOMEntry;
 use App\Entity\PriceInformations\Currency;
+use App\Helpers\Projects\ProjectBuildLocationFilter;
 use App\Helpers\Projects\ProjectBuildRequest;
 use App\Services\Parts\PartLotWithdrawAddHelper;
 use App\Services\Parts\PricedetailHelper;
@@ -47,7 +48,10 @@ final readonly class ProjectBuildHelper
      * Returns the maximum buildable amount of the given BOM entry based on the stock of the used parts.
      * This function only works for BOM entries that are associated with a part.
      */
-    public function getMaximumBuildableCountForBOMEntry(ProjectBOMEntry $projectBOMEntry): int
+    public function getMaximumBuildableCountForBOMEntry(
+        ProjectBOMEntry $projectBOMEntry,
+        ?ProjectBuildLocationFilter $locationFilter = null,
+    ): int
     {
         $part = $projectBOMEntry->getPart();
 
@@ -59,7 +63,7 @@ final readonly class ProjectBuildHelper
             throw new \RuntimeException('The quantity of the BOM entry must be greater than 0!');
         }
 
-        $amount_sum = $part->getAmountSum();
+        $amount_sum = $this->getAvailableAmountForPart($part, $locationFilter);
 
         return (int) floor($amount_sum / $projectBOMEntry->getQuantity());
     }
@@ -67,7 +71,7 @@ final readonly class ProjectBuildHelper
     /**
      * Returns the maximum buildable amount of the given project, based on the stock of the used parts in the BOM.
      */
-    public function getMaximumBuildableCount(Project $project): int
+    public function getMaximumBuildableCount(Project $project, ?ProjectBuildLocationFilter $locationFilter = null): int
     {
         $bom_entries = $project->getBomEntries();
         if ($bom_entries->isEmpty()) {
@@ -80,7 +84,7 @@ final readonly class ProjectBuildHelper
                 continue;
             }
             //The maximum buildable count for the whole project is the minimum of all BOM entries
-            $maximum_buildable_count = min($maximum_buildable_count, $this->getMaximumBuildableCountForBOMEntry($bom_entry));
+            $maximum_buildable_count = min($maximum_buildable_count, $this->getMaximumBuildableCountForBOMEntry($bom_entry, $locationFilter));
         }
         return $maximum_buildable_count;
     }
@@ -91,9 +95,9 @@ final readonly class ProjectBuildHelper
      * @param  Project  $project
      * @return string
      */
-    public function getMaximumBuildableCountAsString(Project $project): string
+    public function getMaximumBuildableCountAsString(Project $project, ?ProjectBuildLocationFilter $locationFilter = null): string
     {
-        $max_count = $this->getMaximumBuildableCount($project);
+        $max_count = $this->getMaximumBuildableCount($project, $locationFilter);
         if ($max_count === PHP_INT_MAX) {
             return '∞';
         }
@@ -105,18 +109,18 @@ final readonly class ProjectBuildHelper
      * This means that the maximum buildable count is greater or equal than the requested $number_of_projects
      * @param int $number_of_builds
      */
-    public function isProjectBuildable(Project $project, int $number_of_builds = 1): bool
+    public function isProjectBuildable(Project $project, int $number_of_builds = 1, ?ProjectBuildLocationFilter $locationFilter = null): bool
     {
-        return $this->getMaximumBuildableCount($project) >= $number_of_builds;
+        return $this->getMaximumBuildableCount($project, $locationFilter) >= $number_of_builds;
     }
 
     /**
      * Check if the given BOM entry can be built with the current stock.
      * This means that the maximum buildable count is greater or equal than the requested $number_of_projects
      */
-    public function isBOMEntryBuildable(ProjectBOMEntry $bom_entry, int $number_of_builds = 1): bool
+    public function isBOMEntryBuildable(ProjectBOMEntry $bom_entry, int $number_of_builds = 1, ?ProjectBuildLocationFilter $locationFilter = null): bool
     {
-        return $this->getMaximumBuildableCountForBOMEntry($bom_entry) >= $number_of_builds;
+        return $this->getMaximumBuildableCountForBOMEntry($bom_entry, $locationFilter) >= $number_of_builds;
     }
 
     /**
@@ -125,7 +129,7 @@ final readonly class ProjectBuildHelper
      * @param  int  $number_of_builds How often should the project be build?
      * @return ProjectBOMEntry[]
      */
-    public function getNonBuildableProjectBomEntries(Project $project, int $number_of_builds = 1): array
+    public function getNonBuildableProjectBomEntries(Project $project, int $number_of_builds = 1, ?ProjectBuildLocationFilter $locationFilter = null): array
     {
         if ($number_of_builds < 1) {
             throw new \InvalidArgumentException('The number of builds must be greater than 0!');
@@ -141,7 +145,7 @@ final readonly class ProjectBuildHelper
                 continue;
             }
 
-            $amount_sum = $part->getAmountSum();
+            $amount_sum = $this->getAvailableAmountForPart($part, $locationFilter);
 
             if ($amount_sum < $bomEntry->getQuantity() * $number_of_builds) {
                 $non_buildable_entries[] = $bomEntry;
@@ -149,6 +153,23 @@ final readonly class ProjectBuildHelper
         }
 
         return $non_buildable_entries;
+    }
+
+    public function getAvailableAmountForPart(Part $part, ?ProjectBuildLocationFilter $locationFilter = null): float
+    {
+        if ($locationFilter === null) {
+            return $part->getAmountSum();
+        }
+
+        $amount = 0.0;
+        foreach ($part->getPartLots() as $lot) {
+            if ($lot->isInstockUnknown() || !$locationFilter->isLotAllowed($lot)) {
+                continue;
+            }
+            $amount += $lot->getAmount();
+        }
+
+        return $part->useFloatAmount() ? $amount : round($amount);
     }
 
     /**

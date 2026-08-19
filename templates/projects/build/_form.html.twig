@@ -18,7 +18,7 @@
     <tbody>
     {% for bom_entry in build_request.bomEntries %}
         {# 1st row basic infos about the BOM entry #}
-        <tr class="{% if bom_entry.part is null or buildHelper.bOMEntryBuildable(bom_entry, number_of_builds) %}table-primary{% else %}table-danger{% endif %}">
+        <tr class="{% if bom_entry.part is null or buildHelper.bOMEntryBuildable(bom_entry, number_of_builds, location_filter) %}table-primary{% else %}table-danger{% endif %}">
             <td style="width: 20px;">
                 <div class="form-check">
                     <input class="form-check-input" type="checkbox" value="" data-multicheck-name="lots_check" required>

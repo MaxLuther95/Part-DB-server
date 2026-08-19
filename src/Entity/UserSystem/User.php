@@ -266,6 +266,8 @@ class User extends AttachmentContainingDBElement implements UserInterface, HasPe
     #[ORM\Column(type: Types::JSON)]
     protected ?array $settings = [];
 
+    private const PROJECT_BUILD_LOCATION_FILTER_SETTING = 'project_build_location_filter';
+
     /**
      * @var Collection<int, UserAttachment>
      */
@@ -762,6 +764,48 @@ class User extends AttachmentContainingDBElement implements UserInterface, HasPe
     public function setTimezone(?string $timezone): self
     {
         $this->timezone = $timezone;
+
+        return $this;
+    }
+
+    /** @return array{default: bool, unassigned: bool|null, locations: array<int, bool>} */
+    public function getProjectBuildLocationFilterSettings(): array
+    {
+        $stored = $this->settings[self::PROJECT_BUILD_LOCATION_FILTER_SETTING] ?? [];
+        if (!is_array($stored)) {
+            $stored = [];
+        }
+
+        $default = $stored['default'] ?? true;
+        $unassigned = array_key_exists('unassigned', $stored) ? $stored['unassigned'] : false;
+        $locations = [];
+        foreach (($stored['locations'] ?? []) as $id => $allowed) {
+            $locationId = filter_var($id, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+            if ($locationId !== false && is_bool($allowed)) {
+                $locations[$locationId] = $allowed;
+            }
+        }
+
+        return [
+            'default' => is_bool($default) ? $default : true,
+            'unassigned' => is_bool($unassigned) || $unassigned === null ? $unassigned : false,
+            'locations' => $locations,
+        ];
+    }
+
+    /** @param array<int, bool> $locations */
+    public function setProjectBuildLocationFilterSettings(
+        bool $defaultAllowed,
+        ?bool $unassignedAllowed,
+        array $locations,
+    ): self
+    {
+        $this->settings ??= [];
+        $this->settings[self::PROJECT_BUILD_LOCATION_FILTER_SETTING] = [
+            'default' => $defaultAllowed,
+            'unassigned' => $unassignedAllowed,
+            'locations' => $locations,
+        ];
 
         return $this;
     }

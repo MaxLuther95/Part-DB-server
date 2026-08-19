@@ -25,8 +25,10 @@ namespace App\Tests\Helpers\Projects;
 use App\Entity\Parts\MeasurementUnit;
 use App\Entity\Parts\Part;
 use App\Entity\Parts\PartLot;
+use App\Entity\Parts\StorageLocation;
 use App\Entity\ProjectSystem\Project;
 use App\Entity\ProjectSystem\ProjectBOMEntry;
+use App\Helpers\Projects\ProjectBuildLocationFilter;
 use App\Helpers\Projects\ProjectBuildRequest;
 use PHPUnit\Framework\TestCase;
 
@@ -168,6 +170,33 @@ final class ProjectBuildRequestTest extends TestCase
         $this->assertEqualsWithDelta(5.0, $build_request->getWithdrawAmountSum($this->bom_entry1a), PHP_FLOAT_EPSILON);
         $build_request->setLotWithdrawAmount($this->lot2, 1.5);
         $this->assertEqualsWithDelta(1.5, $build_request->getWithdrawAmountSum($this->bom_entry1b), PHP_FLOAT_EPSILON);
+    }
+
+    public function testLocationFilterRestrictsLotsAndAutomaticWithdrawal(): void
+    {
+        $allowedLocation = new class extends StorageLocation {
+            public function getID(): ?int
+            {
+                return 10;
+            }
+        };
+        $blockedLocation = new class extends StorageLocation {
+            public function getID(): ?int
+            {
+                return 11;
+            }
+        };
+        $this->lot1a->setStorageLocation($allowedLocation);
+        $this->lot1b->setStorageLocation($blockedLocation);
+
+        $filter = new ProjectBuildLocationFilter(false, [10 => true], false);
+        $request = new ProjectBuildRequest($this->project1, 5, $filter);
+
+        self::assertSame([$this->lot1a], $request->getPartLotsForBOMEntry($this->bom_entry1a));
+        self::assertEqualsWithDelta(10.0, $request->getLotWithdrawAmount($this->lot1a), PHP_FLOAT_EPSILON);
+
+        $this->expectException(\InvalidArgumentException::class);
+        $request->getLotWithdrawAmount($this->lot1b);
     }
 
 

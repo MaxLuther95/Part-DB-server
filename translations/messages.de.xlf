@@ -14259,5 +14259,23 @@ Buerklin-API-Authentication-Server:
         <target>OAuth2-Client erfolgreich aktualisiert!</target>
       </segment>
     </unit>
+    <unit id="buildLocEdit" name="project.build.location_filter.edit"><segment state="translated"><source>project.build.location_filter.edit</source><target>Lagerortfilter bearbeiten</target></segment></unit>
+    <unit id="buildLocSummary" name="project.build.location_filter.summary"><segment state="translated"><source>project.build.location_filter.summary</source><target>Standard: %default%, %count% explizite Regeln</target></segment></unit>
+    <unit id="buildLocTitle" name="project.build.location_filter.title"><segment state="translated"><source>project.build.location_filter.title</source><target>Lagerortfilter</target></segment></unit>
+    <unit id="buildLocHelp" name="project.build.location_filter.help"><segment state="translated"><source>project.build.location_filter.help</source><target>Jeder Lagerort erbt seinen Zustand von der nächsten konfigurierten übergeordneten Ebene. Explizite Regeln überschreiben geerbte Zustände.</target></segment></unit>
+    <unit id="buildLocDefault" name="project.build.location_filter.default"><segment state="translated"><source>project.build.location_filter.default</source><target>Globaler Standard</target></segment></unit>
+    <unit id="buildLocFilterSavedHelp" name="project.build.location_filter.filter_saved_help"><segment state="translated"><source>project.build.location_filter.filter_saved_help</source><target>Der vollständige Filter wird beim Übernehmen für dein Benutzerkonto gespeichert.</target></segment></unit>
+    <unit id="buildLocExpand" name="project.build.location_filter.expand_all"><segment state="translated"><source>project.build.location_filter.expand_all</source><target>Alle aufklappen</target></segment></unit>
+    <unit id="buildLocCollapse" name="project.build.location_filter.collapse_all"><segment state="translated"><source>project.build.location_filter.collapse_all</source><target>Alle einklappen</target></segment></unit>
+    <unit id="buildLocInvert" name="project.build.location_filter.invert"><segment state="translated"><source>project.build.location_filter.invert</source><target>Erlaubt/Nicht erlaubt tauschen</target></segment></unit>
+    <unit id="buildLocUnassigned" name="project.build.location_filter.unassigned"><segment state="translated"><source>project.build.location_filter.unassigned</source><target>Ohne Lagerort</target></segment></unit>
+    <unit id="buildLocEmpty" name="project.build.location_filter.empty"><segment state="translated"><source>project.build.location_filter.empty</source><target>Keine Lagerorte vorhanden.</target></segment></unit>
+    <unit id="buildLocAllowed" name="project.build.location_filter.allowed"><segment state="translated"><source>project.build.location_filter.allowed</source><target>Erlaubt</target></segment></unit>
+    <unit id="buildLocDenied" name="project.build.location_filter.denied"><segment state="translated"><source>project.build.location_filter.denied</source><target>Nicht erlaubt</target></segment></unit>
+    <unit id="buildLocInherit" name="project.build.location_filter.inherit"><segment state="translated"><source>project.build.location_filter.inherit</source><target>Erben</target></segment></unit>
+    <unit id="buildLocApply" name="project.build.location_filter.apply"><segment state="translated"><source>project.build.location_filter.apply</source><target>Übernehmen</target></segment></unit>
+    <unit id="buildLocInvalidState" name="project.build.location_filter.invalid_state"><segment state="translated"><source>project.build.location_filter.invalid_state</source><target>Der Lagerortfilter enthält einen ungültigen Zustand.</target></segment></unit>
+    <unit id="buildLocInvalidLocations" name="project.build.location_filter.invalid_locations"><segment state="translated"><source>project.build.location_filter.invalid_locations</source><target>Der Lagerortfilter hat ein ungültiges Format.</target></segment></unit>
+    <unit id="buildLocInvalidLocation" name="project.build.location_filter.invalid_location"><segment state="translated"><source>project.build.location_filter.invalid_location</source><target>Der Lagerortfilter verweist auf einen unbekannten oder nicht verfügbaren Lagerort.</target></segment></unit>
   </file>
 </xliff>
