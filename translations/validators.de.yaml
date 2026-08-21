@@ -1,0 +1,25 @@
+production:
+  customer:
+    number:
+      unique: Diese Kundennummer ist bereits vergeben.
+  customer_project:
+    number:
+      unique: Diese Projektnummer ist bereits vergeben.
+  build_instance:
+    template_required: Bitte eine Systemvorlage oder ein Part-DB-Bauprojekt auswählen.
+    serial_number:
+      unique: Diese Seriennummer ist bereits vergeben.
+  project_position:
+    template_required: Bitte eine Systemvorlage oder ein Part-DB-Bauprojekt auswählen.
+    name:
+      unique: Eine Projektposition mit dieser Bezeichnung existiert bereits.
+  system_template:
+    base_project:
+      unique: Für dieses Part-DB-Projekt existiert bereits eine Systemvorlage.
+    slot:
+      position:
+        unique: Diese Positionsnummer ist in der Systemvorlage bereits vergeben.
+      quantity:
+        invalid: Die Höchstmenge darf nicht kleiner als die Mindestmenge sein.
+      allowed_content:
+        required: Wählen Sie mindestens eine erlaubte Systemvorlage, ein Part-DB-Projekt oder ein Lagerteil.

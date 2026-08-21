@@ -1,0 +1,210 @@
+production:
+  dashboard:
+    title: Production
+    intro: Manage customers, projects and physical build instances separately from the normal parts stock.
+  common:
+    name: Name
+    description: Description
+    status: Status
+    yes: Yes
+    no: No
+    empty: No entries yet.
+    created_at: Created at
+    active: Active
+    inactive: Inactive
+  action:
+    save: Save
+    cancel: Cancel
+    edit: Edit
+    show_all: Show all
+  flash:
+    saved: The changes were saved.
+  navigation:
+    customers_projects: Customers & projects
+    build: Build
+    templates: System templates
+  build:
+    intro: Continue planned, active and paused build instances here.
+    empty: There are currently no build instances in progress.
+  template:
+    intro: These existing Part-DB projects are used directly as technical build templates and are not duplicated.
+    new: Create project template
+  customer:
+    label: Customer
+    plural: Customers
+    number: Customer number
+    name: Customer name
+    active: Active
+    new: Create customer
+    edit: Edit customer
+  customer_project:
+    label: Project
+    plural: Projects
+    number: Project number
+    new: Create project
+    edit: Edit project
+    status:
+      planning: Planning
+      commissioned: Commissioned
+      in_production: In production
+      completed: Completed
+      delivered: Delivered
+      cancelled: Cancelled
+  project:
+    no_customer: No customer assigned
+    cancelled_hint: This project has been cancelled.
+    build_instances: Build instances in production
+  project_position:
+    label: Project position
+    plural: Project positions
+    position: Position
+    quantity: Quantity
+    new: Add position
+    add_system: Add system / build project
+    edit: Edit project position
+    delete: Delete project position
+    delete_confirm: 'Really delete project position “%name%” including its child configuration?'
+    deleted: The project position was deleted.
+    delete_has_builds: The project position cannot be deleted because it or a child position already has build instances.
+    delete_has_material: The project position cannot be deleted while material has already been allocated to the project.
+    configure: Configure system
+    build: Build
+    build_title: Prepare build
+    build_intro: The location-aware build workflow for this project position will be prepared here.
+    build_notice: This preparation page does not withdraw material or create a build instance yet.
+    build_steps:
+      serial: Set the serial number
+      site: Select the production site
+      material: Review the BOM and available lots at that site
+      confirm: Allocate material and start the build instance
+    configure_intro: Select one allowed content for every predefined slot.
+    systems: Ordered systems
+    content: System / content
+    selection: System or build project
+    selection_placeholder: Select a template
+    selection_help: A system template contains fixed configurable slots. A standalone build project directly uses the BOM of the selected Part-DB project.
+    selection_group:
+      system: System templates
+      project: Standalone build projects
+    name:
+      help: Optional; the template or build project name is used when empty.
+    template_required: Select a system template or standalone Part-DB project.
+    slot:
+      empty: Empty
+      range: 'Allowed quantity: %min% to %max%.'
+      required: This required slot must be filled.
+      in_use: The existing assignment already has build instances or child positions and cannot be replaced.
+      quantity_invalid: The quantity is outside the allowed range for this slot.
+    empty: No positions have been added to this project yet.
+  system_template:
+    label: System template
+    plural: System templates
+    new: Create system template
+    edit: Edit system template
+    intro: System templates define fixed slots and allowed content. Their own fixed BOM is optional.
+    empty: No system templates yet.
+    name: Name
+    base_project: Part-DB base project
+    base_project_none: No separate fixed BOM
+    base_project_help: Optional. This project's BOM contains only the enclosure and components that are always required regardless of configuration.
+    active: Active
+    slot:
+      plural: Predefined slots
+      new: Add slot
+      edit: Edit slot
+      empty: This template has no configurable slots yet.
+      position: Position
+      name: Slot name
+      quantity: Allowed quantity
+      min_quantity: Minimum quantity
+      max_quantity: Maximum quantity
+      allowed_content: Allowed systems, build projects and inventory parts
+      allowed_system_templates: Allowed system templates
+      allowed_system_templates_help: System templates are nested directly; no artificial Part-DB project assignment is needed.
+      allowed_projects: Allowed self-built projects
+      allowed_projects_help: Build instances with individual serial numbers are created from these Part-DB projects.
+      allowed_parts: Allowed purchased inventory parts
+      allowed_parts_help: These items are supplied from normal Part-DB inventory.
+      required: Required
+      optional: Optional
+      serial_tracking: Record manufacturer serial number on withdrawal
+      serial_tracking_help: For purchased individual devices such as Electronics-18 that are managed as inventory parts.
+      serial_tracking_short: Serial number
+  accessory:
+    plural: Additional accessories
+    new: Add inventory part
+    edit: Edit accessory
+    empty: No additional accessories entered.
+    part: Part-DB inventory part
+    quantity: Quantity
+    available: available
+    note: Note
+    inventory_part: Inventory part
+  material_plan:
+    label: Material availability
+    complete: All parts available
+    incomplete: Missing parts
+    not_configured: Not configured yet
+    empty: The selected systems and build projects do not require inventory parts yet.
+    part: Part
+    required: Required
+    allocated: In project stock
+    remaining: Remaining to provide
+    available: Freely available
+    missing: Missing
+    allocate: Provide material
+    provide: Provide
+    project_stock: Project stock
+    source_lot: Source lot
+    choose_lot: Select a lot
+    allocate_quantity: Quantity
+    serial_number: Manufacturer serial number
+    serial_number_help: Optional; an existing lot serial number is used automatically.
+    serial_number_required_help: Required when the selected lot does not have a serial number stored as its barcode.
+    serial_required_notice: This part requires serial-number tracking according to the system template.
+    production_only: Material can only be provided when the project is in production.
+    invalid_lot: The selected lot does not belong to this part.
+    invalid_quantity: Quantity exceeds available stock or remaining project demand.
+    serial_number_required: Enter the manufacturer serial number or select a lot with a stored serial number.
+    allocation_success: Material was moved into project stock.
+  history:
+    label: History
+    empty: This project has no history entries yet.
+    system: System
+    event:
+      project_created: Project created
+      project_updated: Project details changed
+      position_created: Project position created
+      position_updated: Project position updated
+      position_deleted: Project position deleted
+      position_configured: System configuration changed
+      accessory_created: Accessory added
+      accessory_updated: Accessory updated
+      material_allocated: Material moved into project stock
+      build_created: Build instance created
+      build_updated: Build instance updated
+      build_unassigned: Build instance removed from project
+  build_instance:
+    label: Build instance
+    plural: Build instances
+    serial_number: Serial number
+    template: System or build project
+    template_required: Select a system template or a Part-DB build project.
+    location: Location
+    completed_at: Completed at
+    unassigned: Unassigned
+    position_unassigned: Not assigned yet
+    project_position_help: The project assignment is controlled exclusively through this project position. “Unassigned” fully releases the build instance for another project.
+    unassign: Remove project assignment
+    unassign_confirm: 'Really remove build instance %serial% from this project? The build instance will be kept.'
+    unassign_success: The build instance was removed from the project and remains available for reassignment.
+    already_unassigned: The build instance is already unassigned.
+    new: Create build instance
+    edit: Edit build instance
+    status:
+      planned: Planned
+      in_progress: In progress
+      paused: Paused
+      completed: Completed
+      installed: Installed
+      scrapped: Scrapped

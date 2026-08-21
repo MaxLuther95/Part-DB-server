@@ -1,0 +1,210 @@
+production:
+  dashboard:
+    title: Fertigung
+    intro: Kunden, Projekte und reale Bauinstanzen werden hier getrennt vom normalen Bauteillager verwaltet.
+  common:
+    name: Bezeichnung
+    description: Beschreibung
+    status: Status
+    yes: Ja
+    no: Nein
+    empty: Noch keine Einträge vorhanden.
+    created_at: Erstellt am
+    active: Aktiv
+    inactive: Inaktiv
+  action:
+    save: Speichern
+    cancel: Abbrechen
+    edit: Bearbeiten
+    show_all: Alle anzeigen
+  flash:
+    saved: Die Änderungen wurden gespeichert.
+  navigation:
+    customers_projects: Kunden & Projekte
+    build: Bauen
+    templates: Systemvorlagen
+  build:
+    intro: Hier werden geplante, laufende und pausierte Bauinstanzen fortgesetzt.
+    empty: Im Moment befindet sich keine Bauinstanz in Bearbeitung.
+  template:
+    intro: Diese vorhandenen Part-DB-Projekte dienen als technische Bauvorlagen und werden nicht dupliziert.
+    new: Projektvorlage anlegen
+  customer:
+    label: Kunde
+    plural: Kunden
+    number: Kundennummer
+    name: Name des Kunden
+    active: Aktiv
+    new: Kunde anlegen
+    edit: Kunde bearbeiten
+  customer_project:
+    label: Projekt
+    plural: Projekte
+    number: Projektnummer
+    new: Projekt anlegen
+    edit: Projekt bearbeiten
+    status:
+      planning: In Planung
+      commissioned: Beauftragt
+      in_production: In Produktion
+      completed: Fertiggestellt
+      delivered: Ausgeliefert
+      cancelled: Storniert
+  project:
+    no_customer: Ohne Kundenzuordnung
+    cancelled_hint: Dieses Projekt wurde storniert.
+    build_instances: Bauinstanzen im Fertigungsbereich
+  project_position:
+    label: Projektposition
+    plural: Projektpositionen
+    position: Position
+    quantity: Anzahl
+    new: Position hinzufügen
+    add_system: System / Bauprojekt hinzufügen
+    edit: Projektposition bearbeiten
+    delete: Projektposition löschen
+    delete_confirm: 'Projektposition „%name%“ einschließlich ihrer untergeordneten Konfiguration wirklich löschen?'
+    deleted: Die Projektposition wurde gelöscht.
+    delete_has_builds: Die Projektposition kann nicht gelöscht werden, weil sie oder eine Unterposition bereits Bauinstanzen besitzt.
+    delete_has_material: Die Projektposition kann nicht gelöscht werden, solange dem Projekt bereits Material bereitgestellt wurde.
+    configure: System konfigurieren
+    build: Bauen
+    build_title: Bau vorbereiten
+    build_intro: Der standortbezogene Bauablauf für diese Projektposition wird hier vorbereitet.
+    build_notice: Auf dieser vorbereiteten Seite wird noch kein Material ausgebucht und keine Bauinstanz erzeugt.
+    build_steps:
+      serial: Seriennummer festlegen
+      site: Fertigungsstandort auswählen
+      material: BOM und verfügbare Lagerlose dieses Standortes prüfen
+      confirm: Material bereitstellen und Bauinstanz starten
+    configure_intro: Wählen Sie für jeden vorgegebenen Platz einen erlaubten Inhalt.
+    systems: Bestellte Systeme
+    content: System / Inhalt
+    selection: System oder Bauprojekt
+    selection_placeholder: Bitte eine Vorlage auswählen
+    selection_help: Eine Systemvorlage enthält feste konfigurierbare Plätze. Ein einzelnes Bauprojekt verwendet direkt die BOM des ausgewählten Part-DB-Projekts.
+    selection_group:
+      system: Systemvorlagen
+      project: Einzelne Bauprojekte
+    name:
+      help: Optional; ohne Eingabe wird der Name der Vorlage oder des Bauprojekts verwendet.
+    template_required: Bitte eine Systemvorlage oder ein einzelnes Part-DB-Projekt auswählen.
+    slot:
+      empty: Nicht belegt
+      range: 'Erlaubte Menge: %min% bis %max%.'
+      required: Dieser Pflichtplatz muss belegt werden.
+      in_use: Die vorhandene Belegung besitzt bereits Bauinstanzen oder Unterpositionen und kann nicht ausgetauscht werden.
+      quantity_invalid: Die Menge liegt außerhalb des für diesen Platz erlaubten Bereichs.
+    empty: Für dieses Projekt wurden noch keine Positionen angelegt.
+  system_template:
+    label: Systemvorlage
+    plural: Systemvorlagen
+    new: Systemvorlage anlegen
+    edit: Systemvorlage bearbeiten
+    intro: Systemvorlagen definieren feste Plätze und erlaubte Inhalte. Eine eigene feste BOM ist optional.
+    empty: Noch keine Systemvorlagen vorhanden.
+    name: Bezeichnung
+    base_project: Part-DB-Basisprojekt
+    base_project_none: Keine eigene feste BOM
+    base_project_help: Optional. Die BOM dieses Projekts enthält nur Gehäuse und Teile, die unabhängig von der Konfiguration immer benötigt werden.
+    active: Aktiv
+    slot:
+      plural: Vorgegebene Plätze
+      new: Platz hinzufügen
+      edit: Platz bearbeiten
+      empty: Diese Systemvorlage besitzt noch keine konfigurierbaren Plätze.
+      position: Reihenfolge
+      name: Platzbezeichnung
+      quantity: Erlaubte Menge
+      min_quantity: Mindestmenge
+      max_quantity: Höchstmenge
+      allowed_content: Erlaubte Systeme, Bauprojekte und Lagerteile
+      allowed_system_templates: Erlaubte Systemvorlagen
+      allowed_system_templates_help: Systemvorlagen werden direkt verschachtelt; dafür ist kein künstlich zugeordnetes Part-DB-Projekt nötig.
+      allowed_projects: Erlaubte selbst gebaute Projekte
+      allowed_projects_help: Aus diesen Part-DB-Projekten entstehen Bauinstanzen mit eigener Seriennummer.
+      allowed_parts: Erlaubte gekaufte Lagerteile
+      allowed_parts_help: Diese Inhalte werden aus dem normalen Part-DB-Lager bereitgestellt.
+      required: Pflicht
+      optional: Optional
+      serial_tracking: Hersteller-Seriennummer beim Ausbuchen erfassen
+      serial_tracking_help: Für zugekaufte Einzelgeräte wie Elektronik-18, die als Lagerteil geführt werden.
+      serial_tracking_short: Seriennummer
+  accessory:
+    plural: Zusätzliches Zubehör
+    new: Lagerteil hinzufügen
+    edit: Zubehör bearbeiten
+    empty: Kein zusätzliches Zubehör eingetragen.
+    part: Part-DB-Lagerteil
+    quantity: Menge
+    available: verfügbar
+    note: Notiz
+    inventory_part: Lagerteil
+  material_plan:
+    label: Materialverfügbarkeit
+    complete: Alle Teile verfügbar
+    incomplete: Fehlende Teile
+    not_configured: Noch nicht konfiguriert
+    empty: Aus den gewählten Systemen und Bauprojekten ergeben sich noch keine Lagerteile.
+    part: Bauteil
+    required: Benötigt
+    allocated: Im Projektbestand
+    remaining: Noch bereitzustellen
+    available: Frei verfügbar
+    missing: Fehlt
+    allocate: Material bereitstellen
+    provide: Bereitstellen
+    project_stock: Projektbestand
+    source_lot: Quell-Lagerlos
+    choose_lot: Lagerlos auswählen
+    allocate_quantity: Menge
+    serial_number: Hersteller-Seriennummer
+    serial_number_help: Optional; vorhandene Seriennummer des Lagerloses wird automatisch übernommen.
+    serial_number_required_help: Pflicht, sofern das gewählte Lagerlos noch keine Seriennummer als Barcode besitzt.
+    serial_required_notice: Dieses Bauteil ist in der Systemvorlage seriennummernpflichtig.
+    production_only: Material kann erst im Projektstatus „In Produktion“ bereitgestellt werden.
+    invalid_lot: Das gewählte Lagerlos gehört nicht zu diesem Bauteil.
+    invalid_quantity: Die Menge überschreitet den Lagerbestand oder den noch offenen Projektbedarf.
+    serial_number_required: Bitte die Hersteller-Seriennummer angeben oder ein Lagerlos mit hinterlegter Seriennummer wählen.
+    allocation_success: Material wurde in den Projektbestand umgebucht.
+  history:
+    label: Historie
+    empty: Für dieses Projekt sind noch keine Ereignisse vorhanden.
+    system: System
+    event:
+      project_created: Projekt angelegt
+      project_updated: Projektdaten geändert
+      position_created: Projektposition angelegt
+      position_updated: Projektposition bearbeitet
+      position_deleted: Projektposition gelöscht
+      position_configured: Systemkonfiguration geändert
+      accessory_created: Zubehör hinzugefügt
+      accessory_updated: Zubehör bearbeitet
+      material_allocated: Material in den Projektbestand umgebucht
+      build_created: Bauinstanz angelegt
+      build_updated: Bauinstanz bearbeitet
+      build_unassigned: Bauinstanz aus Projekt entfernt
+  build_instance:
+    label: Bauinstanz
+    plural: Bauinstanzen
+    serial_number: Seriennummer
+    template: System oder Bauprojekt
+    template_required: Bitte eine Systemvorlage oder ein Part-DB-Bauprojekt auswählen.
+    location: Standort
+    completed_at: Abgeschlossen am
+    unassigned: Nicht zugeordnet
+    position_unassigned: Noch nicht zugewiesen
+    project_position_help: Die Projektzuordnung wird ausschließlich über diese Projektposition festgelegt. „Nicht zugeordnet“ gibt die Bauinstanz vollständig für ein anderes Projekt frei.
+    unassign: Projektzuordnung lösen
+    unassign_confirm: 'Bauinstanz %serial% wirklich aus diesem Projekt lösen? Die Bauinstanz bleibt erhalten.'
+    unassign_success: Die Bauinstanz wurde aus dem Projekt gelöst und bleibt für eine neue Zuordnung erhalten.
+    already_unassigned: Die Bauinstanz ist bereits keinem Projekt zugeordnet.
+    new: Bauinstanz anlegen
+    edit: Bauinstanz bearbeiten
+    status:
+      planned: Geplant
+      in_progress: In Bau
+      paused: Pausiert
+      completed: Fertig
+      installed: Eingebaut
+      scrapped: Ausgesondert

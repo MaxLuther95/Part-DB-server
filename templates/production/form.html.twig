@@ -1,0 +1,20 @@
+{% extends 'main_card.html.twig' %}
+{% trans_default_domain 'production' %}
+
+{% block title %}{{ title|trans }}{% endblock %}
+
+{% block card_title %}
+    <i class="fa-solid fa-pen-to-square fa-fw"></i> {{ title|trans }}
+{% endblock %}
+
+{% block card_content %}
+    {{ form_start(form) }}
+        {{ form_widget(form) }}
+        <div class="d-flex gap-2 mt-3">
+            <button class="btn btn-primary" type="submit">
+                <i class="fa-solid fa-floppy-disk fa-fw"></i> {{ 'production.action.save'|trans }}
+            </button>
+            <a class="btn btn-secondary" href="{{ path(cancel_route, cancel_route_params|default({})) }}">{{ 'production.action.cancel'|trans }}</a>
+        </div>
+    {{ form_end(form) }}
+{% endblock %}

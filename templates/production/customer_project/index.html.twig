@@ -1,0 +1,39 @@
+{% extends 'main_card.html.twig' %}
+{% trans_default_domain 'production' %}
+
+{% block title %}{{ 'production.customer_project.plural'|trans }}{% endblock %}
+{% block card_title %}<i class="fa-solid fa-folder-open fa-fw"></i> {{ 'production.customer_project.plural'|trans }}{% endblock %}
+
+{% block card_content %}
+    <div class="d-flex justify-content-between mb-3">
+        <a href="{{ path('production_dashboard') }}" class="btn btn-outline-secondary">
+            <i class="fa-solid fa-arrow-left fa-fw"></i> {{ 'production.dashboard.title'|trans }}
+        </a>
+        {% if is_granted('@projects.edit') %}
+            <a href="{{ path('production_customer_project_new') }}" class="btn btn-success">
+                <i class="fa-solid fa-plus fa-fw"></i> {{ 'production.customer_project.new'|trans }}
+            </a>
+        {% endif %}
+    </div>
+    <div class="table-responsive"><table class="table table-striped table-hover align-middle">
+        <thead><tr>
+            <th>{{ 'production.customer_project.number'|trans }}</th><th>{{ 'production.common.name'|trans }}</th>
+            <th>{{ 'production.customer.label'|trans }}</th><th>{{ 'production.common.status'|trans }}</th>
+            <th>{{ 'production.build_instance.plural'|trans }}</th><th></th>
+        </tr></thead>
+        <tbody>
+        {% for project in projects %}
+            <tr>
+                <td><a href="{{ path('production_customer_project_show', {id: project.id}) }}">{{ project.projectNumber }}</a></td>
+                <td>{{ project.name }}</td>
+                <td>{% if project.customer %}<a href="{{ path('production_customer_show', {id: project.customer.id}) }}">{{ project.customer }}</a>{% else %}<span class="text-muted">{{ 'production.project.no_customer'|trans }}</span>{% endif %}</td>
+                <td><span class="badge bg-secondary">{{ ('production.customer_project.status.' ~ project.status.value)|trans }}</span></td>
+                <td>{{ project.buildInstances|length }}</td>
+                <td class="text-end">{% if is_granted('@projects.edit') %}<a class="btn btn-sm btn-outline-primary" href="{{ path('production_customer_project_edit', {id: project.id}) }}"><i class="fa-solid fa-pen fa-fw"></i></a>{% endif %}</td>
+            </tr>
+        {% else %}
+            <tr><td colspan="6" class="text-center text-muted">{{ 'production.common.empty'|trans }}</td></tr>
+        {% endfor %}
+        </tbody>
+    </table></div>
+{% endblock %}

@@ -1,0 +1,33 @@
+{% extends 'base.html.twig' %}
+{% trans_default_domain 'production' %}
+
+{% block title %}{{ 'production.system_template.plural'|trans }}{% endblock %}
+
+{% block content %}
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <div>
+            <h1 class="h2 mb-1"><i class="fa-solid fa-diagram-project fa-fw"></i> {{ 'production.system_template.plural'|trans }}</h1>
+            <p class="text-muted mb-0">{{ 'production.system_template.intro'|trans }}</p>
+        </div>
+        {% if is_granted('@projects.edit') %}
+            <a class="btn btn-success" href="{{ path('production_template_new') }}"><i class="fa-solid fa-plus fa-fw"></i> {{ 'production.system_template.new'|trans }}</a>
+        {% endif %}
+    </div>
+
+    <div class="card"><div class="table-responsive"><table class="table table-hover align-middle mb-0">
+        <thead><tr><th>{{ 'production.system_template.name'|trans }}</th><th>{{ 'production.system_template.base_project'|trans }}</th><th>{{ 'production.system_template.slot.plural'|trans }}</th><th>{{ 'production.system_template.active'|trans }}</th><th></th></tr></thead>
+        <tbody>
+        {% for template in templates %}
+            <tr>
+                <td><a href="{{ path('production_template_show', {id: template.id}) }}"><strong>{{ template.name }}</strong></a></td>
+                <td>{% if template.baseProject %}<a href="{{ path('project_info', {id: template.baseProject.id}) }}">{{ template.baseProject.name }}</a>{% else %}<span class="text-muted">–</span>{% endif %}</td>
+                <td>{{ template.slots|length }}</td>
+                <td><span class="badge {{ template.active ? 'bg-success' : 'bg-secondary' }}">{{ (template.active ? 'production.common.yes' : 'production.common.no')|trans }}</span></td>
+                <td class="text-end">{% if is_granted('@projects.edit') %}<a class="btn btn-sm btn-outline-primary" href="{{ path('production_template_edit', {id: template.id}) }}"><i class="fa-solid fa-pen fa-fw"></i></a>{% endif %}</td>
+            </tr>
+        {% else %}
+            <tr><td colspan="5" class="text-center text-muted py-4">{{ 'production.system_template.empty'|trans }}</td></tr>
+        {% endfor %}
+        </tbody>
+    </table></div></div>
+{% endblock %}

@@ -1,0 +1,51 @@
+{% extends 'base.html.twig' %}
+{% trans_default_domain 'production' %}
+
+{% block title %}{{ template.name }}{% endblock %}
+
+{% block content %}
+    <div class="d-flex justify-content-between align-items-start mb-3">
+        <div>
+            <h1 class="h2 mb-1">{{ template.name }}</h1>
+            <span class="badge {{ template.active ? 'bg-success' : 'bg-secondary' }}">{{ (template.active ? 'production.common.active' : 'production.common.inactive')|trans }}</span>
+        </div>
+        <div class="d-flex gap-2">
+            <a class="btn btn-outline-secondary" href="{{ path('production_template_index') }}"><i class="fa-solid fa-arrow-left fa-fw"></i> {{ 'production.system_template.plural'|trans }}</a>
+            {% if is_granted('@projects.edit') %}<a class="btn btn-primary" href="{{ path('production_template_edit', {id: template.id}) }}"><i class="fa-solid fa-pen fa-fw"></i> {{ 'production.action.edit'|trans }}</a>{% endif %}
+        </div>
+    </div>
+
+    <div class="card mb-3"><div class="card-body">
+        <dl class="row mb-0">
+            <dt class="col-sm-3">{{ 'production.system_template.base_project'|trans }}</dt>
+            <dd class="col-sm-9">{% if template.baseProject %}<a href="{{ path('project_info', {id: template.baseProject.id}) }}">{{ template.baseProject.name }}</a>{% else %}<span class="text-muted">{{ 'production.system_template.base_project_none'|trans }}</span>{% endif %}</dd>
+            <dt class="col-sm-3">{{ 'production.common.description'|trans }}</dt>
+            <dd class="col-sm-9">{{ template.description|default('–')|nl2br }}</dd>
+        </dl>
+    </div></div>
+
+    <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <strong><i class="fa-solid fa-list-ol fa-fw"></i> {{ 'production.system_template.slot.plural'|trans }}</strong>
+            {% if is_granted('@projects.edit') %}<a class="btn btn-sm btn-success" href="{{ path('production_template_slot_new', {id: template.id}) }}"><i class="fa-solid fa-plus fa-fw"></i> {{ 'production.system_template.slot.new'|trans }}</a>{% endif %}
+        </div>
+        <div class="table-responsive"><table class="table table-hover align-middle mb-0">
+            <thead><tr><th>#</th><th>{{ 'production.system_template.slot.name'|trans }}</th><th>{{ 'production.system_template.slot.quantity'|trans }}</th><th>{{ 'production.system_template.slot.allowed_content'|trans }}</th><th></th></tr></thead>
+            <tbody>
+            {% for slot in template.slots %}
+                <tr>
+                    <td>{{ slot.position }}</td>
+                    <td><strong>{{ slot.name }}</strong> {% if slot.required %}<span class="badge bg-primary">{{ 'production.system_template.slot.required'|trans }}</span>{% else %}<span class="badge bg-secondary">{{ 'production.system_template.slot.optional'|trans }}</span>{% endif %}{% if slot.serialTracking %} <span class="badge bg-info text-dark"><i class="fa-solid fa-barcode fa-fw"></i> {{ 'production.system_template.slot.serial_tracking_short'|trans }}</span>{% endif %}</td>
+                    <td>{{ slot.minQuantity }}–{{ slot.maxQuantity }}</td>
+                    <td>
+                        {% for allowed_template in slot.allowedSystemTemplates %}<a class="badge text-bg-light border text-decoration-none" href="{{ path('production_template_show', {id: allowed_template.id}) }}"><i class="fa-solid fa-diagram-project fa-fw"></i> {{ allowed_template.name }}</a> {% endfor %}
+                        {% for project in slot.allowedProjects %}<a class="badge text-bg-light border text-decoration-none" href="{{ path('project_info', {id: project.id}) }}"><i class="fa-solid fa-screwdriver-wrench fa-fw"></i> {{ project.name }}</a> {% endfor %}
+                        {% for part in slot.allowedParts %}<a class="badge text-bg-light border text-decoration-none" href="{{ path('part_info', {id: part.id}) }}"><i class="fa-solid fa-box fa-fw"></i> {{ part.name }}</a> {% endfor %}
+                    </td>
+                    <td class="text-end">{% if is_granted('@projects.edit') %}<a class="btn btn-sm btn-outline-primary" href="{{ path('production_template_slot_edit', {id: slot.id}) }}"><i class="fa-solid fa-pen fa-fw"></i></a>{% endif %}</td>
+                </tr>
+            {% else %}<tr><td colspan="5" class="text-center text-muted py-4">{{ 'production.system_template.slot.empty'|trans }}</td></tr>{% endfor %}
+            </tbody>
+        </table></div>
+    </div>
+{% endblock %}

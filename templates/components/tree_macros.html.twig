@@ -9,6 +9,7 @@
         ['manufacturers', path('tree_manufacturer_root'), '@manufacturer@@', is_granted('@manufacturers.read') and is_granted('@parts.read'), 'manufacturer'],
         ['suppliers', path('tree_supplier_root'), '@supplier@@', is_granted('@suppliers.read') and is_granted('@parts.read'), 'supplier'],
         ['projects', path('tree_device_root'), '@project@@', is_granted('@projects.read'), 'project'],
+        ['production', path('tree_production'), 'production.dashboard.title', is_granted('@projects.read'), 'production'],
         ['tools', path('tree_tools'), 'tools.label', true, 'tool'],
     ] %}
 
@@ -24,7 +25,7 @@
                 {% if source[2] starts with '@' %}
                     {% set label = type_label_p(source[2]|replace({'@': ''})) %}
                 {% else %}
-                    {% set label = source[2]|trans %}
+                    {% set label = source[2]|trans({}, source[0] == 'production' ? 'production' : 'messages') %}
                 {% endif %}
 
                 <button class="tree-btns dropdown-item"

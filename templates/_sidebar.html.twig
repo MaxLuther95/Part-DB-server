@@ -6,4 +6,8 @@
         {{ tree.treeview_sidebar('sidebar-panel-' ~ loop.index, item.value) }}
         <div class="mb-2"></div>
     {% endfor %}
+    {% if is_granted('@projects.read') %}
+        {{ tree.treeview_sidebar('sidebar-panel-production', 'production') }}
+        <div class="mb-2"></div>
+    {% endif %}
 </div>

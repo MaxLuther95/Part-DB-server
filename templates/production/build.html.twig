@@ -1,0 +1,26 @@
+{% extends 'main_card.html.twig' %}
+{% trans_default_domain 'production' %}
+
+{% block title %}{{ 'production.navigation.build'|trans }}{% endblock %}
+{% block card_title %}<i class="fa-solid fa-wrench fa-fw"></i> {{ 'production.navigation.build'|trans }}{% endblock %}
+
+{% block card_content %}
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <p class="text-muted mb-0">{{ 'production.build.intro'|trans }}</p>
+        {% if is_granted('@projects.edit') %}
+            <a class="btn btn-success" href="{{ path('production_build_instance_new') }}">
+                <i class="fa-solid fa-plus fa-fw"></i> {{ 'production.build_instance.new'|trans }}
+            </a>
+        {% endif %}
+    </div>
+    <div class="list-group">
+        {% for instance in build_instances %}
+            <a class="list-group-item list-group-item-action d-flex justify-content-between align-items-center" href="{{ path('production_build_instance_show', {id: instance.id}) }}">
+                <span><strong>{{ instance.serialNumber }}</strong><br><small class="text-muted">{{ instance.systemTemplate ? instance.systemTemplate.name : instance.templateProject.fullPath }}</small></span>
+                <span class="badge bg-primary">{{ ('production.build_instance.status.' ~ instance.status.value)|trans }}</span>
+            </a>
+        {% else %}
+            <div class="list-group-item text-muted">{{ 'production.build.empty'|trans }}</div>
+        {% endfor %}
+    </div>
+{% endblock %}

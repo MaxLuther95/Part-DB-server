@@ -1,0 +1,25 @@
+production:
+  customer:
+    number:
+      unique: This customer number is already in use.
+  customer_project:
+    number:
+      unique: This project number is already in use.
+  build_instance:
+    template_required: Select a system template or a Part-DB build project.
+    serial_number:
+      unique: This serial number is already in use.
+  project_position:
+    template_required: Select a system template or a Part-DB build project.
+    name:
+      unique: A project position with this name already exists.
+  system_template:
+    base_project:
+      unique: A system template already exists for this Part-DB project.
+    slot:
+      position:
+        unique: This position number is already used in the system template.
+      quantity:
+        invalid: Maximum quantity must not be lower than minimum quantity.
+      allowed_content:
+        required: Select at least one allowed system template, Part-DB project or inventory part.

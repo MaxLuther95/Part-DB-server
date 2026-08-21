@@ -1,0 +1,47 @@
+{% extends 'main_card.html.twig' %}
+{% trans_default_domain 'production' %}
+
+{% block title %}{{ 'production.dashboard.title'|trans }}{% endblock %}
+
+{% block card_title %}
+    <i class="fa-solid fa-industry fa-fw"></i> {{ 'production.dashboard.title'|trans }}
+{% endblock %}
+
+{% block card_content %}
+    <p class="text-muted">{{ 'production.dashboard.intro'|trans }}</p>
+    <div class="row g-3">
+        <div class="col-md-4">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h2 class="h5"><a class="text-decoration-none" href="{{ path('production_customer_index') }}"><i class="fa-solid fa-address-book fa-fw"></i> {{ 'production.customer.plural'|trans }}</a></h2>
+                    <div class="display-6 mb-3">{{ customer_count }}</div>
+                    {% if is_granted('@projects.edit') %}
+                        <a class="btn btn-sm btn-success" href="{{ path('production_customer_new') }}"><i class="fa-solid fa-plus fa-fw"></i> {{ 'production.customer.new'|trans }}</a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h2 class="h5"><a class="text-decoration-none" href="{{ path('production_customer_project_index') }}"><i class="fa-solid fa-folder-open fa-fw"></i> {{ 'production.customer_project.plural'|trans }}</a></h2>
+                    <div class="display-6 mb-3">{{ project_count }}</div>
+                    {% if is_granted('@projects.edit') %}
+                        <a class="btn btn-sm btn-success" href="{{ path('production_customer_project_new') }}"><i class="fa-solid fa-plus fa-fw"></i> {{ 'production.customer_project.new'|trans }}</a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card h-100">
+                <div class="card-body">
+                    <h2 class="h5"><a class="text-decoration-none" href="{{ path('production_build_instance_index') }}"><i class="fa-solid fa-screwdriver-wrench fa-fw"></i> {{ 'production.build_instance.plural'|trans }}</a></h2>
+                    <div class="display-6 mb-3">{{ build_instance_count }}</div>
+                    {% if is_granted('@projects.edit') %}
+                        <a class="btn btn-sm btn-success" href="{{ path('production_build_instance_new') }}"><i class="fa-solid fa-plus fa-fw"></i> {{ 'production.build_instance.new'|trans }}</a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+{% endblock %}

@@ -32,6 +32,7 @@ use App\Entity\Parts\StorageLocation;
 use App\Entity\Parts\Supplier;
 use App\Services\Trees\ToolsTreeBuilder;
 use App\Services\Trees\TreeViewGenerator;
+use App\Services\Production\ProductionTreeBuilder;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\Routing\Attribute\Route;
@@ -52,6 +53,16 @@ class TreeController extends AbstractController
         $tree = $builder->getTree();
 
         return new JsonResponse($tree);
+    }
+
+    #[Route(path: '/production', name: 'tree_production')]
+    public function production(ProductionTreeBuilder $builder): JsonResponse
+    {
+        if (!$this->isGranted('@projects.read')) {
+            return new JsonResponse('Access denied', Response::HTTP_FORBIDDEN);
+        }
+
+        return new JsonResponse($builder->getTree());
     }
 
     #[Route(path: '/category/{id}', name: 'tree_category')]

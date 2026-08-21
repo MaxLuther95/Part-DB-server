@@ -1,0 +1,55 @@
+{% extends 'main_card.html.twig' %}
+{% trans_default_domain 'production' %}
+
+{% block title %}{{ 'production.customer.plural'|trans }}{% endblock %}
+
+{% block card_title %}
+    <i class="fa-solid fa-address-book fa-fw"></i> {{ 'production.customer.plural'|trans }}
+{% endblock %}
+
+{% block card_content %}
+    <div class="d-flex justify-content-between mb-3">
+        <a href="{{ path('production_dashboard') }}" class="btn btn-outline-secondary">
+            <i class="fa-solid fa-arrow-left fa-fw"></i> {{ 'production.dashboard.title'|trans }}
+        </a>
+        {% if is_granted('@projects.edit') %}
+            <a href="{{ path('production_customer_new') }}" class="btn btn-success">
+                <i class="fa-solid fa-plus fa-fw"></i> {{ 'production.customer.new'|trans }}
+            </a>
+        {% endif %}
+    </div>
+    <div class="table-responsive">
+        <table class="table table-striped table-hover align-middle">
+            <thead><tr>
+                <th>{{ 'production.customer.number'|trans }}</th>
+                <th>{{ 'production.customer.name'|trans }}</th>
+                <th>{{ 'production.customer.active'|trans }}</th>
+                <th>{{ 'production.customer_project.plural'|trans }}</th>
+                <th></th>
+            </tr></thead>
+            <tbody>
+            {% for customer in customers %}
+                <tr>
+                    <td><a href="{{ path('production_customer_show', {id: customer.id}) }}">{{ customer.customerNumber }}</a></td>
+                    <td>{{ customer.name }}</td>
+                    <td>
+                        <span class="badge {{ customer.active ? 'bg-success' : 'bg-secondary' }}">
+                            {{ (customer.active ? 'production.common.yes' : 'production.common.no')|trans }}
+                        </span>
+                    </td>
+                    <td>{{ customer.projects|length }}</td>
+                    <td class="text-end">
+                        {% if is_granted('@projects.edit') %}
+                            <a class="btn btn-sm btn-outline-primary" href="{{ path('production_customer_edit', {id: customer.id}) }}">
+                                <i class="fa-solid fa-pen fa-fw"></i>
+                            </a>
+                        {% endif %}
+                    </td>
+                </tr>
+            {% else %}
+                <tr><td colspan="5" class="text-center text-muted">{{ 'production.common.empty'|trans }}</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+{% endblock %}

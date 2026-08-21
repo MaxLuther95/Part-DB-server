@@ -1,0 +1,19 @@
+{% extends 'base.html.twig' %}
+{% trans_default_domain 'production' %}
+
+{% block title %}{{ 'production.material_plan.allocate'|trans }}{% endblock %}
+
+{% block content %}
+    <div class="mb-3">
+        <h1 class="h2 mb-1">{{ 'production.material_plan.allocate'|trans }}: {{ part.name }}</h1>
+        <p class="text-muted mb-0">{{ project.projectNumber }} – {{ 'production.material_plan.remaining'|trans }}: {{ plan_item.remaining|number_format }}</p>
+    </div>
+    {% if serial_required %}<div class="alert alert-info"><i class="fa-solid fa-barcode fa-fw"></i> {{ 'production.material_plan.serial_required_notice'|trans }}</div>{% endif %}
+    <div class="card"><div class="card-body">
+        {{ form_start(form) }}
+        {{ form_widget(form) }}
+        <button class="btn btn-success"><i class="fa-solid fa-arrow-right-arrow-left fa-fw"></i> {{ 'production.material_plan.allocate'|trans }}</button>
+        <a class="btn btn-outline-secondary" href="{{ path('production_customer_project_show', {id: project.id}) }}">{{ 'production.action.cancel'|trans }}</a>
+        {{ form_end(form) }}
+    </div></div>
+{% endblock %}
