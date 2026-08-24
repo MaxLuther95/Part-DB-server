@@ -6,6 +6,7 @@ namespace DoctrineMigrations;
 
 use App\Migration\AbstractMultiPlatformMigration;
 use Doctrine\DBAL\Schema\Schema;
+use Doctrine\Migrations\Exception\IrreversibleMigration;
 
 /** Brings positions created before direct nested-system support in line with their migrated slot choices. */
 final class Version20260821012200 extends AbstractMultiPlatformMigration
@@ -23,6 +24,7 @@ final class Version20260821012200 extends AbstractMultiPlatformMigration
 
     public function mySQLDown(Schema $schema): void
     {
+        $this->abortDowngrade();
     }
 
     public function sqLiteUp(Schema $schema): void
@@ -33,6 +35,7 @@ final class Version20260821012200 extends AbstractMultiPlatformMigration
 
     public function sqLiteDown(Schema $schema): void
     {
+        $this->abortDowngrade();
     }
 
     public function postgreSQLUp(Schema $schema): void
@@ -43,5 +46,11 @@ final class Version20260821012200 extends AbstractMultiPlatformMigration
 
     public function postgreSQLDown(Schema $schema): void
     {
+        $this->abortDowngrade();
+    }
+
+    private function abortDowngrade(): never
+    {
+        throw new IrreversibleMigration('Nested project positions cannot be converted back without losing their direct system-template assignments. Restore the database backup to downgrade safely.');
     }
 }

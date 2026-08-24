@@ -11,11 +11,12 @@
     </div>
     <dl class="row">
         <dt class="col-sm-3">{{ 'production.build_instance.serial_number'|trans }}</dt><dd class="col-sm-9"><strong>{{ build_instance.serialNumber }}</strong></dd>
-        <dt class="col-sm-3">{{ 'production.build_instance.template'|trans }}</dt><dd class="col-sm-9">{% if build_instance.systemTemplate %}<a href="{{ path('production_template_show', {id: build_instance.systemTemplate.id}) }}">{{ build_instance.systemTemplate.name }}</a>{% else %}<a href="{{ path('project_info', {id: build_instance.templateProject.id}) }}">{{ build_instance.templateProject.fullPath }}</a>{% endif %}</dd>
+        <dt class="col-sm-3">{{ 'production.build_instance.template'|trans }}</dt><dd class="col-sm-9">{% if build_instance.systemTemplate %}<a href="{{ path('production_template_show', {id: build_instance.systemTemplate.id}) }}">{{ build_instance.systemTemplate.name }}</a>{% elseif build_instance.templateProject %}<a href="{{ path('project_info', {id: build_instance.templateProject.id}) }}">{{ build_instance.templateProject.fullPath }}</a>{% else %}<span class="text-muted">{{ build_instance.contentName }} ({{ 'production.common.deleted_reference'|trans }})</span>{% endif %}</dd>
         <dt class="col-sm-3">{{ 'production.common.status'|trans }}</dt><dd class="col-sm-9"><span class="badge bg-secondary">{{ ('production.build_instance.status.' ~ build_instance.status.value)|trans }}</span></dd>
         <dt class="col-sm-3">{{ 'production.build_instance.location'|trans }}</dt><dd class="col-sm-9">{{ build_instance.location|default('–') }}</dd>
         <dt class="col-sm-3">{{ 'production.customer_project.label'|trans }}</dt><dd class="col-sm-9">{% if build_instance.customerProject %}<a href="{{ path('production_customer_project_show', {id: build_instance.customerProject.id}) }}">{{ build_instance.customerProject }}</a>{% else %}{{ 'production.build_instance.unassigned'|trans }}{% endif %}</dd>
         <dt class="col-sm-3">{{ 'production.project_position.label'|trans }}</dt><dd class="col-sm-9">{{ build_instance.projectPosition ? build_instance.projectPosition.name : '–' }}</dd>
+        <dt class="col-sm-3">{{ 'production.build_instance.notes'|trans }}</dt><dd class="col-sm-9">{{ build_instance.notes ? build_instance.notes|nl2br : '–' }}</dd>
         <dt class="col-sm-3">{{ 'production.common.created_at'|trans }}</dt><dd class="col-sm-9">{{ build_instance.addedDate ? build_instance.addedDate|format_datetime('short', 'short') : '–' }}</dd>
         <dt class="col-sm-3">{{ 'production.build_instance.completed_at'|trans }}</dt><dd class="col-sm-9">{{ build_instance.completedAt ? build_instance.completedAt|format_datetime('short', 'short') : '–' }}</dd>
     </dl>

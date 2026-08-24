@@ -8,10 +8,7 @@
 {% endblock %}
 
 {% block card_content %}
-    <div class="d-flex justify-content-between mb-3">
-        <a href="{{ path('production_dashboard') }}" class="btn btn-outline-secondary">
-            <i class="fa-solid fa-arrow-left fa-fw"></i> {{ 'production.dashboard.title'|trans }}
-        </a>
+    <div class="d-flex justify-content-end mb-3">
         {% if is_granted('@projects.edit') %}
             <a href="{{ path('production_customer_new') }}" class="btn btn-success">
                 <i class="fa-solid fa-plus fa-fw"></i> {{ 'production.customer.new'|trans }}

@@ -1,10 +1,12 @@
 production:
   dashboard:
     title: Production
-    intro: Manage customers, projects and physical build instances separately from the normal parts stock.
+    intro: Manage customers, projects, manufactured devices and assemblies separately from regular inventory parts.
   common:
     name: Name
     description: Description
+    notes: Notes
+    no_notes: No notes available.
     status: Status
     yes: Yes
     no: No
@@ -12,11 +14,14 @@ production:
     created_at: Created at
     active: Active
     inactive: Inactive
+    deleted_reference: deleted reference
   action:
     save: Save
     cancel: Cancel
+    back: Back
     edit: Edit
     show_all: Show all
+    delete: Delete
   flash:
     saved: The changes were saved.
   navigation:
@@ -24,8 +29,18 @@ production:
     build: Build
     templates: System templates
   build:
-    intro: Continue planned, active and paused build instances here.
-    empty: There are currently no build instances in progress.
+    intro: Choose whether to manufacture a new device or assembly or register an existing one without changing inventory.
+    empty: There are currently no devices or assemblies in progress.
+    active: Active manufacturing
+    new: Build new device / assembly
+    new_short: Select a system template or Part-DB build project and start the regular manufacturing workflow.
+    new_intro: Select the system template or Part-DB build project for the new device or assembly.
+    new_content: System or build project
+    new_content_placeholder: Select a system template or build project
+    prepare: Prepare build
+    choose_different: Select another template
+    new_preparation_intro: The new device or assembly was selected for the regular manufacturing workflow.
+    new_preparation_notice: This preparation step does not create a device or assembly or change inventory. The location-aware material workflow will be added next.
   template:
     intro: These existing Part-DB projects are used directly as technical build templates and are not duplicated.
     new: Create project template
@@ -40,7 +55,20 @@ production:
   customer_project:
     label: Project
     plural: Projects
+    all_projects: All projects
+    my_projects: My projects
     number: Project number
+    assigned_users: Assigned users
+    assigned_users_help: The project appears under “My projects” for these users. Multiple users can be selected.
+    status_filter:
+      label: Filter projects by status
+      all: All statuses
+    scope:
+      label: Project filter
+      active: Active projects
+      all: All projects
+      empty_active: No projects with the status “In production” are currently assigned to you.
+      empty_all: No projects are currently assigned to you.
     new: Create project
     edit: Edit project
     status:
@@ -53,7 +81,7 @@ production:
   project:
     no_customer: No customer assigned
     cancelled_hint: This project has been cancelled.
-    build_instances: Build instances in production
+    build_instances: Devices and assemblies in project
   project_position:
     label: Project position
     plural: Project positions
@@ -65,18 +93,21 @@ production:
     delete: Delete project position
     delete_confirm: 'Really delete project position “%name%” including its child configuration?'
     deleted: The project position was deleted.
-    delete_has_builds: The project position cannot be deleted because it or a child position already has build instances.
+    delete_has_builds: The project position cannot be deleted because devices or assemblies are already assigned to it or a child position.
     delete_has_material: The project position cannot be deleted while material has already been allocated to the project.
     configure: Configure system
+    toggle_children: Expand or collapse child positions
+    has_notes: Notes available
     build: Build
+    build_requires_production: Building and assigning devices or assemblies are only available while the project is in production.
     build_title: Prepare build
     build_intro: The location-aware build workflow for this project position will be prepared here.
-    build_notice: This preparation page does not withdraw material or create a build instance yet.
+    build_notice: This preparation page does not withdraw material or create a device or assembly yet.
     build_steps:
       serial: Set the serial number
       site: Select the production site
       material: Review the BOM and available lots at that site
-      confirm: Allocate material and start the build instance
+      confirm: Allocate material and start manufacturing the device or assembly
     configure_intro: Select one allowed content for every predefined slot.
     systems: Ordered systems
     content: System / content
@@ -91,9 +122,9 @@ production:
     template_required: Select a system template or standalone Part-DB project.
     slot:
       empty: Empty
-      range: 'Allowed quantity: %min% to %max%.'
+      range: 'Allowed quantity: %min% to %max%. Systems and build projects are created as separate, independently configurable positions.'
       required: This required slot must be filled.
-      in_use: The existing assignment already has build instances or child positions and cannot be replaced.
+      in_use: Devices, assemblies or child positions are already assigned to the existing content, so it cannot be replaced.
       quantity_invalid: The quantity is outside the allowed range for this slot.
     empty: No positions have been added to this project yet.
   system_template:
@@ -101,6 +132,8 @@ production:
     plural: System templates
     new: Create system template
     edit: Edit system template
+    delete_confirm: 'Really delete system template “%name%”? Existing project positions and devices will be kept.'
+    deleted: The system template was deleted. Existing project positions and devices were kept.
     intro: System templates define fixed slots and allowed content. Their own fixed BOM is optional.
     empty: No system templates yet.
     name: Name
@@ -122,7 +155,7 @@ production:
       allowed_system_templates: Allowed system templates
       allowed_system_templates_help: System templates are nested directly; no artificial Part-DB project assignment is needed.
       allowed_projects: Allowed self-built projects
-      allowed_projects_help: Build instances with individual serial numbers are created from these Part-DB projects.
+      allowed_projects_help: Devices or assemblies with individual serial numbers are created from these Part-DB projects.
       allowed_parts: Allowed purchased inventory parts
       allowed_parts_help: These items are supplied from normal Part-DB inventory.
       required: Required
@@ -152,6 +185,7 @@ production:
     remaining: Remaining to provide
     available: Freely available
     missing: Missing
+    overstock: Surplus
     allocate: Provide material
     provide: Provide
     project_stock: Project stock
@@ -169,6 +203,9 @@ production:
     allocation_success: Material was moved into project stock.
   history:
     label: History
+    timestamp: Timestamp
+    event_label: Event
+    actor: User
     empty: This project has no history entries yet.
     system: System
     event:
@@ -181,26 +218,39 @@ production:
       accessory_created: Accessory added
       accessory_updated: Accessory updated
       material_allocated: Material moved into project stock
-      build_created: Build instance created
-      build_updated: Build instance updated
-      build_unassigned: Build instance removed from project
+      build_created: Device / assembly created
+      build_assigned: Device / assembly assigned to project
+      build_updated: Device / assembly updated
+      build_unassigned: Device / assembly removed from project
   build_instance:
-    label: Build instance
-    plural: Build instances
+    label: Device / assembly
+    plural: Devices and assemblies
     serial_number: Serial number
     template: System or build project
     template_required: Select a system template or a Part-DB build project.
     location: Location
+    notes: Notes
     completed_at: Completed at
     unassigned: Unassigned
     position_unassigned: Not assigned yet
-    project_position_help: The project assignment is controlled exclusively through this project position. “Unassigned” fully releases the build instance for another project.
-    unassign: Remove project assignment
-    unassign_confirm: 'Really remove build instance %serial% from this project? The build instance will be kept.'
-    unassign_success: The build instance was removed from the project and remains available for reassignment.
-    already_unassigned: The build instance is already unassigned.
-    new: Create build instance
-    edit: Edit build instance
+    project_position_help: The project assignment is controlled exclusively through this project position. “Unassigned” fully releases the device or assembly for another project.
+    assign: Assign device / assembly
+    assign_choice: Existing device / assembly
+    assign_placeholder: Select a device or assembly
+    assign_intro: 'An existing, unassigned and compatible device or assembly can be assigned to position “%position%” (%content%).'
+    assign_empty: No compatible unassigned device or assembly is currently available.
+    assign_invalid: This device or assembly is no longer available. Refresh the selection.
+    assign_success: The device or assembly was assigned to the project position.
+    position_already_assigned: A device or assembly is already assigned to this project position.
+    unassign: Unassign device / assembly
+    unassign_confirm: 'Really remove device or assembly %serial% from this project? The record will be kept.'
+    unassign_success: The device or assembly was removed from the project and remains available for reassignment.
+    already_unassigned: The device or assembly is already unassigned.
+    new: Create device / assembly
+    register_existing: Register existing device / assembly
+    register_existing_short: Record an already manufactured device or assembly with a serial number without changing materials or inventory.
+    register_existing_intro: Record an existing device or assembly. Its status defaults to “Completed” but can be changed. Inventory is not changed and no project position is assigned.
+    edit: Edit device / assembly
     status:
       planned: Planned
       in_progress: In progress

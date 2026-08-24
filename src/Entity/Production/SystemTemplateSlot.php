@@ -240,5 +240,53 @@ class SystemTemplateSlot extends AbstractProductionEntity
                 ->atPath('allowedProjects')
                 ->addViolation();
         }
+
+        if ($this->introducesTemplateCycle()) {
+            $context->buildViolation('production.system_template.slot.allowed_content.cyclic')
+                ->atPath('allowedSystemTemplates')
+                ->addViolation();
+        }
+    }
+
+    public function introducesTemplateCycle(): bool
+    {
+        $owner = $this->systemTemplate;
+        if (null === $owner) {
+            return false;
+        }
+
+        foreach ($this->allowedSystemTemplates as $allowedTemplate) {
+            if ($this->templateReaches($allowedTemplate, $owner, [])) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @param array<int, true> $visited
+     */
+    private function templateReaches(SystemTemplate $current, SystemTemplate $target, array $visited): bool
+    {
+        if ($current === $target) {
+            return true;
+        }
+
+        $objectId = spl_object_id($current);
+        if (isset($visited[$objectId])) {
+            return false;
+        }
+        $visited[$objectId] = true;
+
+        foreach ($current->getSlots() as $slot) {
+            foreach ($slot->getAllowedSystemTemplates() as $nestedTemplate) {
+                if ($this->templateReaches($nestedTemplate, $target, $visited)) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 }

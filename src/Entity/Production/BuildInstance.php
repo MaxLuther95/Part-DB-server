@@ -14,7 +14,9 @@ use Symfony\Component\Validator\Constraints as Assert;
 #[ORM\Entity(repositoryClass: BuildInstanceRepository::class)]
 #[ORM\Table(name: 'production_build_instances')]
 #[ORM\Index(name: 'IDX_PROD_BUILD_SYSTEM_TEMPLATE', columns: ['system_template_id'])]
+#[ORM\UniqueConstraint(name: 'UNIQ_PROD_BUILD_POSITION', columns: ['project_position_id'])]
 #[UniqueEntity(fields: ['serialNumber'], message: 'production.build_instance.serial_number.unique')]
+#[UniqueEntity(fields: ['projectPosition'], message: 'production.build_instance.project_position.unique')]
 class BuildInstance extends AbstractProductionEntity
 {
     #[ORM\Column(name: 'serial_number', type: Types::STRING, length: 128, unique: true)]
@@ -23,12 +25,22 @@ class BuildInstance extends AbstractProductionEntity
     private string $serialNumber = '';
 
     #[ORM\ManyToOne(targetEntity: Project::class)]
-    #[ORM\JoinColumn(name: 'template_project_id', nullable: true)]
+    #[ORM\JoinColumn(name: 'template_project_id', nullable: true, onDelete: 'SET NULL')]
     private ?Project $templateProject = null;
 
     #[ORM\ManyToOne(targetEntity: SystemTemplate::class)]
     #[ORM\JoinColumn(name: 'system_template_id', nullable: true, onDelete: 'SET NULL')]
     private ?SystemTemplate $systemTemplate = null;
+
+    #[ORM\Column(name: 'content_name', type: Types::STRING, length: 255, nullable: true)]
+    #[Assert\Length(max: 255)]
+    private ?string $contentName = null;
+
+    #[ORM\Column(name: 'content_reference_type', type: Types::STRING, length: 32, nullable: true)]
+    private ?string $contentReferenceType = null;
+
+    #[ORM\Column(name: 'content_reference_id', type: Types::INTEGER, nullable: true)]
+    private ?int $contentReferenceId = null;
 
     #[ORM\ManyToOne(targetEntity: CustomerProject::class, inversedBy: 'buildInstances')]
     #[ORM\JoinColumn(name: 'customer_project_id', nullable: true, onDelete: 'SET NULL')]
@@ -44,6 +56,9 @@ class BuildInstance extends AbstractProductionEntity
     #[ORM\Column(type: Types::STRING, length: 255, nullable: true)]
     #[Assert\Length(max: 255)]
     private ?string $location = null;
+
+    #[ORM\Column(type: Types::TEXT, nullable: true)]
+    private ?string $notes = null;
 
     #[ORM\Column(name: 'completed_at', type: Types::DATETIME_IMMUTABLE, nullable: true)]
     private ?\DateTimeImmutable $completedAt = null;
@@ -75,6 +90,9 @@ class BuildInstance extends AbstractProductionEntity
         $this->templateProject = $templateProject;
         if (null !== $templateProject) {
             $this->systemTemplate = null;
+            $this->contentName = $templateProject->getName();
+            $this->contentReferenceType = 'project';
+            $this->contentReferenceId = $templateProject->getId();
         }
 
         return $this;
@@ -90,9 +108,27 @@ class BuildInstance extends AbstractProductionEntity
         $this->systemTemplate = $systemTemplate;
         if (null !== $systemTemplate) {
             $this->templateProject = null;
+            $this->contentName = $systemTemplate->getName();
+            $this->contentReferenceType = 'system_template';
+            $this->contentReferenceId = $systemTemplate->getId();
         }
 
         return $this;
+    }
+
+    public function getContentName(): ?string
+    {
+        return $this->systemTemplate?->getName() ?? $this->templateProject?->getName() ?? $this->contentName;
+    }
+
+    public function getContentReferenceType(): ?string
+    {
+        return null !== $this->systemTemplate ? 'system_template' : (null !== $this->templateProject ? 'project' : $this->contentReferenceType);
+    }
+
+    public function getContentReferenceId(): ?int
+    {
+        return $this->systemTemplate?->getId() ?? $this->templateProject?->getId() ?? $this->contentReferenceId;
     }
 
     public function getBuildProject(): ?Project
@@ -168,6 +204,19 @@ class BuildInstance extends AbstractProductionEntity
         return $this;
     }
 
+    public function getNotes(): ?string
+    {
+        return $this->notes;
+    }
+
+    public function setNotes(?string $notes): self
+    {
+        $notes = null === $notes ? null : trim($notes);
+        $this->notes = '' === $notes ? null : $notes;
+
+        return $this;
+    }
+
     public function getCompletedAt(): ?\DateTimeImmutable
     {
         return $this->completedAt;
@@ -183,7 +232,7 @@ class BuildInstance extends AbstractProductionEntity
     #[Assert\Callback]
     public function validateContent(\Symfony\Component\Validator\Context\ExecutionContextInterface $context): void
     {
-        if (null === $this->systemTemplate && null === $this->templateProject) {
+        if (null === $this->systemTemplate && null === $this->templateProject && null === $this->contentName) {
             $context->buildViolation('production.build_instance.template_required')->addViolation();
         }
     }

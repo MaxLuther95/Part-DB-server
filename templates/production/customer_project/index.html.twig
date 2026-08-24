@@ -1,18 +1,43 @@
 {% extends 'main_card.html.twig' %}
 {% trans_default_domain 'production' %}
 
-{% block title %}{{ 'production.customer_project.plural'|trans }}{% endblock %}
-{% block card_title %}<i class="fa-solid fa-folder-open fa-fw"></i> {{ 'production.customer_project.plural'|trans }}{% endblock %}
+{% set page_title = title|default('production.customer_project.plural') %}
+{% block title %}{{ page_title|trans }}{% endblock %}
+{% block card_title %}<i class="fa-solid {{ my_projects|default(false) ? 'fa-user-check' : 'fa-folder-open' }} fa-fw"></i> {{ page_title|trans }}{% endblock %}
 
 {% block card_content %}
     <div class="d-flex justify-content-between mb-3">
-        <a href="{{ path('production_dashboard') }}" class="btn btn-outline-secondary">
-            <i class="fa-solid fa-arrow-left fa-fw"></i> {{ 'production.dashboard.title'|trans }}
-        </a>
-        {% if is_granted('@projects.edit') %}
-            <a href="{{ path('production_customer_project_new') }}" class="btn btn-success">
-                <i class="fa-solid fa-plus fa-fw"></i> {{ 'production.customer_project.new'|trans }}
-            </a>
+        <div class="d-flex gap-2">
+            {% if my_projects|default(false) %}
+                <a href="{{ path('production_customer_project_index') }}" class="btn btn-outline-primary"><i class="fa-solid fa-folder-open fa-fw"></i> {{ 'production.customer_project.all_projects'|trans }}</a>
+            {% endif %}
+        </div>
+        {% if my_projects|default(false) %}
+            <div class="btn-group" role="group" aria-label="{{ 'production.customer_project.scope.label'|trans }}">
+                <a href="{{ path('production_customer_project_mine', {scope: 'active'}) }}" class="btn {{ project_scope|default('active') == 'active' ? 'btn-primary' : 'btn-outline-primary' }}"><i class="fa-solid fa-industry fa-fw"></i> {{ 'production.customer_project.scope.active'|trans }}</a>
+                <a href="{{ path('production_customer_project_mine', {scope: 'all'}) }}" class="btn {{ project_scope|default('active') == 'all' ? 'btn-primary' : 'btn-outline-primary' }}"><i class="fa-solid fa-list fa-fw"></i> {{ 'production.customer_project.scope.all'|trans }}</a>
+            </div>
+        {% else %}
+            <div class="d-flex align-items-center gap-2">
+                <div class="dropdown">
+                    <button class="btn btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                        <i class="fa-solid fa-filter fa-fw"></i>
+                        {{ selected_status|default(null) ? ('production.customer_project.status.' ~ selected_status)|trans : 'production.customer_project.status_filter.all'|trans }}
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-end">
+                        <li><a class="dropdown-item{{ selected_status|default(null) is null ? ' active' : '' }}" href="{{ path('production_customer_project_index') }}">{{ 'production.customer_project.status_filter.all'|trans }}</a></li>
+                        <li><hr class="dropdown-divider"></li>
+                        {% for status in project_statuses|default([]) %}
+                            <li><a class="dropdown-item{{ selected_status|default(null) == status.value ? ' active' : '' }}" href="{{ path('production_customer_project_index', {status: status.value}) }}">{{ ('production.customer_project.status.' ~ status.value)|trans }}</a></li>
+                        {% endfor %}
+                    </ul>
+                </div>
+                {% if is_granted('@projects.edit') %}
+                    <a href="{{ path('production_customer_project_new') }}" class="btn btn-success text-nowrap">
+                        <i class="fa-solid fa-plus fa-fw"></i> {{ 'production.customer_project.new'|trans }}
+                    </a>
+                {% endif %}
+            </div>
         {% endif %}
     </div>
     <div class="table-responsive"><table class="table table-striped table-hover align-middle">
@@ -32,7 +57,7 @@
                 <td class="text-end">{% if is_granted('@projects.edit') %}<a class="btn btn-sm btn-outline-primary" href="{{ path('production_customer_project_edit', {id: project.id}) }}"><i class="fa-solid fa-pen fa-fw"></i></a>{% endif %}</td>
             </tr>
         {% else %}
-            <tr><td colspan="6" class="text-center text-muted">{{ 'production.common.empty'|trans }}</td></tr>
+            <tr><td colspan="6" class="text-center text-muted">{{ my_projects|default(false) ? ('production.customer_project.scope.empty_' ~ project_scope|default('active'))|trans : 'production.common.empty'|trans }}</td></tr>
         {% endfor %}
         </tbody>
     </table></div>

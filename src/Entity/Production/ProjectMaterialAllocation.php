@@ -25,17 +25,24 @@ class ProjectMaterialAllocation extends AbstractProductionEntity
     private ?CustomerProject $customerProject = null;
 
     #[ORM\ManyToOne(targetEntity: Part::class)]
-    #[ORM\JoinColumn(name: 'part_id', nullable: false)]
-    #[Assert\NotNull]
+    #[ORM\JoinColumn(name: 'part_id', nullable: true, onDelete: 'SET NULL')]
     private ?Part $part = null;
+
+    #[ORM\Column(name: 'part_name', type: Types::STRING, length: 255)]
+    #[Assert\NotBlank]
+    #[Assert\Length(max: 255)]
+    private string $partName = '';
+
+    #[ORM\Column(name: 'part_reference_id', type: Types::INTEGER, nullable: true)]
+    private ?int $partReferenceId = null;
 
     #[ORM\ManyToOne(targetEntity: PartLot::class)]
     #[ORM\JoinColumn(name: 'source_part_lot_id', nullable: true, onDelete: 'SET NULL')]
     private ?PartLot $sourcePartLot = null;
 
-    #[ORM\Column(type: Types::FLOAT)]
+    #[ORM\Column(type: Types::INTEGER)]
     #[Assert\Positive]
-    private float $quantity = 0.0;
+    private int $quantity = 0;
 
     #[ORM\Column(name: 'serial_number', type: Types::STRING, length: 128, nullable: true)]
     #[Assert\Length(max: 128)]
@@ -65,8 +72,22 @@ class ProjectMaterialAllocation extends AbstractProductionEntity
     public function setPart(?Part $part): self
     {
         $this->part = $part;
+        if (null !== $part) {
+            $this->partName = $part->getName();
+            $this->partReferenceId = $part->getId();
+        }
 
         return $this;
+    }
+
+    public function getPartName(): string
+    {
+        return $this->part?->getName() ?? $this->partName;
+    }
+
+    public function getPartReferenceId(): ?int
+    {
+        return $this->part?->getId() ?? $this->partReferenceId;
     }
 
     public function getSourcePartLot(): ?PartLot
@@ -81,12 +102,12 @@ class ProjectMaterialAllocation extends AbstractProductionEntity
         return $this;
     }
 
-    public function getQuantity(): float
+    public function getQuantity(): int
     {
         return $this->quantity;
     }
 
-    public function setQuantity(float $quantity): self
+    public function setQuantity(int $quantity): self
     {
         $this->quantity = $quantity;
 

@@ -1,0 +1,28 @@
+{% extends 'main_card.html.twig' %}
+{% trans_default_domain 'production' %}
+
+{% block title %}{{ 'production.build_instance.assign'|trans }}{% endblock %}
+{% block card_title %}<i class="fa-solid fa-link fa-fw"></i> {{ 'production.build_instance.assign'|trans }}{% endblock %}
+
+{% block card_content %}
+    <p class="text-muted">
+        {{ 'production.build_instance.assign_intro'|trans({
+            '%position%': position.name,
+            '%content%': position.contentName
+        }) }}
+    </p>
+
+    {% if assignable_instances is empty %}
+        <div class="alert alert-info"><i class="fa-solid fa-circle-info fa-fw"></i> {{ 'production.build_instance.assign_empty'|trans }}</div>
+        <a class="btn btn-secondary" href="{{ path('production_customer_project_show', {id: position.customerProject.id}) }}">{{ 'production.action.back'|trans }}</a>
+    {% else %}
+        {{ form_start(form) }}
+            {{ form_errors(form) }}
+            {{ form_row(form.buildInstance) }}
+            <div class="d-flex gap-2 mt-3">
+                <button class="btn btn-success" type="submit"><i class="fa-solid fa-link fa-fw"></i> {{ 'production.build_instance.assign'|trans }}</button>
+                <a class="btn btn-secondary" href="{{ path('production_customer_project_show', {id: position.customerProject.id}) }}">{{ 'production.action.cancel'|trans }}</a>
+            </div>
+        {{ form_end(form) }}
+    {% endif %}
+{% endblock %}

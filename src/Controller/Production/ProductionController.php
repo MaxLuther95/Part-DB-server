@@ -16,6 +16,7 @@ use App\Entity\Production\ProjectAccessory;
 use App\Entity\Production\SystemTemplate;
 use App\Entity\Production\SystemTemplateSlot;
 use App\Form\Production\BuildInstanceType;
+use App\Form\Production\BuildStartType;
 use App\Form\Production\CustomerProjectType;
 use App\Form\Production\CustomerType;
 use App\Form\Production\ProjectAccessoryType;
@@ -25,7 +26,6 @@ use App\Form\Production\SystemTemplateType;
 use App\Repository\Production\BuildInstanceRepository;
 use App\Repository\Production\CustomerProjectRepository;
 use App\Repository\Production\CustomerRepository;
-use App\Repository\Production\ProjectPositionRepository;
 use App\Repository\Production\SystemTemplateRepository;
 use App\Entity\Production\BuildStatus;
 use App\Entity\ProjectSystem\Project;
@@ -37,7 +37,6 @@ use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\Form\Extension\Core\Type\IntegerType;
 use Symfony\Component\Form\Extension\Core\Type\ChoiceType;
-use Symfony\Component\Form\Extension\Core\Type\NumberType;
 use Symfony\Component\Form\Extension\Core\Type\TextType;
 use Symfony\Component\Form\Extension\Core\Type\HiddenType;
 use Symfony\Component\Form\FormError;
@@ -58,18 +57,11 @@ final class ProductionController extends AbstractController
     }
 
     #[Route(path: '', name: 'production_dashboard', methods: ['GET'])]
-    public function dashboard(
-        CustomerRepository $customers,
-        CustomerProjectRepository $projects,
-        BuildInstanceRepository $buildInstances,
-    ): Response {
+    public function dashboard(): Response
+    {
         $this->denyAccessUnlessGranted('@projects.read');
 
-        return $this->render('production/dashboard.html.twig', [
-            'customer_count' => $customers->count([]),
-            'project_count' => $projects->count([]),
-            'build_instance_count' => $buildInstances->count([]),
-        ]);
+        return $this->redirectToRoute('production_customer_project_index');
     }
 
     #[Route(path: '/build', name: 'production_build', methods: ['GET'])]
@@ -84,6 +76,27 @@ final class ProductionController extends AbstractController
         ));
 
         return $this->render('production/build.html.twig', ['build_instances' => $activeBuilds]);
+    }
+
+    #[Route(path: '/build/new', name: 'production_build_new', methods: ['GET', 'POST'])]
+    public function buildNew(Request $request): Response
+    {
+        $this->denyAccessUnlessGranted('@projects.edit');
+
+        $form = $this->createForm(BuildStartType::class);
+        $form->handleRequest($request);
+        $selectedContent = null;
+        if ($form->isSubmitted() && $form->isValid()) {
+            $selectedContent = $form->get('content')->getData();
+            if ($selectedContent instanceof Project) {
+                $this->denyAccessUnlessGranted('read', $selectedContent);
+            }
+        }
+
+        return $this->render('production/build_new.html.twig', [
+            'form' => $form,
+            'selected_content' => $selectedContent,
+        ]);
     }
 
     #[Route(path: '/build-templates', name: 'production_template_index', methods: ['GET'])]
@@ -118,6 +131,21 @@ final class ProductionController extends AbstractController
         $this->denyAccessUnlessGranted('@projects.edit');
 
         return $this->handleSystemTemplateForm($template, $request, $entityManager);
+    }
+
+    #[Route(path: '/build-templates/{id}/delete', name: 'production_template_delete', requirements: ['id' => '\d+'], methods: ['POST'])]
+    public function templateDelete(SystemTemplate $template, Request $request, EntityManagerInterface $entityManager): Response
+    {
+        $this->denyAccessUnlessGranted('@projects.edit');
+        if (!$this->isCsrfTokenValid('delete_system_template_'.$template->getId(), $request->request->getString('_token'))) {
+            throw $this->createAccessDeniedException('Invalid CSRF token.');
+        }
+
+        $entityManager->remove($template);
+        $entityManager->flush();
+        $this->addFlash('success', $this->translator->trans('production.system_template.deleted', domain: 'production'));
+
+        return $this->redirectToRoute('production_template_index');
     }
 
     #[Route(path: '/build-templates/{id}/slots/new', name: 'production_template_slot_new', requirements: ['id' => '\d+'], methods: ['GET', 'POST'])]
@@ -175,12 +203,31 @@ final class ProductionController extends AbstractController
     }
 
     #[Route(path: '/customer-projects', name: 'production_customer_project_index', methods: ['GET'])]
-    public function customerProjectIndex(CustomerProjectRepository $repository): Response
+    public function customerProjectIndex(CustomerProjectRepository $repository, Request $request): Response
     {
         $this->denyAccessUnlessGranted('@projects.read');
+        $status = CustomerProjectStatus::tryFrom($request->query->getString('status'));
 
         return $this->render('production/customer_project/index.html.twig', [
-            'projects' => $repository->findBy([], ['projectNumber' => 'ASC']),
+            'projects' => $repository->findAllWithAssignedUsers($status),
+            'selected_status' => $status?->value,
+            'project_statuses' => CustomerProjectStatus::cases(),
+        ]);
+    }
+
+    #[Route(path: '/customer-projects/mine', name: 'production_customer_project_mine', methods: ['GET'])]
+    public function customerProjectMine(CustomerProjectRepository $repository, Request $request): Response
+    {
+        $this->denyAccessUnlessGranted('@projects.read');
+        $user = $this->getUser();
+        $scope = 'all' === $request->query->getString('scope') ? 'all' : 'active';
+        $status = 'active' === $scope ? CustomerProjectStatus::InProduction : null;
+
+        return $this->render('production/customer_project/index.html.twig', [
+            'projects' => $user instanceof User ? $repository->findAssignedTo($user, $status) : [],
+            'title' => 'production.customer_project.my_projects',
+            'my_projects' => true,
+            'project_scope' => $scope,
         ]);
     }
 
@@ -241,6 +288,15 @@ final class ProductionController extends AbstractController
     public function projectPositionBuild(ProjectPosition $position): Response
     {
         $this->denyAccessUnlessGranted('@projects.edit');
+        $project = $position->getCustomerProject();
+        if (!$project instanceof CustomerProject) {
+            throw $this->createNotFoundException('This position has no customer project.');
+        }
+        if (CustomerProjectStatus::InProduction !== $project->getStatus()) {
+            $this->addFlash('info', $this->translator->trans('production.project_position.build_requires_production', domain: 'production'));
+
+            return $this->redirectToRoute('production_customer_project_show', ['id' => $project->getId()]);
+        }
         if (null !== $position->getBuildProject()) {
             $this->denyAccessUnlessGranted('read', $position->getBuildProject());
         }
@@ -298,7 +354,8 @@ final class ProductionController extends AbstractController
             'method' => 'POST',
         ]);
         foreach ($template->getSlots() as $slot) {
-            $assignment = $position->getAssignmentForSlot($slot);
+            $assignments = $position->getAssignmentsForSlot($slot);
+            $assignment = $assignments[0] ?? null;
             $partAssignment = $position->getPartAssignmentForSlot($slot);
             $choices = [
                 ...$slot->getAllowedSystemTemplates()->toArray(),
@@ -332,7 +389,9 @@ final class ProductionController extends AbstractController
             $quantityType = 1 === $slot->getMaxQuantity() ? HiddenType::class : IntegerType::class;
             $quantityOptions = [
                 'label' => 'production.project_position.quantity',
-                'data' => $assignment?->getQuantity() ?? $partAssignment?->getQuantity() ?? max(1, $slot->getMinQuantity()),
+                'data' => [] !== $assignments
+                    ? array_sum(array_map(static fn(ProjectPosition $item): int => $item->getQuantity(), $assignments))
+                    : ($partAssignment?->getQuantity() ?? max(1, $slot->getMinQuantity())),
                 'mapped' => false,
             ];
             if (IntegerType::class === $quantityType) {
@@ -347,12 +406,12 @@ final class ProductionController extends AbstractController
             foreach ($template->getSlots() as $slot) {
                 $selected = $form->get('content_'.$slot->getId())->getData();
                 $quantity = (int) $form->get('quantity_'.$slot->getId())->getData();
-                $assignment = $position->getAssignmentForSlot($slot);
+                $assignments = $position->getAssignmentsForSlot($slot);
                 $partAssignment = $position->getPartAssignmentForSlot($slot);
                 if (!$selected instanceof SystemTemplate && !$selected instanceof Project && !$selected instanceof Part) {
                     if ($slot->isRequired()) {
                         $form->get('content_'.$slot->getId())->addError(new FormError($this->translator->trans('production.project_position.slot.required', domain: 'production')));
-                    } elseif (null !== $assignment && (0 !== $assignment->getBuildInstances()->count() || 0 !== $assignment->getChildren()->count())) {
+                    } elseif ($this->anyPositionIsInUse($assignments)) {
                         $form->get('content_'.$slot->getId())->addError(new FormError($this->translator->trans('production.project_position.slot.in_use', domain: 'production')));
                     }
                     continue;
@@ -360,10 +419,17 @@ final class ProductionController extends AbstractController
                 if ($quantity < $slot->getMinQuantity() || $quantity > $slot->getMaxQuantity()) {
                     $form->get('quantity_'.$slot->getId())->addError(new FormError($this->translator->trans('production.project_position.slot.quantity_invalid', domain: 'production')));
                 }
-                $samePositionContent = ($selected instanceof SystemTemplate && $assignment?->getSystemTemplate() === $selected)
-                    || ($selected instanceof Project && $assignment?->getTemplateProject() === $selected);
-                if (null !== $assignment && !$samePositionContent
-                    && (0 !== $assignment->getBuildInstances()->count() || 0 !== $assignment->getChildren()->count())) {
+                $allPositionsHaveSelectedContent = true;
+                foreach ($assignments as $assignment) {
+                    if (!(($selected instanceof SystemTemplate && $assignment->getSystemTemplate() === $selected)
+                        || ($selected instanceof Project && $assignment->getTemplateProject() === $selected))) {
+                        $allPositionsHaveSelectedContent = false;
+                        break;
+                    }
+                }
+                $positionsToRemove = array_slice($assignments, $quantity);
+                if ((!$allPositionsHaveSelectedContent && $this->anyPositionIsInUse($assignments))
+                    || $this->anyPositionIsInUse($positionsToRemove)) {
                     $form->get('content_'.$slot->getId())->addError(new FormError($this->translator->trans('production.project_position.slot.in_use', domain: 'production')));
                 }
             }
@@ -372,10 +438,11 @@ final class ProductionController extends AbstractController
         if ($form->isSubmitted() && $form->isValid()) {
             foreach ($template->getSlots() as $slot) {
                 $selected = $form->get('content_'.$slot->getId())->getData();
-                $assignment = $position->getAssignmentForSlot($slot);
+                $assignments = $position->getAssignmentsForSlot($slot);
                 $partAssignment = $position->getPartAssignmentForSlot($slot);
                 if (!$selected instanceof SystemTemplate && !$selected instanceof Project && !$selected instanceof Part) {
-                    if (null !== $assignment) {
+                    foreach ($assignments as $assignment) {
+                        $position->removeChild($assignment);
                         $entityManager->remove($assignment);
                     }
                     if (null !== $partAssignment) {
@@ -388,25 +455,42 @@ final class ProductionController extends AbstractController
                     if (null !== $partAssignment) {
                         $entityManager->remove($partAssignment);
                     }
-                    if (null === $assignment) {
-                        $assignment = (new ProjectPosition())
-                            ->setCustomerProject($position->getCustomerProject())
-                            ->setParent($position)
-                            ->setSourceSlot($slot);
+
+                    $legacyGroupedAssignment = 1 === count($assignments) && $assignments[0]->getQuantity() > 1
+                        ? $assignments[0]
+                        : null;
+                    while (count($assignments) < $quantity) {
+                        $assignment = $legacyGroupedAssignment instanceof ProjectPosition
+                            ? $this->clonePositionConfiguration($legacyGroupedAssignment, $position, $entityManager)
+                            : (new ProjectPosition())
+                                ->setCustomerProject($position->getCustomerProject())
+                                ->setSourceSlot($slot);
+                        $position->addChild($assignment);
                         $entityManager->persist($assignment);
+                        $assignments[] = $assignment;
                     }
-                    $assignment
-                        ->setName($slot->getName())
-                        ->setPosition($slot->getPosition())
-                        ->setQuantity($quantity);
-                    if ($selected instanceof SystemTemplate) {
-                        $assignment->setSystemTemplate($selected);
-                    } else {
-                        $assignment->setTemplateProject($selected);
+
+                    foreach (array_slice($assignments, $quantity) as $assignment) {
+                        $position->removeChild($assignment);
+                        $this->removePositionTree($assignment, $entityManager);
+                    }
+                    $assignments = array_slice($assignments, 0, $quantity);
+
+                    foreach ($assignments as $index => $assignment) {
+                        $assignment
+                            ->setName($quantity > 1 ? sprintf('%s %d', $slot->getName(), $index + 1) : $slot->getName())
+                            ->setPosition($slot->getPosition())
+                            ->setQuantity(1);
+                        if ($selected instanceof SystemTemplate) {
+                            $assignment->setSystemTemplate($selected);
+                        } else {
+                            $assignment->setTemplateProject($selected);
+                        }
                     }
                     continue;
                 }
-                if (null !== $assignment) {
+                foreach ($assignments as $assignment) {
+                    $position->removeChild($assignment);
                     $entityManager->remove($assignment);
                 }
                 if (null === $partAssignment) {
@@ -489,6 +573,7 @@ final class ProductionController extends AbstractController
             static fn(PartLot $lot): bool => !$lot->isInstockUnknown() && $lot->getAmount() > 0,
         ));
         $serialRequired = $project->requiresSerialTracking($part);
+        $remainingQuantity = max(1, (int) ceil($planItem['remaining']));
         $form = $this->createFormBuilder(null, ['translation_domain' => 'production', 'method' => 'POST'])
             ->add('lot', ChoiceType::class, [
                 'label' => 'production.material_plan.source_lot',
@@ -502,12 +587,11 @@ final class ProductionController extends AbstractController
                 'choice_value' => static fn(?PartLot $lot): string => null === $lot ? '' : (string) $lot->getId(),
                 'placeholder' => 'production.material_plan.choose_lot',
             ])
-            ->add('quantity', NumberType::class, [
+            ->add('quantity', IntegerType::class, [
                 'label' => 'production.material_plan.allocate_quantity',
-                'data' => min(1.0, $planItem['remaining']),
-                'scale' => 4,
+                'data' => 1,
                 'html5' => true,
-                'attr' => ['min' => 0.0001, 'max' => $serialRequired ? 1 : $planItem['remaining']],
+                'attr' => ['min' => 1, 'max' => $serialRequired ? 1 : $remainingQuantity, 'step' => 1],
             ])
             ->add('serialNumber', TextType::class, [
                 'label' => 'production.material_plan.serial_number',
@@ -518,11 +602,11 @@ final class ProductionController extends AbstractController
         $form->handleRequest($request);
         if ($form->isSubmitted()) {
             $lot = $form->get('lot')->getData();
-            $quantity = (float) $form->get('quantity')->getData();
+            $quantity = (int) $form->get('quantity')->getData();
             $serialNumber = trim((string) $form->get('serialNumber')->getData());
             if (!$lot instanceof PartLot || $lot->getPart() !== $part) {
                 $form->get('lot')->addError(new FormError($this->translator->trans('production.material_plan.invalid_lot', domain: 'production')));
-            } elseif ($quantity <= 0 || $quantity > $lot->getAmount() || $quantity > $planItem['remaining'] || ($serialRequired && 1.0 !== $quantity)) {
+            } elseif ($quantity <= 0 || $quantity > $lot->getAmount() || $quantity > $remainingQuantity || ($serialRequired && 1 !== $quantity)) {
                 $form->get('quantity')->addError(new FormError($this->translator->trans('production.material_plan.invalid_quantity', domain: 'production')));
             }
             if ($serialRequired && '' === $serialNumber && (!$lot instanceof PartLot || !$lot->getUserBarcode())) {
@@ -533,7 +617,7 @@ final class ProductionController extends AbstractController
         if ($form->isSubmitted() && $form->isValid()) {
             /** @var PartLot $lot */
             $lot = $form->get('lot')->getData();
-            $quantity = (float) $form->get('quantity')->getData();
+            $quantity = (int) $form->get('quantity')->getData();
             $serialNumber = trim((string) $form->get('serialNumber')->getData()) ?: $lot->getUserBarcode();
             $withdrawHelper->withdraw($lot, $quantity, sprintf('Projektbestand %s', $project->getProjectNumber()));
             $allocation = (new ProjectMaterialAllocation())
@@ -574,18 +658,13 @@ final class ProductionController extends AbstractController
     public function buildInstanceNew(
         Request $request,
         EntityManagerInterface $entityManager,
-        ProjectPositionRepository $positions,
     ): Response
     {
         $this->denyAccessUnlessGranted('@projects.edit');
 
         $buildInstance = new BuildInstance();
-        $positionId = $request->query->getInt('position');
-        if ($positionId > 0) {
-            $buildInstance->setProjectPosition($positions->find($positionId));
-        }
 
-        return $this->handleBuildInstanceForm($buildInstance, $request, $entityManager);
+        return $this->handleBuildInstanceForm($buildInstance, $request, $entityManager, true);
     }
 
     #[Route(path: '/build-instances/{id}', name: 'production_build_instance_show', requirements: ['id' => '\d+'], methods: ['GET'])]
@@ -605,6 +684,77 @@ final class ProductionController extends AbstractController
         $this->denyAccessUnlessGranted('@projects.edit');
 
         return $this->handleBuildInstanceForm($buildInstance, $request, $entityManager);
+    }
+
+    #[Route(path: '/project-positions/{id}/assign-instance', name: 'production_project_position_assign_instance', requirements: ['id' => '\d+'], methods: ['GET', 'POST'])]
+    public function projectPositionAssignInstance(
+        ProjectPosition $position,
+        Request $request,
+        BuildInstanceRepository $repository,
+        EntityManagerInterface $entityManager,
+    ): Response {
+        $this->denyAccessUnlessGranted('@projects.edit');
+        $project = $position->getCustomerProject();
+        if (!$project instanceof CustomerProject) {
+            throw $this->createNotFoundException('This position has no customer project.');
+        }
+        if (CustomerProjectStatus::InProduction !== $project->getStatus()) {
+            $this->addFlash('info', $this->translator->trans('production.project_position.build_requires_production', domain: 'production'));
+
+            return $this->redirectToRoute('production_customer_project_show', ['id' => $project->getId()]);
+        }
+        if (!$position->getBuildInstances()->isEmpty()) {
+            $this->addFlash('info', $this->translator->trans('production.build_instance.position_already_assigned', domain: 'production'));
+
+            return $this->redirectToRoute('production_customer_project_show', ['id' => $project->getId()]);
+        }
+
+        $assignableInstances = $repository->findAssignableTo($position);
+        $builder = $this->createFormBuilder(null, [
+            'translation_domain' => 'production',
+            'method' => 'POST',
+        ]);
+        $builder->add('buildInstance', ChoiceType::class, [
+            'label' => 'production.build_instance.assign_choice',
+            'choices' => $assignableInstances,
+            'choice_label' => fn(BuildInstance $instance): string => sprintf(
+                '%s · %s%s',
+                $instance->getSerialNumber(),
+                $this->translator->trans('production.build_instance.status.'.$instance->getStatus()->value, domain: 'production'),
+                null !== $instance->getLocation() ? ' · '.$instance->getLocation() : '',
+            ),
+            'choice_value' => static fn(?BuildInstance $instance): string => null === $instance ? '' : (string) $instance->getId(),
+            'placeholder' => 'production.build_instance.assign_placeholder',
+            'required' => true,
+            'mapped' => false,
+        ]);
+        $form = $builder->getForm();
+        $form->handleRequest($request);
+
+        if ($form->isSubmitted() && $form->isValid()) {
+            $buildInstance = $form->get('buildInstance')->getData();
+            if (!$buildInstance instanceof BuildInstance || null !== $buildInstance->getProjectPosition()) {
+                $form->addError(new FormError($this->translator->trans('production.build_instance.assign_invalid', domain: 'production')));
+            } else {
+                $buildInstance->setProjectPosition($position);
+                $this->historyRecorder->record(
+                    $project,
+                    'build_assigned',
+                    $buildInstance->getSerialNumber(),
+                    $buildInstance,
+                );
+                $entityManager->flush();
+                $this->addFlash('success', $this->translator->trans('production.build_instance.assign_success', domain: 'production'));
+
+                return $this->redirectToRoute('production_customer_project_show', ['id' => $project->getId()]);
+            }
+        }
+
+        return $this->render('production/build_instance/assign.html.twig', [
+            'form' => $form,
+            'position' => $position,
+            'assignable_instances' => $assignableInstances,
+        ]);
     }
 
     #[Route(path: '/build-instances/{id}/unassign', name: 'production_build_instance_unassign', requirements: ['id' => '\d+'], methods: ['POST'])]
@@ -791,11 +941,18 @@ final class ProductionController extends AbstractController
         ]);
     }
 
-    private function handleBuildInstanceForm(BuildInstance $buildInstance, Request $request, EntityManagerInterface $entityManager): Response
+    private function handleBuildInstanceForm(
+        BuildInstance $buildInstance,
+        Request $request,
+        EntityManagerInterface $entityManager,
+        bool $registerExisting = false,
+    ): Response
     {
         $isNew = null === $buildInstance->getId();
         $previousProject = $buildInstance->getCustomerProject();
-        $form = $this->createForm(BuildInstanceType::class, $buildInstance);
+        $form = $this->createForm(BuildInstanceType::class, $buildInstance, [
+            'default_status' => $registerExisting ? BuildStatus::Completed : null,
+        ]);
         $form->handleRequest($request);
         if ($form->isSubmitted() && $form->isValid()) {
             if (null !== $buildInstance->getBuildProject()) {
@@ -827,8 +984,9 @@ final class ProductionController extends AbstractController
 
         return $this->render('production/form.html.twig', [
             'form' => $form,
-            'title' => null === $buildInstance->getId() ? 'production.build_instance.new' : 'production.build_instance.edit',
-            'cancel_route' => 'production_build_instance_index',
+            'title' => $registerExisting ? 'production.build_instance.register_existing' : 'production.build_instance.edit',
+            'intro' => $registerExisting ? 'production.build_instance.register_existing_intro' : null,
+            'cancel_route' => $registerExisting ? 'production_build' : 'production_build_instance_index',
         ]);
     }
 
@@ -845,6 +1003,58 @@ final class ProductionController extends AbstractController
         }
 
         return false;
+    }
+
+    /** @param list<ProjectPosition> $positions */
+    private function anyPositionIsInUse(array $positions): bool
+    {
+        foreach ($positions as $position) {
+            if (!$position->getBuildInstances()->isEmpty()
+                || !$position->getChildren()->isEmpty()
+                || !$position->getPartAssignments()->isEmpty()) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function clonePositionConfiguration(
+        ProjectPosition $source,
+        ProjectPosition $parent,
+        EntityManagerInterface $entityManager,
+    ): ProjectPosition {
+        $clone = (new ProjectPosition())
+            ->setCustomerProject($source->getCustomerProject())
+            ->setParent($parent)
+            ->setSourceSlot($source->getSourceSlot())
+            ->setName($source->getName())
+            ->setPosition($source->getPosition())
+            ->setQuantity(1);
+        if (null !== $source->getSystemTemplate()) {
+            $clone->setSystemTemplate($source->getSystemTemplate());
+        } else {
+            $clone->setTemplateProject($source->getTemplateProject());
+        }
+        $entityManager->persist($clone);
+
+        foreach ($source->getPartAssignments() as $partAssignment) {
+            $entityManager->persist(
+                (new ProjectAccessory())
+                    ->setProjectPosition($clone)
+                    ->setSourceSlot($partAssignment->getSourceSlot())
+                    ->setPart($partAssignment->getPart())
+                    ->setQuantity($partAssignment->getQuantity())
+                    ->setSerialTracking($partAssignment->isSerialTracking())
+                    ->setNote($partAssignment->getNote()),
+            );
+        }
+
+        foreach ($source->getChildren() as $sourceChild) {
+            $clone->addChild($this->clonePositionConfiguration($sourceChild, $clone, $entityManager));
+        }
+
+        return $clone;
     }
 
     private function removePositionTree(ProjectPosition $position, EntityManagerInterface $entityManager): void

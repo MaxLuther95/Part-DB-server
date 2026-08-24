@@ -7,6 +7,8 @@ production:
       unique: Diese Projektnummer ist bereits vergeben.
   build_instance:
     template_required: Bitte eine Systemvorlage oder ein Part-DB-Bauprojekt auswählen.
+    project_position:
+      unique: Dieser Projektposition ist bereits ein Gerät oder eine Baugruppe zugewiesen.
     serial_number:
       unique: Diese Seriennummer ist bereits vergeben.
   project_position:
@@ -23,3 +25,4 @@ production:
         invalid: Die Höchstmenge darf nicht kleiner als die Mindestmenge sein.
       allowed_content:
         required: Wählen Sie mindestens eine erlaubte Systemvorlage, ein Part-DB-Projekt oder ein Lagerteil.
+        cyclic: Diese Auswahl würde eine zyklische Verschachtelung von Systemvorlagen erzeugen.

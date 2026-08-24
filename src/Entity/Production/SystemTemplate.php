@@ -23,8 +23,15 @@ class SystemTemplate extends AbstractProductionEntity
     private string $name = '';
 
     #[ORM\ManyToOne(targetEntity: Project::class)]
-    #[ORM\JoinColumn(name: 'base_project_id', nullable: true)]
+    #[ORM\JoinColumn(name: 'base_project_id', nullable: true, onDelete: 'SET NULL')]
     private ?Project $baseProject = null;
+
+    #[ORM\Column(name: 'base_project_name', type: Types::STRING, length: 255, nullable: true)]
+    #[Assert\Length(max: 255)]
+    private ?string $baseProjectName = null;
+
+    #[ORM\Column(name: 'base_project_reference_id', type: Types::INTEGER, nullable: true)]
+    private ?int $baseProjectReferenceId = null;
 
     #[ORM\Column(type: Types::TEXT)]
     private string $description = '';
@@ -67,8 +74,22 @@ class SystemTemplate extends AbstractProductionEntity
     public function setBaseProject(?Project $baseProject): self
     {
         $this->baseProject = $baseProject;
+        if (null !== $baseProject) {
+            $this->baseProjectName = $baseProject->getName();
+            $this->baseProjectReferenceId = $baseProject->getId();
+        }
 
         return $this;
+    }
+
+    public function getBaseProjectName(): ?string
+    {
+        return $this->baseProject?->getName() ?? $this->baseProjectName;
+    }
+
+    public function getBaseProjectReferenceId(): ?int
+    {
+        return $this->baseProject?->getId() ?? $this->baseProjectReferenceId;
     }
 
     public function getDescription(): string
@@ -99,5 +120,24 @@ class SystemTemplate extends AbstractProductionEntity
     public function getSlots(): Collection
     {
         return $this->slots;
+    }
+
+    public function addSlot(SystemTemplateSlot $slot): self
+    {
+        if (!$this->slots->contains($slot)) {
+            $this->slots->add($slot);
+            $slot->setSystemTemplate($this);
+        }
+
+        return $this;
+    }
+
+    public function removeSlot(SystemTemplateSlot $slot): self
+    {
+        if ($this->slots->removeElement($slot) && $slot->getSystemTemplate() === $this) {
+            $slot->setSystemTemplate(null);
+        }
+
+        return $this;
     }
 }

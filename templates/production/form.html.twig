@@ -8,6 +8,7 @@
 {% endblock %}
 
 {% block card_content %}
+    {% if intro|default(null) %}<p class="text-muted">{{ intro|trans }}</p>{% endif %}
     {{ form_start(form) }}
         {{ form_widget(form) }}
         <div class="d-flex gap-2 mt-3">

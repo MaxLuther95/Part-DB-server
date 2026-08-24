@@ -23,12 +23,22 @@ class ProjectPosition extends AbstractProductionEntity
     private ?CustomerProject $customerProject = null;
 
     #[ORM\ManyToOne(targetEntity: Project::class)]
-    #[ORM\JoinColumn(name: 'template_project_id', nullable: true)]
+    #[ORM\JoinColumn(name: 'template_project_id', nullable: true, onDelete: 'SET NULL')]
     private ?Project $templateProject = null;
 
     #[ORM\ManyToOne(targetEntity: SystemTemplate::class)]
     #[ORM\JoinColumn(name: 'system_template_id', nullable: true, onDelete: 'SET NULL')]
     private ?SystemTemplate $systemTemplate = null;
+
+    #[ORM\Column(name: 'content_name', type: Types::STRING, length: 255, nullable: true)]
+    #[Assert\Length(max: 255)]
+    private ?string $contentName = null;
+
+    #[ORM\Column(name: 'content_reference_type', type: Types::STRING, length: 32, nullable: true)]
+    private ?string $contentReferenceType = null;
+
+    #[ORM\Column(name: 'content_reference_id', type: Types::INTEGER, nullable: true)]
+    private ?int $contentReferenceId = null;
 
     #[ORM\ManyToOne(targetEntity: SystemTemplateSlot::class)]
     #[ORM\JoinColumn(name: 'source_slot_id', nullable: true, onDelete: 'SET NULL')]
@@ -40,7 +50,7 @@ class ProjectPosition extends AbstractProductionEntity
 
     /** @var Collection<int, self> */
     #[ORM\OneToMany(mappedBy: 'parent', targetEntity: self::class)]
-    #[ORM\OrderBy(['position' => 'ASC', 'name' => 'ASC'])]
+    #[ORM\OrderBy(['position' => 'ASC', 'id' => 'ASC'])]
     private Collection $children;
 
     #[ORM\Column(type: Types::STRING, length: 255)]
@@ -55,6 +65,9 @@ class ProjectPosition extends AbstractProductionEntity
     #[ORM\Column(type: Types::INTEGER, options: ['default' => 1])]
     #[Assert\Positive]
     private int $quantity = 1;
+
+    #[ORM\Column(type: Types::TEXT, nullable: true)]
+    private ?string $notes = null;
 
     /** @var Collection<int, BuildInstance> */
     #[ORM\OneToMany(mappedBy: 'projectPosition', targetEntity: BuildInstance::class)]
@@ -100,6 +113,9 @@ class ProjectPosition extends AbstractProductionEntity
         $this->templateProject = $templateProject;
         if (null !== $templateProject) {
             $this->systemTemplate = null;
+            $this->contentName = $templateProject->getName();
+            $this->contentReferenceType = 'project';
+            $this->contentReferenceId = $templateProject->getId();
         }
 
         return $this;
@@ -120,9 +136,27 @@ class ProjectPosition extends AbstractProductionEntity
         $this->systemTemplate = $systemTemplate;
         if (null !== $systemTemplate) {
             $this->templateProject = null;
+            $this->contentName = $systemTemplate->getName();
+            $this->contentReferenceType = 'system_template';
+            $this->contentReferenceId = $systemTemplate->getId();
         }
 
         return $this;
+    }
+
+    public function getContentName(): ?string
+    {
+        return $this->systemTemplate?->getName() ?? $this->templateProject?->getName() ?? $this->contentName;
+    }
+
+    public function getContentReferenceType(): ?string
+    {
+        return null !== $this->systemTemplate ? 'system_template' : (null !== $this->templateProject ? 'project' : $this->contentReferenceType);
+    }
+
+    public function getContentReferenceId(): ?int
+    {
+        return $this->systemTemplate?->getId() ?? $this->templateProject?->getId() ?? $this->contentReferenceId;
     }
 
     public function getSourceSlot(): ?SystemTemplateSlot
@@ -158,15 +192,50 @@ class ProjectPosition extends AbstractProductionEntity
         return $this->children;
     }
 
-    public function getAssignmentForSlot(SystemTemplateSlot $slot): ?self
+    public function addChild(self $child): self
     {
-        foreach ($this->children as $child) {
-            if ($child->getSourceSlot() === $slot) {
-                return $child;
-            }
+        if (!$this->children->contains($child)) {
+            $this->children->add($child);
+            $child->setParent($this);
         }
 
-        return null;
+        return $this;
+    }
+
+    public function removeChild(self $child): self
+    {
+        if ($this->children->removeElement($child) && $child->getParent() === $this) {
+            $child->setParent(null);
+        }
+
+        return $this;
+    }
+
+    /** @return list<self> */
+    public function getAssignmentsForSlot(SystemTemplateSlot $slot): array
+    {
+        return array_values($this->children->filter(
+            static fn(self $child): bool => $child->getSourceSlot() === $slot,
+        )->toArray());
+    }
+
+    public function getAssignmentForSlot(SystemTemplateSlot $slot): ?self
+    {
+        return $this->getAssignmentsForSlot($slot)[0] ?? null;
+    }
+
+    public function getDisplayOffsetForSlot(SystemTemplateSlot $slot): int
+    {
+        $offset = 0;
+        foreach ($this->systemTemplate?->getSlots() ?? [] as $templateSlot) {
+            if ($templateSlot === $slot) {
+                return $offset;
+            }
+
+            $offset += max(1, count($this->getAssignmentsForSlot($templateSlot)));
+        }
+
+        return $offset;
     }
 
     public function getPartAssignmentForSlot(SystemTemplateSlot $slot): ?ProjectAccessory
@@ -216,6 +285,19 @@ class ProjectPosition extends AbstractProductionEntity
         return $this;
     }
 
+    public function getNotes(): ?string
+    {
+        return $this->notes;
+    }
+
+    public function setNotes(?string $notes): self
+    {
+        $notes = null === $notes ? null : trim($notes);
+        $this->notes = '' === $notes ? null : $notes;
+
+        return $this;
+    }
+
     /** @return Collection<int, BuildInstance> */
     public function getBuildInstances(): Collection
     {
@@ -231,7 +313,7 @@ class ProjectPosition extends AbstractProductionEntity
     #[Assert\Callback]
     public function validateContent(\Symfony\Component\Validator\Context\ExecutionContextInterface $context): void
     {
-        if (null === $this->systemTemplate && null === $this->templateProject) {
+        if (null === $this->systemTemplate && null === $this->templateProject && null === $this->contentName) {
             $context->buildViolation('production.project_position.template_required')->addViolation();
         }
     }

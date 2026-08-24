@@ -7,6 +7,8 @@ namespace App\Form\Production;
 use App\Entity\Production\Customer;
 use App\Entity\Production\CustomerProject;
 use App\Entity\Production\CustomerProjectStatus;
+use App\Entity\UserSystem\User;
+use App\Repository\UserRepository;
 use Symfony\Bridge\Doctrine\Form\Type\EntityType;
 use Symfony\Component\Form\AbstractType;
 use Symfony\Component\Form\Extension\Core\Type\ChoiceType;
@@ -44,11 +46,31 @@ final class CustomerProjectType extends AbstractType
                     'production.customer_project.status.cancelled' => CustomerProjectStatus::Cancelled,
                 ],
             ])
+            ->add('assignedUsers', EntityType::class, [
+                'class' => User::class,
+                'label' => 'production.customer_project.assigned_users',
+                'choice_label' => static fn(User $user): string => $user->getFullName(true),
+                'query_builder' => static fn(UserRepository $repository) => $repository->createQueryBuilder('project_user')
+                    ->where('project_user.disabled = :disabled')
+                    ->andWhere('project_user.id <> :anonymous')
+                    ->setParameter('disabled', false)
+                    ->setParameter('anonymous', User::ID_ANONYMOUS)
+                    ->orderBy('project_user.name', 'ASC'),
+                'multiple' => true,
+                'required' => false,
+                'by_reference' => false,
+                'help' => 'production.customer_project.assigned_users_help',
+            ])
             ->add('description', TextareaType::class, [
                 'label' => 'production.common.description',
                 'required' => false,
                 'empty_data' => '',
                 'attr' => ['rows' => 4],
+            ])
+            ->add('notes', TextareaType::class, [
+                'label' => 'production.common.notes',
+                'required' => false,
+                'attr' => ['rows' => 5],
             ]);
     }
 

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Entity\Production;
 
 use App\Repository\Production\CustomerProjectRepository;
+use App\Entity\UserSystem\User;
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
 use Doctrine\DBAL\Types\Types;
@@ -38,6 +39,17 @@ class CustomerProject extends AbstractProductionEntity
     #[ORM\Column(type: Types::TEXT)]
     private string $description = '';
 
+    #[ORM\Column(type: Types::TEXT, nullable: true)]
+    private ?string $notes = null;
+
+    /** @var Collection<int, User> */
+    #[ORM\ManyToMany(targetEntity: User::class)]
+    #[ORM\JoinTable(name: 'production_customer_project_users')]
+    #[ORM\JoinColumn(name: 'customer_project_id', referencedColumnName: 'id', onDelete: 'CASCADE')]
+    #[ORM\InverseJoinColumn(name: 'user_id', referencedColumnName: 'id', onDelete: 'CASCADE')]
+    #[ORM\OrderBy(['name' => 'ASC'])]
+    private Collection $assignedUsers;
+
     /** @var Collection<int, BuildInstance> */
     #[ORM\OneToMany(mappedBy: 'customerProject', targetEntity: BuildInstance::class)]
     #[ORM\OrderBy(['serialNumber' => 'ASC'])]
@@ -65,6 +77,7 @@ class CustomerProject extends AbstractProductionEntity
 
     public function __construct()
     {
+        $this->assignedUsers = new ArrayCollection();
         $this->buildInstances = new ArrayCollection();
         $this->positions = new ArrayCollection();
         $this->history = new ArrayCollection();
@@ -135,6 +148,46 @@ class CustomerProject extends AbstractProductionEntity
         $this->description = $description;
 
         return $this;
+    }
+
+    public function getNotes(): ?string
+    {
+        return $this->notes;
+    }
+
+    public function setNotes(?string $notes): self
+    {
+        $notes = null === $notes ? null : trim($notes);
+        $this->notes = '' === $notes ? null : $notes;
+
+        return $this;
+    }
+
+    /** @return Collection<int, User> */
+    public function getAssignedUsers(): Collection
+    {
+        return $this->assignedUsers;
+    }
+
+    public function addAssignedUser(User $user): self
+    {
+        if (!$this->assignedUsers->contains($user)) {
+            $this->assignedUsers->add($user);
+        }
+
+        return $this;
+    }
+
+    public function removeAssignedUser(User $user): self
+    {
+        $this->assignedUsers->removeElement($user);
+
+        return $this;
+    }
+
+    public function isAssignedTo(User $user): bool
+    {
+        return $this->assignedUsers->contains($user);
     }
 
     /** @return Collection<int, BuildInstance> */

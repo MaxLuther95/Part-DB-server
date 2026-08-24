@@ -11,6 +11,7 @@ use Doctrine\Persistence\ManagerRegistry;
 use Symfony\Component\Form\AbstractType;
 use Symfony\Component\Form\Extension\Core\Type\ChoiceType;
 use Symfony\Component\Form\Extension\Core\Type\IntegerType;
+use Symfony\Component\Form\Extension\Core\Type\TextareaType;
 use Symfony\Component\Form\Extension\Core\Type\TextType;
 use Symfony\Component\Form\FormError;
 use Symfony\Component\Form\FormBuilderInterface;
@@ -57,8 +58,14 @@ final class ProjectPositionType extends AbstractType
                     : 'production.project_position.selection_group.project',
                 'data' => $position->getSystemTemplate() ?? $position->getTemplateProject(),
                 'mapped' => false,
+                'required' => null === $position->getContentName(),
                 'placeholder' => 'production.project_position.selection_placeholder',
                 'help' => 'production.project_position.selection_help',
+            ])
+            ->add('notes', TextareaType::class, [
+                'label' => 'production.common.notes',
+                'required' => false,
+                'attr' => ['rows' => 4],
             ]);
 
         // The selected content is intentionally represented by one unmapped field. Transfer it to
@@ -92,7 +99,9 @@ final class ProjectPositionType extends AbstractType
                 return;
             }
 
-            $form->get('content')->addError(new FormError('production.project_position.template_required'));
+            if (null === $position->getContentName()) {
+                $form->get('content')->addError(new FormError('production.project_position.template_required'));
+            }
         }, 100);
     }
 

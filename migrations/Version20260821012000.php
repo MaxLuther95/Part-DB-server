@@ -6,6 +6,7 @@ namespace DoctrineMigrations;
 
 use App\Migration\AbstractMultiPlatformMigration;
 use Doctrine\DBAL\Schema\Schema;
+use Doctrine\Migrations\Exception\IrreversibleMigration;
 
 final class Version20260821012000 extends AbstractMultiPlatformMigration
 {
@@ -44,7 +45,7 @@ final class Version20260821012000 extends AbstractMultiPlatformMigration
 
     public function mySQLDown(Schema $schema): void
     {
-        // The old model cannot represent system templates without a base project or direct nested templates.
+        $this->abortDowngrade();
     }
 
     public function sqLiteUp(Schema $schema): void
@@ -90,7 +91,7 @@ final class Version20260821012000 extends AbstractMultiPlatformMigration
 
     public function sqLiteDown(Schema $schema): void
     {
-        // The old model cannot represent system templates without a base project or direct nested templates.
+        $this->abortDowngrade();
     }
 
     public function postgreSQLUp(Schema $schema): void
@@ -117,6 +118,11 @@ final class Version20260821012000 extends AbstractMultiPlatformMigration
 
     public function postgreSQLDown(Schema $schema): void
     {
-        // The old model cannot represent system templates without a base project or direct nested templates.
+        $this->abortDowngrade();
+    }
+
+    private function abortDowngrade(): never
+    {
+        throw new IrreversibleMigration('The previous model cannot represent direct or nested system templates. Restore the database backup to downgrade safely.');
     }
 }

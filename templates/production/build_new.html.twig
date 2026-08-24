@@ -1,0 +1,38 @@
+{% extends 'main_card.html.twig' %}
+{% trans_default_domain 'production' %}
+
+{% block title %}{{ 'production.build.new'|trans }}{% endblock %}
+{% block card_title %}<i class="fa-solid fa-hammer fa-fw"></i> {{ 'production.build.new'|trans }}{% endblock %}
+
+{% block card_content %}
+    {% if selected_content %}
+        <p>{{ 'production.build.new_preparation_intro'|trans }}</p>
+        <dl class="row">
+            <dt class="col-sm-3">{{ 'production.build_instance.template'|trans }}</dt>
+            <dd class="col-sm-9">
+                {% if selected_content is instanceof('App\\Entity\\Production\\SystemTemplate') %}
+                    <a href="{{ path('production_template_show', {id: selected_content.id}) }}">{{ selected_content.name }}</a>
+                {% else %}
+                    <a href="{{ path('project_info', {id: selected_content.id}) }}">{{ selected_content.fullPath }}</a>
+                {% endif %}
+            </dd>
+        </dl>
+        <div class="alert alert-info"><i class="fa-solid fa-circle-info fa-fw"></i> {{ 'production.build.new_preparation_notice'|trans }}</div>
+        <ol class="mb-4">
+            <li>{{ 'production.project_position.build_steps.serial'|trans }}</li>
+            <li>{{ 'production.project_position.build_steps.site'|trans }}</li>
+            <li>{{ 'production.project_position.build_steps.material'|trans }}</li>
+            <li>{{ 'production.project_position.build_steps.confirm'|trans }}</li>
+        </ol>
+        <a class="btn btn-primary" href="{{ path('production_build_new') }}"><i class="fa-solid fa-arrow-left fa-fw"></i> {{ 'production.build.choose_different'|trans }}</a>
+    {% else %}
+        <p class="text-muted">{{ 'production.build.new_intro'|trans }}</p>
+        {{ form_start(form) }}
+            {{ form_widget(form) }}
+            <div class="d-flex gap-2 mt-3">
+                <button class="btn btn-success" type="submit"><i class="fa-solid fa-arrow-right fa-fw"></i> {{ 'production.build.prepare'|trans }}</button>
+                <a class="btn btn-secondary" href="{{ path('production_build') }}">{{ 'production.action.cancel'|trans }}</a>
+            </div>
+        {{ form_end(form) }}
+    {% endif %}
+{% endblock %}

@@ -6,14 +6,13 @@ namespace App\Form\Production;
 
 use App\Entity\Production\BuildInstance;
 use App\Entity\Production\BuildStatus;
-use App\Entity\Production\ProjectPosition;
 use App\Entity\Production\SystemTemplate;
 use App\Entity\ProjectSystem\Project;
 use Doctrine\Persistence\ManagerRegistry;
 use Symfony\Component\Form\AbstractType;
 use Symfony\Component\Form\Extension\Core\Type\ChoiceType;
+use Symfony\Component\Form\Extension\Core\Type\TextareaType;
 use Symfony\Component\Form\Extension\Core\Type\TextType;
-use Symfony\Bridge\Doctrine\Form\Type\EntityType;
 use Symfony\Component\Form\FormBuilderInterface;
 use Symfony\Component\Form\FormEvent;
 use Symfony\Component\Form\FormEvents;
@@ -51,17 +50,10 @@ final class BuildInstanceType extends AbstractType
                     : 'production.project_position.selection_group.project',
                 'data' => $buildInstance->getSystemTemplate() ?? $buildInstance->getTemplateProject(),
                 'mapped' => false,
+                'required' => null === $buildInstance->getContentName(),
                 'placeholder' => 'production.project_position.selection_placeholder',
             ])
-            ->add('projectPosition', EntityType::class, [
-                'class' => ProjectPosition::class,
-                'label' => 'production.project_position.label',
-                'choice_label' => static fn(ProjectPosition $position): string => (string) $position,
-                'required' => false,
-                'placeholder' => 'production.build_instance.unassigned',
-                'help' => 'production.build_instance.project_position_help',
-            ])
-            ->add('status', ChoiceType::class, [
+            ->add('status', ChoiceType::class, array_filter([
                 'label' => 'production.common.status',
                 'choices' => [
                     'production.build_instance.status.planned' => BuildStatus::Planned,
@@ -71,11 +63,18 @@ final class BuildInstanceType extends AbstractType
                     'production.build_instance.status.installed' => BuildStatus::Installed,
                     'production.build_instance.status.scrapped' => BuildStatus::Scrapped,
                 ],
-            ])
+                'data' => $options['default_status'],
+            ], static fn(mixed $value): bool => null !== $value))
             ->add('location', TextType::class, [
                 'label' => 'production.build_instance.location',
                 'required' => false,
                 'empty_data' => '',
+            ])
+            ->add('notes', TextareaType::class, [
+                'label' => 'production.build_instance.notes',
+                'required' => false,
+                'empty_data' => '',
+                'attr' => ['rows' => 5],
             ]);
 
         $builder->addEventListener(FormEvents::POST_SUBMIT, static function (FormEvent $event): void {
@@ -105,6 +104,8 @@ final class BuildInstanceType extends AbstractType
         $resolver->setDefaults([
             'data_class' => BuildInstance::class,
             'translation_domain' => 'production',
+            'default_status' => null,
         ]);
+        $resolver->setAllowedTypes('default_status', ['null', BuildStatus::class]);
     }
 }

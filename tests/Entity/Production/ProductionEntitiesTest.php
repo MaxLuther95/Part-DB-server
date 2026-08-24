@@ -15,6 +15,7 @@ use App\Entity\Production\SystemTemplate;
 use App\Entity\Production\SystemTemplateSlot;
 use App\Entity\Parts\Part;
 use App\Entity\ProjectSystem\Project;
+use App\Entity\UserSystem\User;
 use PHPUnit\Framework\TestCase;
 
 final class ProductionEntitiesTest extends TestCase
@@ -28,13 +29,32 @@ final class ProductionEntitiesTest extends TestCase
         $project = (new CustomerProject())
             ->setProjectNumber(' P-2026-0042 ')
             ->setName(' Messsystem ')
+            ->setNotes(' Projekt intern abstimmen. ')
             ->setCustomer($customer);
 
         self::assertSame('K-100', $customer->getCustomerNumber());
         self::assertSame('ACME GmbH', $customer->getName());
         self::assertTrue($customer->isActive());
         self::assertSame(CustomerProjectStatus::Planning, $project->getStatus());
+        self::assertSame('Projekt intern abstimmen.', $project->getNotes());
         self::assertSame($customer, $project->getCustomer());
+    }
+
+    public function testProjectCanBeAssignedToMultipleUsers(): void
+    {
+        $firstUser = new User();
+        $secondUser = new User();
+        $project = (new CustomerProject())
+            ->addAssignedUser($firstUser)
+            ->addAssignedUser($secondUser);
+
+        self::assertTrue($project->isAssignedTo($firstUser));
+        self::assertSame([$firstUser, $secondUser], $project->getAssignedUsers()->toArray());
+
+        $project->removeAssignedUser($firstUser);
+
+        self::assertFalse($project->isAssignedTo($firstUser));
+        self::assertTrue($project->isAssignedTo($secondUser));
     }
 
     public function testCompletedBuildGetsCompletionTimestamp(): void
@@ -42,7 +62,8 @@ final class ProductionEntitiesTest extends TestCase
         $build = (new BuildInstance())
             ->setSerialNumber(' E1-2600127 ')
             ->setTemplateProject(new Project())
-            ->setLocation(' Regal 2 ');
+            ->setLocation(' Regal 2 ')
+            ->setNotes(' Fertigungsprüfung ohne Befund. ');
 
         self::assertSame(BuildStatus::Planned, $build->getStatus());
         self::assertNull($build->getCompletedAt());
@@ -51,6 +72,7 @@ final class ProductionEntitiesTest extends TestCase
 
         self::assertSame('E1-2600127', $build->getSerialNumber());
         self::assertSame('Regal 2', $build->getLocation());
+        self::assertSame('Fertigungsprüfung ohne Befund.', $build->getNotes());
         self::assertNotNull($build->getCompletedAt());
     }
 
@@ -61,13 +83,15 @@ final class ProductionEntitiesTest extends TestCase
         $position = (new ProjectPosition())
             ->setCustomerProject($project)
             ->setTemplateProject($template)
-            ->setName('Elektronik Slot 1');
+            ->setName('Elektronik Slot 1')
+            ->setNotes(' Nur für dieses Projekt. ');
 
         $build = (new BuildInstance())->setProjectPosition($position);
 
         self::assertSame($position, $build->getProjectPosition());
         self::assertSame($project, $build->getCustomerProject());
         self::assertSame($template, $build->getTemplateProject());
+        self::assertSame('Nur für dieses Projekt.', $position->getNotes());
 
         $build->setProjectPosition(null);
 
@@ -121,7 +145,55 @@ final class ProductionEntitiesTest extends TestCase
             ->setQuantity(1)
             ->setSerialNumber(' E18-4711 ');
 
-        self::assertSame(1.0, $allocation->getQuantity());
+        self::assertSame(1, $allocation->getQuantity());
+        self::assertSame($allocation->getPart()?->getName(), $allocation->getPartName());
         self::assertSame('E18-4711', $allocation->getSerialNumber());
+    }
+
+    public function testSystemTemplateCannotContainItselfIndirectly(): void
+    {
+        $first = (new SystemTemplate())->setName('First');
+        $second = (new SystemTemplate())->setName('Second');
+        $third = (new SystemTemplate())->setName('Third');
+
+        $first->addSlot((new SystemTemplateSlot())
+            ->setName('Second')
+            ->addAllowedSystemTemplate($second));
+        $second->addSlot((new SystemTemplateSlot())
+            ->setName('Third')
+            ->addAllowedSystemTemplate($third));
+        $cyclicSlot = (new SystemTemplateSlot())
+            ->setName('First')
+            ->addAllowedSystemTemplate($first);
+        $third->addSlot($cyclicSlot);
+
+        self::assertTrue($cyclicSlot->introducesTemplateCycle());
+
+        $nonCyclicSlot = (new SystemTemplateSlot())
+            ->setSystemTemplate($third)
+            ->setName('Unrelated')
+            ->addAllowedSystemTemplate((new SystemTemplate())->setName('Unrelated'));
+        self::assertFalse($nonCyclicSlot->introducesTemplateCycle());
+    }
+
+    public function testRepeatedNestedSystemsRemainIndividualPositions(): void
+    {
+        $mainboards = (new SystemTemplateSlot())->setName('Mainboards')->setPosition(0);
+        $interface = (new SystemTemplateSlot())->setName('Interface')->setPosition(1);
+        $template = (new SystemTemplate())
+            ->setName('MCFLL System')
+            ->addSlot($mainboards)
+            ->addSlot($interface);
+        $position = (new ProjectPosition())->setName('MCFLL System')->setSystemTemplate($template);
+
+        $mainboardOne = (new ProjectPosition())->setName('Mainboard 1')->setSourceSlot($mainboards);
+        $mainboardTwo = (new ProjectPosition())->setName('Mainboard 2')->setSourceSlot($mainboards);
+        $interfacePosition = (new ProjectPosition())->setName('Interface')->setSourceSlot($interface);
+        $position->addChild($mainboardOne)->addChild($mainboardTwo)->addChild($interfacePosition);
+
+        self::assertSame([$mainboardOne, $mainboardTwo], $position->getAssignmentsForSlot($mainboards));
+        self::assertSame(0, $position->getDisplayOffsetForSlot($mainboards));
+        self::assertSame(2, $position->getDisplayOffsetForSlot($interface));
+        self::assertSame($position, $mainboardTwo->getParent());
     }
 }

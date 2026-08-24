@@ -13,7 +13,7 @@
         <dt class="col-sm-3">{{ 'production.project_position.label'|trans }}</dt>
         <dd class="col-sm-9">{{ position.name }}</dd>
         <dt class="col-sm-3">{{ 'production.build_instance.template'|trans }}</dt>
-        <dd class="col-sm-9">{% if position.systemTemplate %}<a href="{{ path('production_template_show', {id: position.systemTemplate.id}) }}">{{ position.systemTemplate.name }}</a>{% else %}<a href="{{ path('project_info', {id: position.templateProject.id}) }}">{{ position.templateProject.fullPath }}</a>{% endif %}</dd>
+        <dd class="col-sm-9">{% if position.systemTemplate %}<a href="{{ path('production_template_show', {id: position.systemTemplate.id}) }}">{{ position.systemTemplate.name }}</a>{% elseif position.templateProject %}<a href="{{ path('project_info', {id: position.templateProject.id}) }}">{{ position.templateProject.fullPath }}</a>{% else %}<span class="text-muted">{{ position.contentName }} ({{ 'production.common.deleted_reference'|trans }})</span>{% endif %}</dd>
     </dl>
 
     <div class="alert alert-info"><i class="fa-solid fa-circle-info fa-fw"></i> {{ 'production.project_position.build_notice'|trans }}</div>

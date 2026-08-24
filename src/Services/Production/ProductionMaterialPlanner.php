@@ -10,7 +10,7 @@ use App\Entity\Production\CustomerProject;
 final class ProductionMaterialPlanner
 {
     /**
-     * @return array{items: list<array{part: Part, required: float, allocated: float, remaining: float, available: float, missing: float}>, complete: bool}
+     * @return array{items: list<array{part: Part, required: float, allocated: int, remaining: float, available: float, missing: float, overstock: float}>, complete: bool}
      */
     public function createPlan(CustomerProject $project): array
     {
@@ -46,20 +46,23 @@ final class ProductionMaterialPlanner
             $requirements[$partId]['required'] += $accessory->getQuantity();
         }
 
-        /** @var array<int, float> $allocatedByPart */
+        /** @var array<int, int> $allocatedByPart */
         $allocatedByPart = [];
         foreach ($project->getMaterialAllocations() as $allocation) {
-            $partId = $allocation->getPart()?->getId();
-            if (null !== $partId) {
-                $allocatedByPart[$partId] = ($allocatedByPart[$partId] ?? 0.0) + $allocation->getQuantity();
+            $part = $allocation->getPart();
+            $partId = $part?->getId();
+            if (null !== $part && null !== $partId) {
+                $allocatedByPart[$partId] = ($allocatedByPart[$partId] ?? 0) + $allocation->getQuantity();
+                $requirements[$partId] ??= ['part' => $part, 'required' => 0.0];
             }
         }
 
         $items = [];
         $complete = true;
         foreach ($requirements as $partId => $requirement) {
-            $allocated = $allocatedByPart[$partId] ?? 0.0;
+            $allocated = $allocatedByPart[$partId] ?? 0;
             $remaining = max(0.0, $requirement['required'] - $allocated);
+            $overstock = max(0.0, $allocated - $requirement['required']);
             $available = $requirement['part']->getAmountSum();
             $missing = max(0.0, $remaining - $available);
             $complete = $complete && 0.0 === $missing;
@@ -70,6 +73,7 @@ final class ProductionMaterialPlanner
                 'remaining' => $remaining,
                 'available' => $available,
                 'missing' => $missing,
+                'overstock' => $overstock,
             ];
         }
 

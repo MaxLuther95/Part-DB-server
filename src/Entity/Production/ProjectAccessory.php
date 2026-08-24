@@ -31,9 +31,16 @@ class ProjectAccessory extends AbstractProductionEntity
     private ?SystemTemplateSlot $sourceSlot = null;
 
     #[ORM\ManyToOne(targetEntity: Part::class)]
-    #[ORM\JoinColumn(name: 'part_id', nullable: false)]
-    #[Assert\NotNull]
+    #[ORM\JoinColumn(name: 'part_id', nullable: true, onDelete: 'SET NULL')]
     private ?Part $part = null;
+
+    #[ORM\Column(name: 'part_name', type: Types::STRING, length: 255)]
+    #[Assert\NotBlank]
+    #[Assert\Length(max: 255)]
+    private string $partName = '';
+
+    #[ORM\Column(name: 'part_reference_id', type: Types::INTEGER, nullable: true)]
+    private ?int $partReferenceId = null;
 
     #[ORM\Column(type: Types::INTEGER, options: ['default' => 1])]
     #[Assert\Positive]
@@ -93,8 +100,22 @@ class ProjectAccessory extends AbstractProductionEntity
     public function setPart(?Part $part): self
     {
         $this->part = $part;
+        if (null !== $part) {
+            $this->partName = $part->getName();
+            $this->partReferenceId = $part->getId();
+        }
 
         return $this;
+    }
+
+    public function getPartName(): string
+    {
+        return $this->part?->getName() ?? $this->partName;
+    }
+
+    public function getPartReferenceId(): ?int
+    {
+        return $this->part?->getId() ?? $this->partReferenceId;
     }
 
     public function getQuantity(): int

@@ -7,6 +7,8 @@ production:
       unique: This project number is already in use.
   build_instance:
     template_required: Select a system template or a Part-DB build project.
+    project_position:
+      unique: A device or assembly is already assigned to this project position.
     serial_number:
       unique: This serial number is already in use.
   project_position:
@@ -23,3 +25,4 @@ production:
         invalid: Maximum quantity must not be lower than minimum quantity.
       allowed_content:
         required: Select at least one allowed system template, Part-DB project or inventory part.
+        cyclic: This selection would create a cyclic system-template hierarchy.
