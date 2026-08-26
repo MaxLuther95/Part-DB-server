@@ -61,4 +61,11 @@ migrations/.codex
 docker-data/
 scripts/
 db/
+
+# Runtime media and generated thumbnails belong to the Part-DB data backup,
+# not to the source repository.
+/public_media/
+
+# Temporary development database snapshots are kept outside the active DB mount.
+/development_backups/
 docker-compose.yaml

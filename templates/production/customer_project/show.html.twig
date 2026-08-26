@@ -29,14 +29,14 @@
         </td>
         <td class="text-center">
             {% for instance in position.buildInstances %}
-                <span class="badge {{ build_status_class[instance.status.value]|default('bg-secondary') }}" title="{{ instance.serialNumber }}">{{ ('production.build_instance.status.' ~ instance.status.value)|trans }}</span>
+                <span class="badge {{ build_status_class[instance.status.value]|default('bg-secondary') }}" title="{{ instance.displayIdentifier }}">{{ ('production.build_instance.status.' ~ instance.status.value)|trans }}</span>
             {% else %}
                 <span class="text-muted">–</span>
             {% endfor %}
         </td>
         <td>
             {% for instance in position.buildInstances %}
-                <a class="badge text-bg-light border text-decoration-none" href="{{ path('production_build_instance_show', {id: instance.id}) }}">{{ instance.serialNumber }}</a>
+                <a class="badge text-bg-light border text-decoration-none" href="{{ path('production_build_instance_show', {id: instance.id}) }}">{{ instance.displayIdentifier }}</a>
             {% else %}<span class="text-muted">{{ 'production.build_instance.position_unassigned'|trans }} (0 / {{ position.quantity }})</span>{% endfor %}
         </td>
         <td class="text-end text-nowrap">
@@ -47,7 +47,7 @@
                     <a class="btn btn-sm btn-outline-success" href="{{ path('production_project_position_assign_instance', {id: position.id}) }}"><i class="fa-solid fa-link fa-fw"></i> {{ 'production.build_instance.assign'|trans }}</a>
                 {% elseif position.buildInstances is not empty %}
                     {% for instance in position.buildInstances %}
-                        <form method="post" action="{{ path('production_build_instance_unassign', {id: instance.id}) }}" class="d-inline" data-turbo-confirm="{{ 'production.build_instance.unassign_confirm'|trans({'%serial%': instance.serialNumber}) }}">
+                        <form method="post" action="{{ path('production_build_instance_unassign', {id: instance.id}) }}" class="d-inline" data-turbo-confirm="{{ 'production.build_instance.unassign_confirm'|trans({'%serial%': instance.displayIdentifier}) }}">
                             <input type="hidden" name="_token" value="{{ csrf_token('unassign_build_instance_' ~ instance.id) }}">
                             <button class="btn btn-sm btn-outline-danger" title="{{ 'production.build_instance.unassign'|trans }}"><i class="fa-solid fa-link-slash fa-fw"></i> {{ 'production.build_instance.unassign'|trans }}</button>
                         </form>
@@ -84,7 +84,7 @@
                     <td class="text-nowrap">{{ number }}.{{ slot_offset }}</td>
                     <td style="padding-left: {{ indent + 2 }}rem"><i class="fa-solid fa-turn-up fa-rotate-90 text-muted fa-fw"></i>{{ slot.name }}</td>
                     <td class="text-muted">{{ 'production.project_position.slot.empty'|trans }}</td>
-                    <td>{% if slot.required %}<span class="badge bg-danger">{{ 'production.system_template.slot.required'|trans }}</span>{% else %}<span class="badge bg-secondary">{{ 'production.system_template.slot.optional'|trans }}</span>{% endif %}</td>
+                    <td class="text-center">{% if slot.required %}<span class="badge bg-danger">{{ 'production.system_template.slot.required'|trans }}</span>{% else %}<span class="badge bg-secondary">{{ 'production.system_template.slot.optional'|trans }}</span>{% endif %}</td>
                     <td>–</td><td></td>
                 </tr>
             {% endif %}
@@ -171,11 +171,21 @@
             </div>
             <div class="d-flex align-items-center gap-2 mt-1"><span class="fs-5">{{ project.name }}</span><span class="badge {{ status_class[project.status.value]|default('bg-secondary') }}">{{ ('production.customer_project.status.' ~ project.status.value)|trans }}</span></div>
         </div>
-        <div class="d-flex gap-2"><a class="btn btn-outline-secondary" href="{{ path('production_customer_project_index') }}"><i class="fa-solid fa-arrow-left fa-fw"></i> {{ 'production.customer_project.plural'|trans }}</a>{% if is_granted('@projects.edit') %}<a class="btn btn-primary" href="{{ path('production_customer_project_edit', {id: project.id}) }}"><i class="fa-solid fa-pen fa-fw"></i> {{ 'production.action.edit'|trans }}</a>{% endif %}</div>
+        <div class="d-flex gap-2">
+            <a class="btn btn-outline-secondary" href="{{ path('production_customer_project_index') }}"><i class="fa-solid fa-arrow-left fa-fw"></i> {{ 'production.customer_project.plural'|trans }}</a>
+            {% if is_granted('@projects.edit') and project.status.value in ['commissioned', 'in_production'] %}<a class="btn btn-outline-warning" href="{{ path('production_material_reservation', {id: project.id}) }}"><i class="fa-solid fa-bookmark fa-fw"></i> Material reservieren</a>{% endif %}
+            {% if is_granted('@projects.edit') %}
+                <a class="btn btn-primary" href="{{ path('production_customer_project_edit', {id: project.id}) }}"><i class="fa-solid fa-pen fa-fw"></i> {{ 'production.action.edit'|trans }}</a>
+            {% endif %}
+        </div>
     </div>
 
     {% if project.status.value == 'cancelled' %}<div class="alert alert-danger"><i class="fa-solid fa-ban fa-fw"></i> {{ 'production.project.cancelled_hint'|trans }}</div>{% else %}
         <div class="card mb-3"><div class="card-body py-3"><div class="row g-2 text-center">{% for state in workflow %}<div class="col"><div class="border rounded py-2 {{ loop.index0 <= current_step ? 'border-primary text-primary fw-bold bg-primary-subtle' : 'text-muted' }}"><span class="badge rounded-pill {{ loop.index0 <= current_step ? 'bg-primary' : 'bg-secondary' }} me-1">{{ loop.index }}</span>{{ ('production.customer_project.status.' ~ state)|trans }}</div></div>{% endfor %}</div></div></div>
+    {% endif %}
+
+    {% if project.status.value in ['commissioned', 'in_production'] and material_plan.items is not empty %}
+        {% if material_plan.reservation_conflict %}<div class="alert alert-danger"><i class="fa-solid fa-triangle-exclamation fa-fw"></i> Mindestens eine Reservierung ist durch eine zwischenzeitliche Bestandsänderung nicht mehr vollständig gedeckt. Bitte die Reservierung prüfen und aktualisieren.</div>{% elseif material_plan.reservation_stale %}<div class="alert alert-warning d-flex justify-content-between align-items-center"><span><i class="fa-solid fa-arrows-rotate fa-fw"></i> Bedarf und Reservierung stimmen nicht überein. Die BOM oder Projektkonfiguration wurde geändert oder Material ist noch nicht reserviert.</span>{% if is_granted('@projects.edit') %}<a class="btn btn-sm btn-warning" href="{{ path('production_material_reservation', {id: project.id}) }}">Jetzt abgleichen</a>{% endif %}</div>{% else %}<div class="alert alert-success"><i class="fa-solid fa-bookmark fa-fw"></i> Der noch offene Materialbedarf ist vollständig reserviert. Der Part-DB-Bestand wird erst beim Bereitstellen oder Bauen verändert.</div>{% endif %}
     {% endif %}
 
     <div class="row g-3 mb-3">
@@ -196,12 +206,19 @@
     <div class="card mb-3">
         <div class="card-header d-flex justify-content-between align-items-center">
             <strong><i class="fa-solid fa-boxes-stacked fa-fw"></i> {{ 'production.material_plan.label'|trans }}</strong>
-            {% if material_plan.items is empty %}<span class="badge bg-secondary">{{ 'production.material_plan.not_configured'|trans }}</span>{% elseif material_plan.complete %}<span class="badge bg-success"><i class="fa-solid fa-check fa-fw"></i> {{ 'production.material_plan.complete'|trans }}</span>{% else %}<span class="badge bg-danger"><i class="fa-solid fa-triangle-exclamation fa-fw"></i> {{ 'production.material_plan.incomplete'|trans }}</span>{% endif %}
+            {% if not material_plan.configuration_complete %}
+                <span class="badge bg-secondary">{{ 'production.material_plan.not_configured'|trans }}</span>
+            {% elseif not material_plan.complete %}
+                <span class="badge bg-danger"><i class="fa-solid fa-triangle-exclamation fa-fw"></i> {{ 'production.material_plan.incomplete'|trans }}</span>
+            {% elseif material_plan.fully_reserved %}
+                <span class="badge bg-primary"><i class="fa-solid fa-bookmark fa-fw"></i> {{ 'production.material_plan.secured_status'|trans }}</span>
+            {% else %}
+                <span class="badge bg-success"><i class="fa-solid fa-check fa-fw"></i> {{ 'production.material_plan.available_status'|trans }}</span>
+            {% endif %}
         </div>
-        <div class="table-responsive"><table class="table table-sm table-hover mb-0 align-middle"><thead><tr><th>{{ 'production.material_plan.part'|trans }}</th><th>{{ 'production.material_plan.required'|trans }}</th><th>{{ 'production.material_plan.allocated'|trans }}</th><th>{{ 'production.material_plan.available'|trans }}</th><th>{{ 'production.material_plan.missing'|trans }}</th><th>{{ 'production.material_plan.overstock'|trans }}</th><th></th></tr></thead><tbody>
-        {% for item in material_plan.items %}<tr><td><a href="{{ path('part_info', {id: item.part.id}) }}">{{ item.part.name }}</a></td><td>{{ item.required|number_format }}</td><td>{{ item.allocated|number_format }}</td><td>{{ item.available|number_format }}</td><td>{% if item.missing > 0 %}<span class="badge bg-danger">{{ item.missing|number_format }}</span>{% else %}<span class="badge bg-success">0</span>{% endif %}</td><td>{% if item.overstock > 0 %}<span class="badge bg-warning text-dark">{{ item.overstock|number_format }}</span>{% else %}<span class="text-muted">0</span>{% endif %}</td><td class="text-end">{% if project.status.value == 'in_production' and item.remaining > 0 and is_granted('@parts_stock.withdraw') %}<a class="btn btn-sm btn-success" href="{{ path('production_material_allocate', {project: project.id, part: item.part.id}) }}"><i class="fa-solid fa-arrow-right-arrow-left fa-fw"></i> {{ 'production.material_plan.provide'|trans }}</a>{% endif %}</td></tr>{% else %}<tr><td colspan="7" class="text-center text-muted py-4">{{ 'production.material_plan.empty'|trans }}</td></tr>{% endfor %}
+        <div class="table-responsive"><table class="table table-sm table-hover mb-0 align-middle"><thead><tr><th>{{ 'production.material_plan.part'|trans }}</th><th>{{ 'production.material_plan.required'|trans }}</th><th>{{ 'production.material_plan.secured'|trans }}</th><th>{{ 'production.material_plan.installed'|trans }}</th><th>{{ 'production.material_plan.missing'|trans }}</th><th></th></tr></thead><tbody>
+        {% for item in material_plan.items %}<tr><td><a href="{{ path('part_info', {id: item.part.id}) }}">{{ item.part.name }}</a>{% if item.reservation_stale %} <i class="fa-solid fa-arrows-rotate text-warning" title="{{ 'production.material_plan.reconcile_reservation'|trans }}"></i>{% endif %}</td><td>{{ item.required|number_format }}</td><td title="{{ 'production.material_plan.secured_breakdown'|trans({'%reserved%': item.reserved|number_format, '%allocated%': item.allocated|number_format}) }}">{{ item.secured|number_format }}</td><td>{{ item.consumed|number_format }}</td><td>{% if item.missing > 0 %}<span class="badge bg-danger">{{ item.missing|number_format }}</span>{% else %}<span class="badge bg-success">0</span>{% endif %}</td><td class="text-end">{% if project.status.value == 'in_production' and item.remaining > 0 and is_granted('@parts_stock.withdraw') %}<a class="btn btn-sm btn-success" href="{{ path('production_material_allocate', {project: project.id, part: item.part.id}) }}"><i class="fa-solid fa-arrow-right-arrow-left fa-fw"></i> {{ 'production.material_plan.provide'|trans }}</a>{% endif %}</td></tr>{% else %}<tr><td colspan="6" class="text-center text-muted py-4">{{ 'production.material_plan.empty'|trans }}</td></tr>{% endfor %}
         </tbody></table></div>
-        {% if project.materialAllocations|length > 0 %}<div class="card-footer"><strong>{{ 'production.material_plan.project_stock'|trans }}:</strong> {% for allocation in project.materialAllocations %}<span class="badge text-bg-light border">{{ allocation.partName }}{% if not allocation.part %} ({{ 'production.common.deleted_reference'|trans }}){% endif %} × {{ allocation.quantity }}{% if allocation.serialNumber %} · SN {{ allocation.serialNumber }}{% endif %}</span> {% endfor %}</div>{% endif %}
     </div>
 
     <div class="row g-3">
@@ -210,7 +227,7 @@
         </tbody></table></div></div></div>
 
         <div class="col-xl-6"><div class="card h-100"><div class="card-header d-flex justify-content-between align-items-center"><strong><i class="fa-solid fa-layer-group fa-fw"></i> {{ 'production.project.build_instances'|trans }}</strong><a class="btn btn-sm btn-outline-primary" href="{{ path('production_build_instance_index') }}">{{ 'production.action.show_all'|trans }}</a></div><div class="table-responsive"><table class="table table-sm table-hover mb-0 align-middle"><thead><tr><th>{{ 'production.build_instance.serial_number'|trans }}</th><th>{{ 'production.build_instance.template'|trans }}</th><th>{{ 'production.common.status'|trans }}</th><th>{{ 'production.project_position.label'|trans }}</th></tr></thead><tbody>
-            {% for instance in project.buildInstances %}<tr><td><a href="{{ path('production_build_instance_show', {id: instance.id}) }}"><strong>{{ instance.serialNumber }}</strong></a></td><td>{{ instance.contentName }}{% if not instance.systemTemplate and not instance.templateProject %} <span class="text-muted">({{ 'production.common.deleted_reference'|trans }})</span>{% endif %}</td><td><span class="badge {{ build_status_class[instance.status.value]|default('bg-secondary') }}">{{ ('production.build_instance.status.' ~ instance.status.value)|trans }}</span></td><td>{{ instance.projectPosition ? instance.projectPosition.name : '–' }}</td></tr>{% else %}<tr><td colspan="4" class="text-center text-muted py-4">{{ 'production.common.empty'|trans }}</td></tr>{% endfor %}
+            {% for instance in project.buildInstances %}<tr><td><a href="{{ path('production_build_instance_show', {id: instance.id}) }}"><strong>{{ instance.displayIdentifier }}</strong></a></td><td>{{ instance.contentName }}{% if not instance.systemTemplate and not instance.templateProject %} <span class="text-muted">({{ 'production.common.deleted_reference'|trans }})</span>{% endif %}</td><td><span class="badge {{ build_status_class[instance.status.value]|default('bg-secondary') }}">{{ ('production.build_instance.status.' ~ instance.status.value)|trans }}</span></td><td>{{ instance.projectPosition ? instance.projectPosition.name : '–' }}</td></tr>{% else %}<tr><td colspan="4" class="text-center text-muted py-4">{{ 'production.common.empty'|trans }}</td></tr>{% endfor %}
         </tbody></table></div></div></div>
 
         <div class="col-xl-6">

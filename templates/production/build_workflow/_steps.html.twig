@@ -1,0 +1,5 @@
+<div class="row g-2 mb-4 text-center">
+    {% for number, label in {1: 'Konfiguration', 2: 'Geräteangaben', 3: 'Material', 4: 'Prüfen'} %}
+        <div class="col"><div class="border rounded py-2 {{ current_step == number ? 'bg-primary text-white' : (current_step > number ? 'bg-success-subtle text-success-emphasis' : 'text-muted') }}"><strong>{{ number }}</strong> {{ label }}</div></div>
+    {% endfor %}
+</div>

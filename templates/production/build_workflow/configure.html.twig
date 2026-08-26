@@ -1,0 +1,27 @@
+{% extends 'main_card.html.twig' %}
+{% block title %}Bau konfigurieren{% endblock %}
+{% block card_title %}<i class="fa-solid fa-sliders fa-fw"></i> Bau konfigurieren: {{ template.name }}{% endblock %}
+{% block card_content %}
+    {% include 'production/build_workflow/_steps.html.twig' with {current_step: 1} %}
+    {% for error in errors %}<div class="alert alert-danger">{{ error }}</div>{% endfor %}
+    <p class="text-muted">Jede untergeordnete Systemvorlage wird anschließend einzeln konfiguriert und erhält später ein eigenes Gerät.</p>
+    <form method="post">
+        <input type="hidden" name="_token" value="{{ csrf_token('build_configure_' ~ token ~ '_' ~ node) }}">
+        <div class="table-responsive"><table class="table align-middle">
+            <thead><tr><th>Platz</th><th>Inhalt</th><th style="width:10rem">Anzahl</th><th>Vorgabe</th></tr></thead>
+            <tbody>{% for row in slots %}{% set slot = row.slot %}
+                <tr>
+                    <td><strong>{{ slot.name }}</strong></td>
+                    <td><select class="form-select" name="slots[choice][{{ slot.id }}]" {{ slot.required ? 'required' : '' }}>
+                        {% if not slot.required %}<option value="">Nicht belegt</option>{% else %}<option value="">Bitte auswählen</option>{% endif %}
+                        {% for choice in row.choices %}<option value="{{ choice.value }}">{{ choice.label }}</option>{% endfor %}
+                    </select></td>
+                    <td>{% if slot.maxQuantity == 1 %}<span class="text-muted">durch Auswahl</span>{% else %}<input class="form-control" type="number" min="{{ slot.minQuantity }}" max="{{ slot.maxQuantity }}" value="{{ slot.minQuantity > 0 ? slot.minQuantity : 0 }}" name="slots[quantity][{{ slot.id }}]">{% endif %}</td>
+                    <td class="text-muted">{{ slot.minQuantity }}–{{ slot.maxQuantity }}</td>
+                </tr>
+            {% else %}<tr><td colspan="4" class="text-muted text-center">Diese Systemvorlage besitzt keine konfigurierbaren Plätze.</td></tr>{% endfor %}</tbody>
+        </table></div>
+        <button class="btn btn-success" type="submit"><i class="fa-solid fa-arrow-right fa-fw"></i> Konfiguration übernehmen</button>
+        <a class="btn btn-secondary" href="{{ path('production_build') }}">Abbrechen</a>
+    </form>
+{% endblock %}

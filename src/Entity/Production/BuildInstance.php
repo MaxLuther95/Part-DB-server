@@ -7,6 +7,8 @@ namespace App\Entity\Production;
 use App\Entity\ProjectSystem\Project;
 use App\Repository\Production\BuildInstanceRepository;
 use Doctrine\DBAL\Types\Types;
+use Doctrine\Common\Collections\ArrayCollection;
+use Doctrine\Common\Collections\Collection;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Bridge\Doctrine\Validator\Constraints\UniqueEntity;
 use Symfony\Component\Validator\Constraints as Assert;
@@ -14,15 +16,15 @@ use Symfony\Component\Validator\Constraints as Assert;
 #[ORM\Entity(repositoryClass: BuildInstanceRepository::class)]
 #[ORM\Table(name: 'production_build_instances')]
 #[ORM\Index(name: 'IDX_PROD_BUILD_SYSTEM_TEMPLATE', columns: ['system_template_id'])]
+#[ORM\Index(name: 'IDX_PROD_BUILD_PARENT', columns: ['parent_id'])]
 #[ORM\UniqueConstraint(name: 'UNIQ_PROD_BUILD_POSITION', columns: ['project_position_id'])]
 #[UniqueEntity(fields: ['serialNumber'], message: 'production.build_instance.serial_number.unique')]
 #[UniqueEntity(fields: ['projectPosition'], message: 'production.build_instance.project_position.unique')]
 class BuildInstance extends AbstractProductionEntity
 {
-    #[ORM\Column(name: 'serial_number', type: Types::STRING, length: 128, unique: true)]
-    #[Assert\NotBlank]
+    #[ORM\Column(name: 'serial_number', type: Types::STRING, length: 128, unique: true, nullable: true)]
     #[Assert\Length(max: 128)]
-    private string $serialNumber = '';
+    private ?string $serialNumber = null;
 
     #[ORM\ManyToOne(targetEntity: Project::class)]
     #[ORM\JoinColumn(name: 'template_project_id', nullable: true, onDelete: 'SET NULL')]
@@ -50,6 +52,20 @@ class BuildInstance extends AbstractProductionEntity
     #[ORM\JoinColumn(name: 'project_position_id', nullable: true, onDelete: 'SET NULL')]
     private ?ProjectPosition $projectPosition = null;
 
+    #[ORM\ManyToOne(targetEntity: self::class, inversedBy: 'children')]
+    #[ORM\JoinColumn(name: 'parent_id', nullable: true, onDelete: 'SET NULL')]
+    private ?self $parent = null;
+
+    /** @var Collection<int, self> */
+    #[ORM\OneToMany(mappedBy: 'parent', targetEntity: self::class)]
+    #[ORM\OrderBy(['id' => 'ASC'])]
+    private Collection $children;
+
+    /** @var Collection<int, BuildMaterialUsage> */
+    #[ORM\OneToMany(mappedBy: 'buildInstance', targetEntity: BuildMaterialUsage::class)]
+    #[ORM\OrderBy(['addedDate' => 'ASC'])]
+    private Collection $materialUsages;
+
     #[ORM\Column(type: Types::STRING, length: 32, enumType: BuildStatus::class)]
     private BuildStatus $status = BuildStatus::Planned;
 
@@ -63,21 +79,33 @@ class BuildInstance extends AbstractProductionEntity
     #[ORM\Column(name: 'completed_at', type: Types::DATETIME_IMMUTABLE, nullable: true)]
     private ?\DateTimeImmutable $completedAt = null;
 
+    public function __construct()
+    {
+        $this->children = new ArrayCollection();
+        $this->materialUsages = new ArrayCollection();
+    }
+
     public function __toString(): string
     {
-        return $this->serialNumber;
+        return $this->getDisplayIdentifier();
     }
 
-    public function getSerialNumber(): string
+    public function getSerialNumber(): ?string
     {
         return $this->serialNumber;
     }
 
-    public function setSerialNumber(string $serialNumber): self
+    public function setSerialNumber(?string $serialNumber): self
     {
-        $this->serialNumber = trim($serialNumber);
+        $serialNumber = null === $serialNumber ? null : trim($serialNumber);
+        $this->serialNumber = '' === $serialNumber ? null : $serialNumber;
 
         return $this;
+    }
+
+    public function getDisplayIdentifier(): string
+    {
+        return $this->serialNumber ?? (null !== $this->getId() ? '#'.$this->getId() : 'Ohne Seriennummer');
     }
 
     public function getTemplateProject(): ?Project
@@ -147,12 +175,11 @@ class BuildInstance extends AbstractProductionEntity
             throw new \InvalidArgumentException('A build instance must be assigned to a customer project through a project position.');
         }
 
-        $this->customerProject = $customerProject;
         if (null === $customerProject) {
-            $this->projectPosition = null;
+            return $this->setProjectPosition(null);
         }
 
-        return $this;
+        return $this->setProjectPosition($this->projectPosition);
     }
 
     public function getProjectPosition(): ?ProjectPosition
@@ -162,8 +189,28 @@ class BuildInstance extends AbstractProductionEntity
 
     public function setProjectPosition(?ProjectPosition $projectPosition): self
     {
+        $previousPosition = $this->projectPosition;
+        $previousProject = $this->customerProject;
+        $customerProject = $projectPosition?->getCustomerProject();
+        if ($previousPosition === $projectPosition && $previousProject === $customerProject) {
+            return $this;
+        }
+
+        // Remove inverse references before changing the owning fields. Initializing a lazy
+        // collection afterwards can hydrate this entity again and restore the old association.
+        $previousPosition?->getBuildInstances()->removeElement($this);
+        if ($previousProject !== $customerProject) {
+            $previousProject?->getBuildInstances()->removeElement($this);
+        }
+
         $this->projectPosition = $projectPosition;
-        $this->customerProject = $projectPosition?->getCustomerProject();
+        $this->customerProject = $customerProject;
+        if (null !== $projectPosition && !$projectPosition->getBuildInstances()->contains($this)) {
+            $projectPosition->getBuildInstances()->add($this);
+        }
+        if (null !== $customerProject && !$customerProject->getBuildInstances()->contains($this)) {
+            $customerProject->getBuildInstances()->add($this);
+        }
 
         if (null !== $projectPosition) {
             if (null !== $projectPosition->getSystemTemplate()) {
@@ -174,6 +221,41 @@ class BuildInstance extends AbstractProductionEntity
         }
 
         return $this;
+    }
+
+    public function getParent(): ?self
+    {
+        return $this->parent;
+    }
+
+    public function setParent(?self $parent): self
+    {
+        if ($parent === $this) {
+            throw new \InvalidArgumentException('A build instance cannot be its own parent.');
+        }
+        if ($this->parent === $parent) {
+            return $this;
+        }
+        $previousParent = $this->parent;
+        $previousParent?->getChildren()->removeElement($this);
+        $this->parent = $parent;
+        if (null !== $parent && !$parent->getChildren()->contains($this)) {
+            $parent->getChildren()->add($this);
+        }
+
+        return $this;
+    }
+
+    /** @return Collection<int, self> */
+    public function getChildren(): Collection
+    {
+        return $this->children;
+    }
+
+    /** @return Collection<int, BuildMaterialUsage> */
+    public function getMaterialUsages(): Collection
+    {
+        return $this->materialUsages;
     }
 
     public function getStatus(): BuildStatus
@@ -234,6 +316,17 @@ class BuildInstance extends AbstractProductionEntity
     {
         if (null === $this->systemTemplate && null === $this->templateProject && null === $this->contentName) {
             $context->buildViolation('production.build_instance.template_required')->addViolation();
+        }
+        if (null === $this->serialNumber && null === $this->notes) {
+            $context->buildViolation('production.build_instance.notes_required_without_serial')
+                ->atPath('notes')
+                ->addViolation();
+        }
+        if (null === $this->serialNumber
+            && in_array($this->customerProject?->getStatus(), [CustomerProjectStatus::Completed, CustomerProjectStatus::Delivered], true)) {
+            $context->buildViolation('production.build_instance.serial_required_for_completed_project')
+                ->atPath('serialNumber')
+                ->addViolation();
         }
     }
 }

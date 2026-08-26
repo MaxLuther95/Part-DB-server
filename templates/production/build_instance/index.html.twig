@@ -13,7 +13,7 @@
         <tbody>
         {% for instance in build_instances %}
             <tr>
-                <td><a href="{{ path('production_build_instance_show', {id: instance.id}) }}">{{ instance.serialNumber }}</a></td>
+                <td><a href="{{ path('production_build_instance_show', {id: instance.id}) }}">{{ instance.displayIdentifier }}</a></td>
                 <td>{{ instance.contentName }}{% if not instance.systemTemplate and not instance.templateProject %} <span class="text-muted">({{ 'production.common.deleted_reference'|trans }})</span>{% endif %}</td>
                 <td><span class="badge bg-secondary">{{ ('production.build_instance.status.' ~ instance.status.value)|trans }}</span></td>
                 <td>{{ instance.location|default('–') }}</td>

@@ -33,6 +33,10 @@ final class ProductionTreeBuilder
                         $this->urlGenerator->generate('production_customer_project_mine', ['scope' => 'active']),
                     ))->setIcon('fa-fw fa-treeview fa-solid fa-user-check'),
                     (new TreeViewNode(
+                        $this->trans('production.navigation.required_parts'),
+                        $this->urlGenerator->generate('production_required_parts', ['missing' => 1]),
+                    ))->setIcon('fa-fw fa-treeview fa-solid fa-cart-flatbed'),
+                    (new TreeViewNode(
                         $this->trans('production.customer.plural'),
                         $this->urlGenerator->generate('production_customer_index'),
                     ))->setIcon('fa-fw fa-treeview fa-solid fa-address-book'),

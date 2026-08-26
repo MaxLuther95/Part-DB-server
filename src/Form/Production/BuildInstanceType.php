@@ -33,6 +33,9 @@ final class BuildInstanceType extends AbstractType
         $builder
             ->add('serialNumber', TextType::class, [
                 'label' => 'production.build_instance.serial_number',
+                'required' => false,
+                'empty_data' => '',
+                'help' => 'production.build_instance.serial_number_optional_help',
             ])
             ->add('content', ChoiceType::class, [
                 'label' => 'production.build_instance.template',
@@ -75,6 +78,7 @@ final class BuildInstanceType extends AbstractType
                 'required' => false,
                 'empty_data' => '',
                 'attr' => ['rows' => 5],
+                'help' => 'production.build_instance.notes_without_serial_help',
             ]);
 
         $builder->addEventListener(FormEvents::POST_SUBMIT, static function (FormEvent $event): void {

@@ -5,8 +5,11 @@ production:
   customer_project:
     number:
       unique: This project number is already in use.
+    completion_requires_serials: A project can only be completed or delivered when every position has exactly one device or assembly with a valid serial number.
   build_instance:
     template_required: Select a system template or a Part-DB build project.
+    notes_required_without_serial: A reason must be entered in the notes when no serial number is assigned.
+    serial_required_for_completed_project: A serial number is required for devices in completed or delivered projects.
     project_position:
       unique: A device or assembly is already assigned to this project position.
     serial_number:

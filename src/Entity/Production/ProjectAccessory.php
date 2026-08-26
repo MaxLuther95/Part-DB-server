@@ -60,7 +60,15 @@ class ProjectAccessory extends AbstractProductionEntity
 
     public function setCustomerProject(?CustomerProject $customerProject): self
     {
+        if ($this->customerProject === $customerProject) {
+            return $this;
+        }
+
+        $this->customerProject?->getAccessories()->removeElement($this);
         $this->customerProject = $customerProject;
+        if (null !== $customerProject && !$customerProject->getAccessories()->contains($this)) {
+            $customerProject->getAccessories()->add($this);
+        }
 
         return $this;
     }
@@ -72,9 +80,17 @@ class ProjectAccessory extends AbstractProductionEntity
 
     public function setProjectPosition(?ProjectPosition $projectPosition): self
     {
+        if ($this->projectPosition === $projectPosition) {
+            return $this;
+        }
+
+        $this->projectPosition?->getPartAssignments()->removeElement($this);
         $this->projectPosition = $projectPosition;
         if (null !== $projectPosition) {
-            $this->customerProject = $projectPosition->getCustomerProject();
+            if (!$projectPosition->getPartAssignments()->contains($this)) {
+                $projectPosition->getPartAssignments()->add($this);
+            }
+            $this->setCustomerProject($projectPosition->getCustomerProject());
         }
 
         return $this;

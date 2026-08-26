@@ -1,0 +1,16 @@
+{% extends 'main_card.html.twig' %}
+{% block title %}Material auswählen{% endblock %}
+{% block card_title %}<i class="fa-solid fa-boxes-stacked fa-fw"></i> Material am Standort {{ site.fullPath }}{% endblock %}
+{% block card_content %}
+    {% include 'production/build_workflow/_steps.html.twig' with {current_step: 3} %}
+    {% for error in errors %}<div class="alert alert-danger">{{ error }}</div>{% endfor %}
+    {% if not plan.complete %}<div class="alert alert-danger"><i class="fa-solid fa-triangle-exclamation fa-fw"></i> Am gewählten Standort fehlt Material. Der Bau kann erst fortgesetzt werden, wenn der Bedarf vollständig gedeckt ist.</div>{% endif %}
+    <form method="post"><input type="hidden" name="_token" value="{{ csrf_token('build_materials_' ~ token) }}">
+    {% for item in plan.items %}<div class="card mb-3"><div class="card-header d-flex justify-content-between"><strong>{{ item.part.name }}</strong><span>Benötigt: {{ item.required }}</span></div><div class="card-body p-0"><table class="table table-sm mb-0 align-middle"><thead><tr><th>Quelle</th><th>Verfügbar</th><th style="width:12rem">Entnehmen</th></tr></thead><tbody>
+        {% if item.project_stock > 0 %}<tr class="table-info"><td>Bereits im Projektbestand</td><td>{{ item.project_stock }}</td><td>{{ item.project_stock }} (automatisch)</td></tr>{% endif %}
+        {% if item.project_reserved > 0 %}<tr class="table-warning"><td>Für dieses Projekt reserviert</td><td>{{ item.project_reserved }}</td><td>{{ item.project_reserved }} (wird beim Bau gelöst und ausgebucht)</td></tr>{% endif %}
+        {% for row in item.lots %}<tr><td>{{ row.lot.storageLocation ? row.lot.storageLocation.fullPath : 'Ohne Lagerort' }}{% if row.lot.name %} · {{ row.lot.name }}{% endif %}</td><td>{{ row.available }}</td><td><input class="form-control form-control-sm" type="number" min="0" max="{{ row.available }}" name="lots[{{ item.part.id }}][{{ row.lot.id }}]" value="{{ draft.lots[item.part.id ~ ''][row.lot.id ~ '']|default(0) }}"></td></tr>{% else %}<tr><td colspan="3" class="text-muted">Keine passenden Lagerlose an diesem Standort.</td></tr>{% endfor %}
+    </tbody></table></div>{% if item.missing > 0 %}<div class="card-footer text-danger">Es fehlen {{ item.missing }} Stück.</div>{% endif %}</div>{% else %}<div class="alert alert-info">Die ausgewählte Baugruppe besitzt keine Lagerteile in ihrer BOM.</div>{% endfor %}
+    <button class="btn btn-success" type="submit" {{ not plan.complete ? 'disabled' : '' }}><i class="fa-solid fa-arrow-right fa-fw"></i> Auswahl prüfen</button>
+    <a class="btn btn-outline-secondary" href="{{ path('production_build_workflow_details', {token: token}) }}">Zurück</a></form>
+{% endblock %}

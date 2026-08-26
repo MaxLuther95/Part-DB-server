@@ -5,8 +5,11 @@ production:
   customer_project:
     number:
       unique: Diese Projektnummer ist bereits vergeben.
+    completion_requires_serials: Fertigstellen oder Ausliefern ist erst möglich, wenn jede Projektposition genau ein Gerät oder eine Baugruppe mit gültiger Seriennummer besitzt.
   build_instance:
     template_required: Bitte eine Systemvorlage oder ein Part-DB-Bauprojekt auswählen.
+    notes_required_without_serial: Ohne Seriennummer muss in den Notizen ein Grund angegeben werden.
+    serial_required_for_completed_project: In fertiggestellten oder ausgelieferten Projekten ist eine Seriennummer erforderlich.
     project_position:
       unique: Dieser Projektposition ist bereits ein Gerät oder eine Baugruppe zugewiesen.
     serial_number:

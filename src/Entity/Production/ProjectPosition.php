@@ -98,7 +98,15 @@ class ProjectPosition extends AbstractProductionEntity
 
     public function setCustomerProject(?CustomerProject $customerProject): self
     {
+        if ($this->customerProject === $customerProject) {
+            return $this;
+        }
+        $previousProject = $this->customerProject;
+        $previousProject?->getPositions()->removeElement($this);
         $this->customerProject = $customerProject;
+        if (null !== $customerProject && !$customerProject->getPositions()->contains($this)) {
+            $customerProject->getPositions()->add($this);
+        }
 
         return $this;
     }

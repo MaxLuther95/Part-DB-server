@@ -13,6 +13,8 @@ use Doctrine\ORM\Mapping as ORM;
 use App\Entity\Parts\Part;
 use Symfony\Bridge\Doctrine\Validator\Constraints\UniqueEntity;
 use Symfony\Component\Validator\Constraints as Assert;
+use Symfony\Component\Validator\Context\ExecutionContextInterface;
+use Doctrine\ORM\Event\PreUpdateEventArgs;
 
 #[ORM\Entity(repositoryClass: CustomerProjectRepository::class)]
 #[ORM\Table(name: 'production_customer_projects')]
@@ -75,6 +77,11 @@ class CustomerProject extends AbstractProductionEntity
     #[ORM\OrderBy(['addedDate' => 'ASC'])]
     private Collection $materialAllocations;
 
+    /** @var Collection<int, ProjectMaterialReservation> */
+    #[ORM\OneToMany(mappedBy: 'customerProject', targetEntity: ProjectMaterialReservation::class)]
+    #[ORM\OrderBy(['addedDate' => 'ASC'])]
+    private Collection $materialReservations;
+
     public function __construct()
     {
         $this->assignedUsers = new ArrayCollection();
@@ -83,6 +90,7 @@ class CustomerProject extends AbstractProductionEntity
         $this->history = new ArrayCollection();
         $this->accessories = new ArrayCollection();
         $this->materialAllocations = new ArrayCollection();
+        $this->materialReservations = new ArrayCollection();
     }
 
     public function __toString(): string
@@ -228,6 +236,12 @@ class CustomerProject extends AbstractProductionEntity
         return $this->materialAllocations;
     }
 
+    /** @return Collection<int, ProjectMaterialReservation> */
+    public function getMaterialReservations(): Collection
+    {
+        return $this->materialReservations;
+    }
+
     public function requiresSerialTracking(Part $part): bool
     {
         foreach ($this->accessories as $accessory) {
@@ -237,5 +251,57 @@ class CustomerProject extends AbstractProductionEntity
         }
 
         return false;
+    }
+
+    public function isReadyForCompletion(): bool
+    {
+        foreach ($this->positions as $position) {
+            $instance = $position->getBuildInstances()->first();
+            if (!$instance instanceof BuildInstance || null === $instance->getSerialNumber()) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /** @return list<ProjectPosition> */
+    public function getPositionsMissingSerialNumber(): array
+    {
+        return array_values($this->positions->filter(static function (ProjectPosition $position): bool {
+            $instance = $position->getBuildInstances()->first();
+
+            return !$instance instanceof BuildInstance || null === $instance->getSerialNumber();
+        })->toArray());
+    }
+
+    #[Assert\Callback]
+    public function validateCompletionStatus(ExecutionContextInterface $context): void
+    {
+        if (in_array($this->status, [CustomerProjectStatus::Completed, CustomerProjectStatus::Delivered], true)
+            && !$this->isReadyForCompletion()) {
+            $context->buildViolation('production.customer_project.completion_requires_serials')
+                ->atPath('status')
+                ->addViolation();
+        }
+    }
+
+    #[ORM\PrePersist]
+    public function preventInvalidInitialCompletion(): void
+    {
+        if (in_array($this->status, [CustomerProjectStatus::Completed, CustomerProjectStatus::Delivered], true)
+            && !$this->isReadyForCompletion()) {
+            throw new \DomainException('A project cannot be completed or delivered without one serialized device per project position.');
+        }
+    }
+
+    #[ORM\PreUpdate]
+    public function preventInvalidCompletionTransition(PreUpdateEventArgs $event): void
+    {
+        if ($event->hasChangedField('status')
+            && in_array($this->status, [CustomerProjectStatus::Completed, CustomerProjectStatus::Delivered], true)
+            && !$this->isReadyForCompletion()) {
+            throw new \DomainException('A project cannot be completed or delivered without one serialized device per project position.');
+        }
     }
 }

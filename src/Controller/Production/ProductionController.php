@@ -32,6 +32,9 @@ use App\Entity\ProjectSystem\Project;
 use App\Entity\UserSystem\User;
 use App\Services\Production\ProductionHistoryRecorder;
 use App\Services\Production\ProductionMaterialPlanner;
+use App\Services\Production\ProductionBuildWorkflow;
+use App\Services\Production\ProjectPositionInitializer;
+use App\Services\Production\ProductionReservationManager;
 use App\Services\Parts\PartLotWithdrawAddHelper;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -52,6 +55,8 @@ final class ProductionController extends AbstractController
     public function __construct(
         private readonly ProductionHistoryRecorder $historyRecorder,
         private readonly TranslatorInterface $translator,
+        private readonly ProductionReservationManager $reservationManager,
+        private readonly ProjectPositionInitializer $positionInitializer,
     )
     {
     }
@@ -79,23 +84,27 @@ final class ProductionController extends AbstractController
     }
 
     #[Route(path: '/build/new', name: 'production_build_new', methods: ['GET', 'POST'])]
-    public function buildNew(Request $request): Response
+    public function buildNew(Request $request, ProductionBuildWorkflow $workflow): Response
     {
         $this->denyAccessUnlessGranted('@projects.edit');
 
         $form = $this->createForm(BuildStartType::class);
         $form->handleRequest($request);
-        $selectedContent = null;
         if ($form->isSubmitted() && $form->isValid()) {
             $selectedContent = $form->get('content')->getData();
             if ($selectedContent instanceof Project) {
                 $this->denyAccessUnlessGranted('read', $selectedContent);
             }
+            if ($selectedContent instanceof SystemTemplate || $selectedContent instanceof Project) {
+                $token = bin2hex(random_bytes(16));
+                $request->getSession()->set('production_build_'.$token, $workflow->createDraft($selectedContent));
+
+                return $this->redirectToRoute('production_build_workflow_next', ['token' => $token]);
+            }
         }
 
         return $this->render('production/build_new.html.twig', [
             'form' => $form,
-            'selected_content' => $selectedContent,
         ]);
     }
 
@@ -202,6 +211,25 @@ final class ProductionController extends AbstractController
         return $this->handleCustomerForm($customer, $request, $entityManager);
     }
 
+    #[Route(path: '/customers/{id}/delete', name: 'production_customer_delete', requirements: ['id' => '\d+'], methods: ['POST'])]
+    public function customerDelete(Customer $customer, Request $request, EntityManagerInterface $entityManager): Response
+    {
+        $this->denyAccessUnlessGranted('@projects.edit');
+        if (!$this->isCsrfTokenValid('delete_customer_'.$customer->getId(), $request->request->getString('_token'))) {
+            throw $this->createAccessDeniedException('Invalid CSRF token.');
+        }
+
+        $projectCount = $customer->getProjects()->count();
+        foreach ($customer->getProjects()->toArray() as $project) {
+            $project->setCustomer(null);
+        }
+        $entityManager->remove($customer);
+        $entityManager->flush();
+        $this->addFlash('success', $this->translator->trans('production.customer.deleted', ['%projects%' => $projectCount], 'production'));
+
+        return $this->redirectToRoute('production_customer_index');
+    }
+
     #[Route(path: '/customer-projects', name: 'production_customer_project_index', methods: ['GET'])]
     public function customerProjectIndex(CustomerProjectRepository $repository, Request $request): Response
     {
@@ -264,6 +292,30 @@ final class ProductionController extends AbstractController
         return $this->handleCustomerProjectForm($project, $request, $entityManager);
     }
 
+    #[Route(path: '/customer-projects/{id}/delete', name: 'production_customer_project_delete', requirements: ['id' => '\d+'], methods: ['POST'])]
+    public function customerProjectDelete(CustomerProject $project, Request $request, EntityManagerInterface $entityManager): Response
+    {
+        $this->denyAccessUnlessGranted('@projects.edit');
+        if (!$this->isCsrfTokenValid('delete_customer_project_'.$project->getId(), $request->request->getString('_token'))) {
+            throw $this->createAccessDeniedException('Invalid CSRF token.');
+        }
+        if (!$project->getMaterialAllocations()->isEmpty()) {
+            $this->addFlash('error', $this->translator->trans('production.customer_project.delete_has_material', domain: 'production'));
+
+            return $this->redirectToRoute('production_customer_project_show', ['id' => $project->getId()]);
+        }
+
+        $buildCount = $project->getBuildInstances()->count();
+        foreach ($project->getBuildInstances()->toArray() as $buildInstance) {
+            $buildInstance->setProjectPosition(null);
+        }
+        $entityManager->remove($project);
+        $entityManager->flush();
+        $this->addFlash('success', $this->translator->trans('production.customer_project.deleted', ['%builds%' => $buildCount], 'production'));
+
+        return $this->redirectToRoute('production_customer_project_index');
+    }
+
     #[Route(path: '/customer-projects/{id}/positions/new', name: 'production_project_position_new', requirements: ['id' => '\d+'], methods: ['GET', 'POST'])]
     public function projectPositionNew(CustomerProject $project, Request $request, EntityManagerInterface $entityManager): Response
     {
@@ -285,7 +337,7 @@ final class ProductionController extends AbstractController
     }
 
     #[Route(path: '/project-positions/{id}/build', name: 'production_project_position_build', requirements: ['id' => '\d+'], methods: ['GET'])]
-    public function projectPositionBuild(ProjectPosition $position): Response
+    public function projectPositionBuild(ProjectPosition $position, Request $request, ProductionBuildWorkflow $workflow): Response
     {
         $this->denyAccessUnlessGranted('@projects.edit');
         $project = $position->getCustomerProject();
@@ -300,10 +352,15 @@ final class ProductionController extends AbstractController
         if (null !== $position->getBuildProject()) {
             $this->denyAccessUnlessGranted('read', $position->getBuildProject());
         }
+        if (!$position->getBuildInstances()->isEmpty()) {
+            $this->addFlash('info', $this->translator->trans('production.build_instance.position_already_assigned', domain: 'production'));
 
-        return $this->render('production/project_position/build.html.twig', [
-            'position' => $position,
-        ]);
+            return $this->redirectToRoute('production_customer_project_show', ['id' => $project->getId()]);
+        }
+        $token = bin2hex(random_bytes(16));
+        $request->getSession()->set('production_build_'.$token, $workflow->createDraft($position->getSystemTemplate() ?? $position->getTemplateProject(), $position));
+
+        return $this->redirectToRoute('production_build_workflow_next', ['token' => $token]);
     }
 
     #[Route(path: '/project-positions/{id}/delete', name: 'production_project_position_delete', requirements: ['id' => '\d+'], methods: ['POST'])]
@@ -477,12 +534,16 @@ final class ProductionController extends AbstractController
                     $assignments = array_slice($assignments, 0, $quantity);
 
                     foreach ($assignments as $index => $assignment) {
+                        $isNewAssignment = null === $assignment->getId();
                         $assignment
                             ->setName($quantity > 1 ? sprintf('%s %d', $slot->getName(), $index + 1) : $slot->getName())
                             ->setPosition($slot->getPosition())
                             ->setQuantity(1);
                         if ($selected instanceof SystemTemplate) {
                             $assignment->setSystemTemplate($selected);
+                            if ($isNewAssignment) {
+                                $this->positionInitializer->initializeRequiredDefaults($assignment);
+                            }
                         } else {
                             $assignment->setTemplateProject($selected);
                         }
@@ -567,10 +628,15 @@ final class ProductionController extends AbstractController
         if (null === $planItem) {
             throw $this->createNotFoundException('This part is not required by the project.');
         }
+        if ($planItem['remaining'] < 1) {
+            $this->addFlash('info', 'Der Materialbedarf für dieses Bauteil ist bereits vollständig gedeckt.');
+
+            return $this->redirectToRoute('production_customer_project_show', ['id' => $project->getId()]);
+        }
 
         $lots = array_values(array_filter(
             $part->getPartLots()->toArray(),
-            static fn(PartLot $lot): bool => !$lot->isInstockUnknown() && $lot->getAmount() > 0,
+            fn(PartLot $lot): bool => !$lot->isInstockUnknown() && $this->reservationManager->availableToProject($lot, $project) > 0,
         ));
         $serialRequired = $project->requiresSerialTracking($part);
         $remainingQuantity = max(1, (int) ceil($planItem['remaining']));
@@ -606,7 +672,7 @@ final class ProductionController extends AbstractController
             $serialNumber = trim((string) $form->get('serialNumber')->getData());
             if (!$lot instanceof PartLot || $lot->getPart() !== $part) {
                 $form->get('lot')->addError(new FormError($this->translator->trans('production.material_plan.invalid_lot', domain: 'production')));
-            } elseif ($quantity <= 0 || $quantity > $lot->getAmount() || $quantity > $remainingQuantity || ($serialRequired && 1 !== $quantity)) {
+            } elseif ($quantity <= 0 || $quantity > $this->reservationManager->availableToProject($lot, $project) || $quantity > $remainingQuantity || ($serialRequired && 1 !== $quantity)) {
                 $form->get('quantity')->addError(new FormError($this->translator->trans('production.material_plan.invalid_quantity', domain: 'production')));
             }
             if ($serialRequired && '' === $serialNumber && (!$lot instanceof PartLot || !$lot->getUserBarcode())) {
@@ -620,6 +686,7 @@ final class ProductionController extends AbstractController
             $quantity = (int) $form->get('quantity')->getData();
             $serialNumber = trim((string) $form->get('serialNumber')->getData()) ?: $lot->getUserBarcode();
             $withdrawHelper->withdraw($lot, $quantity, sprintf('Projektbestand %s', $project->getProjectNumber()));
+            $releasedReservation = $this->reservationManager->consumeForProvision($project, $part, $lot, $quantity);
             $allocation = (new ProjectMaterialAllocation())
                 ->setCustomerProject($project)
                 ->setPart($part)
@@ -629,6 +696,9 @@ final class ProductionController extends AbstractController
                 ->setAllocatedBy($this->getUser() instanceof User ? $this->getUser() : null);
             $entityManager->persist($allocation);
             $this->historyRecorder->record($project, 'material_allocated', sprintf('%s × %s', $part->getName(), $quantity));
+            if ($releasedReservation > 0) {
+                $this->historyRecorder->record($project, 'material_reservation_consumed', sprintf('%s × %s bereitgestellt', $part->getName(), $releasedReservation));
+            }
             $entityManager->flush();
             $this->addFlash('success', 'production.material_plan.allocation_success');
 
@@ -686,6 +756,31 @@ final class ProductionController extends AbstractController
         return $this->handleBuildInstanceForm($buildInstance, $request, $entityManager);
     }
 
+    #[Route(path: '/build-instances/{id}/delete', name: 'production_build_instance_delete', requirements: ['id' => '\d+'], methods: ['POST'])]
+    public function buildInstanceDelete(BuildInstance $buildInstance, Request $request, EntityManagerInterface $entityManager): Response
+    {
+        $this->denyAccessUnlessGranted('@projects.edit');
+        if (!$this->isCsrfTokenValid('delete_build_instance_'.$buildInstance->getId(), $request->request->getString('_token'))) {
+            throw $this->createAccessDeniedException('Invalid CSRF token.');
+        }
+
+        $identifier = $buildInstance->getDisplayIdentifier();
+        $project = $buildInstance->getCustomerProject() ?? $buildInstance->getProjectPosition()?->getCustomerProject();
+        foreach ($buildInstance->getChildren()->toArray() as $child) {
+            $child->setParent(null);
+        }
+        $buildInstance->setProjectPosition(null);
+        $buildInstance->setParent(null);
+        if ($project instanceof CustomerProject) {
+            $this->historyRecorder->record($project, 'build_deleted', $identifier);
+        }
+        $entityManager->remove($buildInstance);
+        $entityManager->flush();
+        $this->addFlash('success', $this->translator->trans('production.build_instance.deleted', ['%serial%' => $identifier], 'production'));
+
+        return $this->redirectToRoute('production_build_instance_index');
+    }
+
     #[Route(path: '/project-positions/{id}/assign-instance', name: 'production_project_position_assign_instance', requirements: ['id' => '\d+'], methods: ['GET', 'POST'])]
     public function projectPositionAssignInstance(
         ProjectPosition $position,
@@ -719,7 +814,7 @@ final class ProductionController extends AbstractController
             'choices' => $assignableInstances,
             'choice_label' => fn(BuildInstance $instance): string => sprintf(
                 '%s · %s%s',
-                $instance->getSerialNumber(),
+                $instance->getDisplayIdentifier(),
                 $this->translator->trans('production.build_instance.status.'.$instance->getStatus()->value, domain: 'production'),
                 null !== $instance->getLocation() ? ' · '.$instance->getLocation() : '',
             ),
@@ -740,7 +835,7 @@ final class ProductionController extends AbstractController
                 $this->historyRecorder->record(
                     $project,
                     'build_assigned',
-                    $buildInstance->getSerialNumber(),
+                    $buildInstance->getDisplayIdentifier(),
                     $buildInstance,
                 );
                 $entityManager->flush();
@@ -765,7 +860,9 @@ final class ProductionController extends AbstractController
             throw $this->createAccessDeniedException('Invalid CSRF token.');
         }
 
-        $project = $buildInstance->getCustomerProject();
+        // Also accept records created by older extension versions where only the
+        // project-position relation remained set after an attempted unassignment.
+        $project = $buildInstance->getCustomerProject() ?? $buildInstance->getProjectPosition()?->getCustomerProject();
         if (!$project instanceof CustomerProject) {
             $this->addFlash('info', $this->translator->trans('production.build_instance.already_unassigned', domain: 'production'));
 
@@ -776,7 +873,7 @@ final class ProductionController extends AbstractController
         $this->historyRecorder->record(
             $project,
             'build_unassigned',
-            $buildInstance->getSerialNumber(),
+            $buildInstance->getDisplayIdentifier(),
             $buildInstance,
         );
         $entityManager->flush();
@@ -801,19 +898,42 @@ final class ProductionController extends AbstractController
             'form' => $form,
             'title' => null === $customer->getId() ? 'production.customer.new' : 'production.customer.edit',
             'cancel_route' => 'production_customer_index',
+            'delete_route' => null === $customer->getId() ? null : 'production_customer_delete',
+            'delete_route_params' => ['id' => $customer->getId()],
+            'delete_token_id' => 'delete_customer_'.$customer->getId(),
+            'delete_confirm' => $this->translator->trans('production.customer.delete_confirm', [
+                '%name%' => $customer->getName(),
+                '%projects%' => $customer->getProjects()->count(),
+            ], 'production'),
         ]);
     }
 
     private function handleCustomerProjectForm(CustomerProject $project, Request $request, EntityManagerInterface $entityManager): Response
     {
         $isNew = null === $project->getId();
+        $previousStatus = $project->getStatus();
         $form = $this->createForm(CustomerProjectType::class, $project);
         $form->handleRequest($request);
         if ($form->isSubmitted() && $form->isValid()) {
             $entityManager->persist($project);
             $this->historyRecorder->record($project, $isNew ? 'project_created' : 'project_updated');
+            $activeReservationStatuses = [CustomerProjectStatus::Commissioned, CustomerProjectStatus::InProduction];
+            $released = 0;
+            if (in_array($previousStatus, $activeReservationStatuses, true)
+                && !in_array($project->getStatus(), $activeReservationStatuses, true)) {
+                $released = $this->reservationManager->release($project);
+            }
             $entityManager->flush();
             $this->addFlash('success', 'production.flash.saved');
+            if ($released > 0) {
+                $this->addFlash('info', sprintf('%s reservierte Teile wurden aufgrund des neuen Projektstatus freigegeben.', $released));
+            }
+            if (CustomerProjectStatus::Commissioned === $project->getStatus()
+                && CustomerProjectStatus::Commissioned !== $previousStatus) {
+                $this->addFlash('info', 'Das Kundenprojekt ist jetzt beauftragt. Bitte prüfen und bestätigen Sie die vorgeschlagene Materialreservierung. Der Lagerbestand wird dabei noch nicht verändert.');
+
+                return $this->redirectToRoute('production_material_reservation', ['id' => $project->getId()]);
+            }
 
             return $this->redirectToRoute('production_customer_project_show', ['id' => $project->getId()]);
         }
@@ -822,6 +942,13 @@ final class ProductionController extends AbstractController
             'form' => $form,
             'title' => null === $project->getId() ? 'production.customer_project.new' : 'production.customer_project.edit',
             'cancel_route' => 'production_customer_project_index',
+            'delete_route' => null === $project->getId() ? null : 'production_customer_project_delete',
+            'delete_route_params' => ['id' => $project->getId()],
+            'delete_token_id' => 'delete_customer_project_'.$project->getId(),
+            'delete_confirm' => $this->translator->trans('production.customer_project.delete_confirm', [
+                '%number%' => $project->getProjectNumber(),
+                '%builds%' => $project->getBuildInstances()->count(),
+            ], 'production'),
         ]);
     }
 
@@ -838,6 +965,9 @@ final class ProductionController extends AbstractController
                 $this->denyAccessUnlessGranted('read', $position->getBuildProject());
             }
             $entityManager->persist($position);
+            if ($isNew) {
+                $this->positionInitializer->initializeRequiredDefaults($position);
+            }
             $project = $position->getCustomerProject();
             if ($project instanceof CustomerProject) {
                 $this->historyRecorder->record(
@@ -964,7 +1094,7 @@ final class ProductionController extends AbstractController
                 $this->historyRecorder->record(
                     $project,
                     $isNew ? 'build_created' : 'build_updated',
-                    $buildInstance->getSerialNumber(),
+                    $buildInstance->getDisplayIdentifier(),
                     $buildInstance,
                 );
             }
@@ -972,7 +1102,7 @@ final class ProductionController extends AbstractController
                 $this->historyRecorder->record(
                     $previousProject,
                     'build_unassigned',
-                    $buildInstance->getSerialNumber(),
+                    $buildInstance->getDisplayIdentifier(),
                     $buildInstance,
                 );
             }
@@ -987,6 +1117,12 @@ final class ProductionController extends AbstractController
             'title' => $registerExisting ? 'production.build_instance.register_existing' : 'production.build_instance.edit',
             'intro' => $registerExisting ? 'production.build_instance.register_existing_intro' : null,
             'cancel_route' => $registerExisting ? 'production_build' : 'production_build_instance_index',
+            'delete_route' => $isNew ? null : 'production_build_instance_delete',
+            'delete_route_params' => ['id' => $buildInstance->getId()],
+            'delete_token_id' => 'delete_build_instance_'.$buildInstance->getId(),
+            'delete_confirm' => $this->translator->trans('production.build_instance.delete_confirm', [
+                '%serial%' => $buildInstance->getDisplayIdentifier(),
+            ], 'production'),
         ]);
     }
 

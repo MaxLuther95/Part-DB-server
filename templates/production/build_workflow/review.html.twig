@@ -1,0 +1,10 @@
+{% extends 'main_card.html.twig' %}
+{% block title %}Bau prüfen{% endblock %}
+{% block card_title %}<i class="fa-solid fa-clipboard-check fa-fw"></i> Bau abschließend prüfen{% endblock %}
+{% block card_content %}
+    {% include 'production/build_workflow/_steps.html.twig' with {current_step: 4} %}
+    <h5>Geräte und Baugruppen</h5><table class="table"><thead><tr><th>Bezeichnung</th><th>Seriennummer</th><th>Notizen</th></tr></thead><tbody>{% for key, node in draft.nodes %}<tr><td style="padding-left: {{ node.parent ? '2.5rem' : '.5rem' }}">{{ node.name }}</td><td>{{ draft.details[key].serial ?: '–' }}</td><td>{{ draft.details[key].notes ?: '–' }}</td></tr>{% endfor %}</tbody></table>
+    <h5>Material</h5><table class="table"><thead><tr><th>Bauteil</th><th>Bedarf</th><th>Projektbestand</th><th>Reserviert</th><th>Freier Lagerbestand</th></tr></thead><tbody>{% for item in plan.items %}<tr><td>{{ item.part.name }}</td><td>{{ item.required }}</td><td>{{ item.project_stock }}</td><td>{{ item.project_reserved }}</td><td>{{ item.remaining }}</td></tr>{% else %}<tr><td colspan="5" class="text-muted">Kein Lagerteilbedarf.</td></tr>{% endfor %}</tbody></table>
+    <div class="alert alert-warning"><strong>Verbindlicher Schritt:</strong> Mit „Bau starten“ werden die Geräte angelegt und die ausgewählten Lagerbestände aus Part-DB ausgebucht.</div>
+    <form method="post"><input type="hidden" name="_token" value="{{ csrf_token('build_finish_' ~ token) }}"><button class="btn btn-success" type="submit"><i class="fa-solid fa-hammer fa-fw"></i> Bau starten und Material ausbuchen</button> <a class="btn btn-outline-secondary" href="{{ path('production_build_workflow_materials', {token: token}) }}">Zurück</a></form>
+{% endblock %}

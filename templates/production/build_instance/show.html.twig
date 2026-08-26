@@ -1,16 +1,18 @@
 {% extends 'main_card.html.twig' %}
 {% trans_default_domain 'production' %}
 
-{% block title %}{{ build_instance.serialNumber }}{% endblock %}
-{% block card_title %}<i class="fa-solid fa-screwdriver-wrench fa-fw"></i> {{ build_instance.serialNumber }}{% endblock %}
+{% block title %}{{ build_instance.displayIdentifier }}{% endblock %}
+{% block card_title %}<i class="fa-solid fa-screwdriver-wrench fa-fw"></i> {{ build_instance.displayIdentifier }}{% endblock %}
 
 {% block card_content %}
     <div class="d-flex gap-2 mb-3">
         <a class="btn btn-outline-secondary" href="{{ path('production_build_instance_index') }}"><i class="fa-solid fa-arrow-left fa-fw"></i> {{ 'production.build_instance.plural'|trans }}</a>
-        {% if is_granted('@projects.edit') %}<a class="btn btn-primary" href="{{ path('production_build_instance_edit', {id: build_instance.id}) }}"><i class="fa-solid fa-pen fa-fw"></i> {{ 'production.action.edit'|trans }}</a>{% endif %}
+        {% if is_granted('@projects.edit') %}
+            <a class="btn btn-primary" href="{{ path('production_build_instance_edit', {id: build_instance.id}) }}"><i class="fa-solid fa-pen fa-fw"></i> {{ 'production.action.edit'|trans }}</a>
+        {% endif %}
     </div>
     <dl class="row">
-        <dt class="col-sm-3">{{ 'production.build_instance.serial_number'|trans }}</dt><dd class="col-sm-9"><strong>{{ build_instance.serialNumber }}</strong></dd>
+        <dt class="col-sm-3">{{ 'production.build_instance.serial_number'|trans }}</dt><dd class="col-sm-9"><strong>{{ build_instance.serialNumber ?: '–' }}</strong></dd>
         <dt class="col-sm-3">{{ 'production.build_instance.template'|trans }}</dt><dd class="col-sm-9">{% if build_instance.systemTemplate %}<a href="{{ path('production_template_show', {id: build_instance.systemTemplate.id}) }}">{{ build_instance.systemTemplate.name }}</a>{% elseif build_instance.templateProject %}<a href="{{ path('project_info', {id: build_instance.templateProject.id}) }}">{{ build_instance.templateProject.fullPath }}</a>{% else %}<span class="text-muted">{{ build_instance.contentName }} ({{ 'production.common.deleted_reference'|trans }})</span>{% endif %}</dd>
         <dt class="col-sm-3">{{ 'production.common.status'|trans }}</dt><dd class="col-sm-9"><span class="badge bg-secondary">{{ ('production.build_instance.status.' ~ build_instance.status.value)|trans }}</span></dd>
         <dt class="col-sm-3">{{ 'production.build_instance.location'|trans }}</dt><dd class="col-sm-9">{{ build_instance.location|default('–') }}</dd>
@@ -20,4 +22,6 @@
         <dt class="col-sm-3">{{ 'production.common.created_at'|trans }}</dt><dd class="col-sm-9">{{ build_instance.addedDate ? build_instance.addedDate|format_datetime('short', 'short') : '–' }}</dd>
         <dt class="col-sm-3">{{ 'production.build_instance.completed_at'|trans }}</dt><dd class="col-sm-9">{{ build_instance.completedAt ? build_instance.completedAt|format_datetime('short', 'short') : '–' }}</dd>
     </dl>
+    {% if build_instance.children|length > 0 %}<h5>Untergeordnete Geräte und Baugruppen</h5><div class="list-group mb-4">{% for child in build_instance.children %}<a class="list-group-item list-group-item-action" href="{{ path('production_build_instance_show', {id: child.id}) }}"><strong>{{ child.displayIdentifier }}</strong> · {{ child.contentName }}</a>{% endfor %}</div>{% endif %}
+    <h5>Verwendetes Material</h5><div class="table-responsive"><table class="table table-sm"><thead><tr><th>Bauteil</th><th>Menge</th><th>Quelle</th><th>Lagerort</th></tr></thead><tbody>{% for usage in build_instance.materialUsages %}<tr><td>{{ usage.partName }}</td><td>{{ usage.quantity }}</td><td>{{ usage.fromProjectStock ? 'Projektbestand' : usage.sourceLotName|default('Lagerbestand') }}</td><td>{{ usage.sourceLocationName|default('–') }}</td></tr>{% else %}<tr><td colspan="4" class="text-muted">Kein Material erfasst.</td></tr>{% endfor %}</tbody></table></div>
 {% endblock %}

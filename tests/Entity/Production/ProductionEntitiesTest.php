@@ -11,6 +11,7 @@ use App\Entity\Production\CustomerProject;
 use App\Entity\Production\CustomerProjectStatus;
 use App\Entity\Production\ProjectPosition;
 use App\Entity\Production\ProjectMaterialAllocation;
+use App\Entity\Production\ProjectMaterialReservation;
 use App\Entity\Production\SystemTemplate;
 use App\Entity\Production\SystemTemplateSlot;
 use App\Entity\Parts\Part;
@@ -74,6 +75,34 @@ final class ProductionEntitiesTest extends TestCase
         self::assertSame('Regal 2', $build->getLocation());
         self::assertSame('Fertigungsprüfung ohne Befund.', $build->getNotes());
         self::assertNotNull($build->getCompletedAt());
+    }
+
+    public function testBuildWithoutSerialUsesInternalIdentifierAndKeepsReason(): void
+    {
+        $build = (new BuildInstance())
+            ->setTemplateProject(new Project())
+            ->setSerialNumber(' ')
+            ->setNotes('Prototyp ohne Typenschild');
+
+        self::assertNull($build->getSerialNumber());
+        self::assertSame('Ohne Seriennummer', $build->getDisplayIdentifier());
+        self::assertSame('Prototyp ohne Typenschild', $build->getNotes());
+    }
+
+    public function testProjectCompletionRequiresSerializedDeviceOnEveryPosition(): void
+    {
+        $project = (new CustomerProject())->setProjectNumber('P-2026-0999');
+        $first = (new ProjectPosition())->setCustomerProject($project)->setName('Position 1')->setTemplateProject(new Project());
+        $second = (new ProjectPosition())->setCustomerProject($project)->setName('Position 2')->setTemplateProject(new Project());
+
+        (new BuildInstance())->setProjectPosition($first)->setSerialNumber('SN-1');
+        (new BuildInstance())->setProjectPosition($second)->setNotes('Seriennummer wird später vergeben');
+
+        self::assertFalse($project->isReadyForCompletion());
+        self::assertSame([$second], $project->getPositionsMissingSerialNumber());
+
+        $second->getBuildInstances()->first()->setSerialNumber('SN-2');
+        self::assertTrue($project->isReadyForCompletion());
     }
 
     public function testProjectPositionAssignsBuildToProjectAndTemplate(): void
@@ -148,6 +177,20 @@ final class ProductionEntitiesTest extends TestCase
         self::assertSame(1, $allocation->getQuantity());
         self::assertSame($allocation->getPart()?->getName(), $allocation->getPartName());
         self::assertSame('E18-4711', $allocation->getSerialNumber());
+    }
+
+    public function testProjectMaterialReservationUsesWholeQuantitiesWithoutChangingStock(): void
+    {
+        $project = (new CustomerProject())->setProjectNumber('P-RESERVE');
+        $part = new Part();
+        $reservation = (new ProjectMaterialReservation())
+            ->setCustomerProject($project)
+            ->setPart($part)
+            ->setQuantity(4);
+
+        self::assertSame($project, $reservation->getCustomerProject());
+        self::assertSame($part, $reservation->getPart());
+        self::assertSame(4, $reservation->getQuantity());
     }
 
     public function testSystemTemplateCannotContainItselfIndirectly(): void

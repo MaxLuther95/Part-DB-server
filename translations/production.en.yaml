@@ -1,7 +1,7 @@
 production:
   dashboard:
     title: Production
-    intro: Manage customers, projects, manufactured devices and assemblies separately from regular inventory parts.
+    intro: Manage customers, customer projects, manufactured devices and assemblies separately from regular inventory parts.
   common:
     name: Name
     description: Description
@@ -28,6 +28,7 @@ production:
     customers_projects: Customers & projects
     build: Build
     templates: System templates
+    required_parts: Required parts
   build:
     intro: Choose whether to manufacture a new device or assembly or register an existing one without changing inventory.
     empty: There are currently no devices or assemblies in progress.
@@ -52,25 +53,30 @@ production:
     active: Active
     new: Create customer
     edit: Edit customer
+    delete_confirm: 'Really delete customer “%name%”? The %projects% assigned customer projects will remain without a customer.'
+    deleted: 'The customer was deleted. %projects% customer projects remain without a customer.'
   customer_project:
-    label: Project
-    plural: Projects
-    all_projects: All projects
-    my_projects: My projects
+    label: Customer project
+    plural: Customer projects
+    all_projects: All customer projects
+    my_projects: My customer projects
     number: Project number
     assigned_users: Assigned users
-    assigned_users_help: The project appears under “My projects” for these users. Multiple users can be selected.
+    assigned_users_help: The customer project appears under “My customer projects” for these users. Multiple users can be selected.
     status_filter:
-      label: Filter projects by status
+      label: Filter customer projects by status
       all: All statuses
     scope:
-      label: Project filter
-      active: Active projects
-      all: All projects
-      empty_active: No projects with the status “In production” are currently assigned to you.
-      empty_all: No projects are currently assigned to you.
-    new: Create project
-    edit: Edit project
+      label: Customer project filter
+      active: Active customer projects
+      all: All customer projects
+      empty_active: No customer projects with the status “In production” are currently assigned to you.
+      empty_all: No customer projects are currently assigned to you.
+    new: Create customer project
+    edit: Edit customer project
+    delete_confirm: 'Really delete customer project %number% completely? Positions, reservations, accessories and history will be deleted. %builds% devices or assemblies will be retained and released.'
+    deleted: 'The customer project was deleted. %builds% devices or assemblies were released and retained.'
+    delete_has_material: The customer project cannot be deleted while withdrawn project stock is still assigned to it.
     status:
       planning: Planning
       commissioned: Commissioned
@@ -80,8 +86,8 @@ production:
       cancelled: Cancelled
   project:
     no_customer: No customer assigned
-    cancelled_hint: This project has been cancelled.
-    build_instances: Devices and assemblies in project
+    cancelled_hint: This customer project has been cancelled.
+    build_instances: Devices and assemblies in customer project
   project_position:
     label: Project position
     plural: Project positions
@@ -176,11 +182,17 @@ production:
   material_plan:
     label: Material availability
     complete: All parts available
+    available_status: Material available
+    secured_status: Material secured
     incomplete: Missing parts
     not_configured: Not configured yet
     empty: The selected systems and build projects do not require inventory parts yet.
     part: Part
     required: Required
+    secured: Secured for project
+    installed: Installed
+    secured_breakdown: '%reserved% reserved, %allocated% provided'
+    reconcile_reservation: Reconcile reservation
     allocated: In project stock
     remaining: Remaining to provide
     available: Freely available
@@ -218,18 +230,24 @@ production:
       accessory_created: Accessory added
       accessory_updated: Accessory updated
       material_allocated: Material moved into project stock
+      material_reservation_updated: Material reservation updated
+      material_reservation_released: Material reservation released
+      material_reservation_consumed: Reservation released during withdrawal
       build_created: Device / assembly created
       build_assigned: Device / assembly assigned to project
       build_updated: Device / assembly updated
       build_unassigned: Device / assembly removed from project
+      build_deleted: Device / assembly deleted
   build_instance:
     label: Device / assembly
     plural: Devices and assemblies
     serial_number: Serial number
+    serial_number_optional_help: Optional. If no serial number is assigned, enter a clear reason in the notes.
     template: System or build project
     template_required: Select a system template or a Part-DB build project.
     location: Location
     notes: Notes
+    notes_without_serial_help: Required as the reason when no serial number is assigned.
     completed_at: Completed at
     unassigned: Unassigned
     position_unassigned: Not assigned yet
@@ -251,6 +269,8 @@ production:
     register_existing_short: Record an already manufactured device or assembly with a serial number without changing materials or inventory.
     register_existing_intro: Record an existing device or assembly. Its status defaults to “Completed” but can be changed. Inventory is not changed and no project position is assigned.
     edit: Edit device / assembly
+    delete_confirm: 'Really delete device or assembly %serial%? Material will not be returned to stock. Child devices and assemblies will be retained.'
+    deleted: 'Device or assembly %serial% was deleted. Material stock was not changed.'
     status:
       planned: Planned
       in_progress: In progress

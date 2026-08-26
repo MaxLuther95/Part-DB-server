@@ -1,7 +1,7 @@
 production:
   dashboard:
     title: Fertigung
-    intro: Kunden, Projekte sowie gefertigte Geräte und Baugruppen werden hier getrennt von den normalen Lagerteilen verwaltet.
+    intro: Kunden, Kundenprojekte sowie gefertigte Geräte und Baugruppen werden hier getrennt von den normalen Lagerteilen verwaltet.
   common:
     name: Bezeichnung
     description: Beschreibung
@@ -28,6 +28,7 @@ production:
     customers_projects: Kunden & Projekte
     build: Bauen
     templates: Systemvorlagen
+    required_parts: Benötigte Teile
   build:
     intro: Wählen Sie, ob ein neues Gerät bzw. eine neue Baugruppe gefertigt oder ein bereits vorhandenes Exemplar ohne Bestandsänderung eingepflegt werden soll.
     empty: Im Moment befindet sich kein Gerät und keine Baugruppe in Bearbeitung.
@@ -52,25 +53,30 @@ production:
     active: Aktiv
     new: Kunde anlegen
     edit: Kunde bearbeiten
+    delete_confirm: 'Kunde „%name%“ wirklich löschen? Die %projects% zugeordneten Kundenprojekte bleiben ohne Kundenzuordnung erhalten.'
+    deleted: 'Der Kunde wurde gelöscht. %projects% Kundenprojekte bleiben ohne Kundenzuordnung erhalten.'
   customer_project:
-    label: Projekt
-    plural: Projekte
-    all_projects: Alle Projekte
-    my_projects: Meine Projekte
+    label: Kundenprojekt
+    plural: Kundenprojekte
+    all_projects: Alle Kundenprojekte
+    my_projects: Meine Kundenprojekte
     number: Projektnummer
     assigned_users: Zugeordnete Nutzer
-    assigned_users_help: Das Projekt erscheint für diese Personen unter „Meine Projekte“. Mehrere Nutzer können ausgewählt werden.
+    assigned_users_help: Das Kundenprojekt erscheint für diese Personen unter „Meine Kundenprojekte“. Mehrere Nutzer können ausgewählt werden.
     status_filter:
-      label: Projekte nach Status filtern
+      label: Kundenprojekte nach Status filtern
       all: Alle Status
     scope:
-      label: Projektfilter
-      active: Aktive Projekte
-      all: Alle Projekte
-      empty_active: Ihnen sind momentan keine Projekte mit dem Status „In Produktion“ zugeordnet.
-      empty_all: Ihnen sind momentan keine Projekte zugeordnet.
-    new: Projekt anlegen
-    edit: Projekt bearbeiten
+      label: Kundenprojektfilter
+      active: Aktive Kundenprojekte
+      all: Alle Kundenprojekte
+      empty_active: Ihnen sind momentan keine Kundenprojekte mit dem Status „In Produktion“ zugeordnet.
+      empty_all: Ihnen sind momentan keine Kundenprojekte zugeordnet.
+    new: Kundenprojekt anlegen
+    edit: Kundenprojekt bearbeiten
+    delete_confirm: 'Kundenprojekt %number% wirklich vollständig löschen? Positionen, Reservierungen, Zubehör und Historie werden gelöscht. %builds% Geräte bzw. Baugruppen bleiben erhalten und werden freigegeben.'
+    deleted: 'Das Kundenprojekt wurde gelöscht. %builds% Geräte bzw. Baugruppen wurden freigegeben und bleiben erhalten.'
+    delete_has_material: Das Kundenprojekt kann nicht gelöscht werden, solange ihm bereits ausgebuchter Projektbestand zugeordnet ist.
     status:
       planning: In Planung
       commissioned: Beauftragt
@@ -80,8 +86,8 @@ production:
       cancelled: Storniert
   project:
     no_customer: Ohne Kundenzuordnung
-    cancelled_hint: Dieses Projekt wurde storniert.
-    build_instances: Geräte und Baugruppen im Projekt
+    cancelled_hint: Dieses Kundenprojekt wurde storniert.
+    build_instances: Geräte und Baugruppen im Kundenprojekt
   project_position:
     label: Projektposition
     plural: Projektpositionen
@@ -176,11 +182,17 @@ production:
   material_plan:
     label: Materialverfügbarkeit
     complete: Alle Teile verfügbar
+    available_status: Material verfügbar
+    secured_status: Material gesichert
     incomplete: Fehlende Teile
     not_configured: Noch nicht konfiguriert
     empty: Aus den gewählten Systemen und Bauprojekten ergeben sich noch keine Lagerteile.
     part: Bauteil
     required: Benötigt
+    secured: Für Projekt gesichert
+    installed: Verbaut
+    secured_breakdown: '%reserved% reserviert, %allocated% bereitgestellt'
+    reconcile_reservation: Reservierung abgleichen
     allocated: Im Projektbestand
     remaining: Noch bereitzustellen
     available: Frei verfügbar
@@ -218,18 +230,24 @@ production:
       accessory_created: Zubehör hinzugefügt
       accessory_updated: Zubehör bearbeitet
       material_allocated: Material in den Projektbestand umgebucht
+      material_reservation_updated: Materialreservierung aktualisiert
+      material_reservation_released: Materialreservierung freigegeben
+      material_reservation_consumed: Reservierung beim Ausbuchen aufgelöst
       build_created: Gerät / Baugruppe angelegt
       build_assigned: Gerät / Baugruppe dem Projekt zugewiesen
       build_updated: Gerät / Baugruppe bearbeitet
       build_unassigned: Gerät / Baugruppe aus Projekt entfernt
+      build_deleted: Gerät / Baugruppe gelöscht
   build_instance:
     label: Gerät / Baugruppe
     plural: Geräte und Baugruppen
     serial_number: Seriennummer
+    serial_number_optional_help: Optional. Ohne Seriennummer muss in den Notizen ein nachvollziehbarer Grund angegeben werden.
     template: System oder Bauprojekt
     template_required: Bitte eine Systemvorlage oder ein Part-DB-Bauprojekt auswählen.
     location: Standort
     notes: Notizen
+    notes_without_serial_help: Pflichtfeld für den Grund, wenn keine Seriennummer vergeben wird.
     completed_at: Abgeschlossen am
     unassigned: Nicht zugeordnet
     position_unassigned: Noch nicht zugewiesen
@@ -251,6 +269,8 @@ production:
     register_existing_short: Ein bereits gefertigtes Gerät bzw. eine Baugruppe mit Seriennummer erfassen, ohne Material oder Lagerbestände zu verändern.
     register_existing_intro: Erfassen Sie ein bereits vorhandenes Gerät bzw. eine Baugruppe. Der Status ist standardmäßig auf „Fertig“ gesetzt, kann aber geändert werden. Es werden keine Lagerbestände verändert und keine Projektposition zugewiesen.
     edit: Gerät / Baugruppe bearbeiten
+    delete_confirm: 'Gerät bzw. Baugruppe %serial% wirklich löschen? Material wird nicht wieder eingebucht. Untergeordnete Geräte und Baugruppen bleiben erhalten.'
+    deleted: 'Gerät bzw. Baugruppe %serial% wurde gelöscht. Materialbestände wurden nicht verändert.'
     status:
       planned: Geplant
       in_progress: In Bau

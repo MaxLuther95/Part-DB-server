@@ -1,0 +1,33 @@
+{% extends 'main_card.html.twig' %}
+{% trans_default_domain 'production' %}
+{% block title %}Material reservieren – {{ project.projectNumber }}{% endblock %}
+{% block card_title %}<i class="fa-solid fa-bookmark fa-fw"></i> Material für {{ project.projectNumber }} reservieren{% endblock %}
+{% block card_content %}
+    <div class="alert alert-info"><i class="fa-solid fa-circle-info fa-fw"></i> Die Reservierung verändert den Part-DB-Bestand noch nicht. Sie verhindert jedoch, dass dasselbe Material in der Fertigungsplanung erneut als frei verfügbar gilt. Erst beim Bereitstellen oder Bauen wird es tatsächlich ausgebucht.</div>
+    {% if material_plan.reservation_stale %}<div class="alert alert-warning"><i class="fa-solid fa-arrows-rotate fa-fw"></i> Bedarf und vorhandene Reservierung stimmen nicht überein. Mit dem Speichern wird die Reservierung vollständig an die aktuelle BOM und Projektkonfiguration angepasst.</div>{% endif %}
+    <form method="post">
+        <input type="hidden" name="_token" value="{{ csrf_token('refresh_material_reservation_' ~ project.id) }}">
+        <div class="mb-3"><label class="form-label fw-bold" for="site">Fertigungsstandort</label><select class="form-select" id="site" name="site_id" required><option value="">Bitte Standort auswählen</option>{% for location in locations %}<option value="{{ location.id }}" {{ selected_site and selected_site.id == location.id ? 'selected' : '' }}>{{ location.fullPath }}</option>{% endfor %}</select><div class="form-text">Berücksichtigt werden der Standort und alle darunterliegenden Lagerorte.</div></div>
+        <div class="table-responsive">
+            <table class="table table-sm align-middle">
+                <thead><tr><th>Bauteil</th><th>Benötigt</th><th>Verbaut</th><th>Projektbestand</th><th>Reserviert</th><th>Frei verfügbar</th><th>Fehlt</th><th>Überschuss</th><th>Noch zu sichern</th></tr></thead>
+                <tbody>
+                {% for item in material_plan.items %}
+                    <tr><td>{{ item.part.name }}</td><td>{{ item.required }}</td><td>{{ item.consumed }}</td><td>{{ item.allocated }}</td><td>{{ item.reserved }}</td><td>{{ item.available }}</td><td>{{ item.missing }}</td><td>{{ item.overstock }}</td><td>{{ item.unreserved_remaining }}</td></tr>
+                {% else %}
+                    <tr><td colspan="9" class="text-muted text-center">Aus der aktuellen Konfiguration ergibt sich kein Materialbedarf.</td></tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% if project.materialReservations|length > 0 %}<h5>Aktuell reservierte Lagerlose</h5><div class="table-responsive mb-3"><table class="table table-sm"><thead><tr><th>Bauteil</th><th>Menge</th><th>Konkretes Lagerlos</th><th>Standort</th></tr></thead><tbody>{% for reservation in project.materialReservations %}<tr><td>{{ reservation.partName }}</td><td>{{ reservation.quantity }}</td><td>{{ reservation.sourcePartLot ? (reservation.sourcePartLot.name ?: '#' ~ reservation.sourcePartLot.id) : reservation.sourceLotName|default('Verknüpfung gelöscht') }}</td><td>{{ reservation.sourcePartLot and reservation.sourcePartLot.storageLocation ? reservation.sourcePartLot.storageLocation.fullPath : reservation.siteName }}</td></tr>{% endfor %}</tbody></table></div>{% endif %}
+        <button class="btn btn-success" type="submit"><i class="fa-solid fa-bookmark fa-fw"></i> Reservierung bestätigen und aktualisieren</button>
+        <a class="btn btn-secondary" href="{{ path('production_customer_project_show', {id: project.id}) }}">Abbrechen</a>
+    </form>
+    {% if project.materialReservations|length > 0 %}
+        <form class="mt-3" method="post" action="{{ path('production_material_reservation_release', {id: project.id}) }}" data-turbo-confirm="Alle offenen Materialreservierungen dieses Projekts freigeben?">
+            <input type="hidden" name="_token" value="{{ csrf_token('release_material_reservation_' ~ project.id) }}">
+            <button class="btn btn-outline-danger"><i class="fa-solid fa-xmark fa-fw"></i> Alle Reservierungen freigeben</button>
+        </form>
+    {% endif %}
+{% endblock %}
