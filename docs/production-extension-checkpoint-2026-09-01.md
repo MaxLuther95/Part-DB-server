@@ -100,3 +100,17 @@ into deployable images.
   packages.
 - Any published Git-history rewrite; that requires an explicit coordinated
   decision and force-push.
+
+## MariaDB follow-up
+
+After this checkpoint, `compose.mariadb.yaml` and the runbook in
+`docs/development-mariadb.md` established a portable MariaDB baseline. A fresh
+MariaDB 11.4.10 instance successfully ran all 70 migrations through
+`Version20260901200000`, created 20 production tables and served a healthy
+Part-DB instance. The added index-normalization migration is also a safe no-op
+on a fresh SQLite schema.
+
+The remaining MariaDB schema comparison contains only two pre-existing Part-DB
+core type representations and no production-extension object. Importing and
+validating a copy of the real MariaDB remains deferred until its exact server
+version and target host are known.

@@ -1,0 +1,73 @@
+name: partdb-mariadb
+
+services:
+  database:
+    image: ${MARIADB_IMAGE:-mariadb:11.4.10}
+    restart: unless-stopped
+    environment:
+      MARIADB_DATABASE: ${PARTDB_DB_NAME:-partdb}
+      MARIADB_USER: ${PARTDB_DB_USER:-partdb}
+      MARIADB_PASSWORD: ${PARTDB_DB_PASSWORD:?Set PARTDB_DB_PASSWORD in .env.mariadb.local}
+      MARIADB_ROOT_PASSWORD: ${MARIADB_ROOT_PASSWORD:?Set MARIADB_ROOT_PASSWORD in .env.mariadb.local}
+      MARIADB_INITDB_SKIP_TZINFO: "1"
+      TZ: ${PARTDB_TIMEZONE:-Europe/Berlin}
+    volumes:
+      - mariadb_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      start_period: 20s
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    stop_grace_period: 1m
+    networks:
+      - database
+
+  partdb:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ${PARTDB_IMAGE:-localhost/partdb-local:mariadb}
+    restart: unless-stopped
+    depends_on:
+      database:
+        condition: service_healthy
+    environment:
+      APP_ENV: docker
+      APP_DEBUG: "0"
+      APP_SECRET: ${PARTDB_APP_SECRET:?Set PARTDB_APP_SECRET in .env.mariadb.local}
+      DATABASE_URL: mysql://${PARTDB_DB_USER:-partdb}:${PARTDB_DB_PASSWORD:?Set PARTDB_DB_PASSWORD in .env.mariadb.local}@database:3306/${PARTDB_DB_NAME:-partdb}?serverVersion=${MARIADB_SERVER_VERSION:-11.4.10-MariaDB}&charset=utf8mb4
+      DB_AUTOMIGRATE: ${PARTDB_DB_AUTOMIGRATE:-false}
+      DEFAULT_LANG: ${PARTDB_DEFAULT_LANG:-de}
+      DEFAULT_TIMEZONE: ${PARTDB_TIMEZONE:-Europe/Berlin}
+      BASE_CURRENCY: ${PARTDB_BASE_CURRENCY:-EUR}
+      INSTANCE_NAME: ${PARTDB_INSTANCE_NAME:-Part-DB}
+      TRUSTED_HOSTS: ${PARTDB_TRUSTED_HOSTS:-^(localhost|127[.]0[.]0[.]1)$}
+      CHECK_FOR_UPDATES: ${PARTDB_CHECK_FOR_UPDATES:-0}
+      USE_GRAVATAR: ${PARTDB_USE_GRAVATAR:-0}
+      ALLOW_ATTACHMENT_DOWNLOADS: ${PARTDB_ALLOW_ATTACHMENT_DOWNLOADS:-0}
+    ports:
+      - ${PARTDB_HTTP_BIND:-127.0.0.1}:${PARTDB_HTTP_PORT:-8081}:80
+    volumes:
+      - partdb_uploads:/var/www/html/uploads
+      - partdb_public_media:/var/www/html/public/media
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1/ >/dev/null || exit 1"]
+      start_period: 90s
+      interval: 30s
+      timeout: 5s
+      retries: 5
+    stop_grace_period: 1m
+    networks:
+      - frontend
+      - database
+
+networks:
+  frontend:
+  database:
+    internal: true
+
+volumes:
+  mariadb_data:
+  partdb_uploads:
+  partdb_public_media:

@@ -250,10 +250,12 @@ excludes `db`, `development_backups`, `public_media`, `.tmp` and generated
 `public/build.*` trees. Runtime data may be mounted where required, but it must
 never be copied into a distributable application image.
 
-The current workstation database is disposable test data. Before productive
-deployment, migrations must be verified again against a fresh MariaDB copy of
-the real Part-DB installation, followed by backup/restore and an end-to-end
-order-to-build scenario on the target Raspberry Pi/reverse-proxy setup.
+The current workstation database is disposable test data. The portable
+MariaDB environment and its data boundary are documented in
+`docs/development-mariadb.md`. Before productive deployment, migrations must be
+verified again against a fresh MariaDB copy of the real Part-DB installation,
+followed by backup/restore and an end-to-end order-to-build scenario on the
+selected Linux or Synology host and its reverse proxy.
 
 Container builds pin Composer `2.10.2` instead of the moving `latest` tag so an
 unrelated upstream image update cannot invalidate routine dependency builds.
