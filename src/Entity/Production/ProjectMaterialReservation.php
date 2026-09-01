@@ -20,7 +20,7 @@ use Symfony\Component\Validator\Constraints as Assert;
 #[ORM\Index(name: 'IDX_PROD_RES_LOT', columns: ['source_part_lot_id'])]
 #[ORM\Index(name: 'IDX_PROD_RES_SITE', columns: ['site_id'])]
 #[ORM\Index(name: 'IDX_PROD_RES_USER', columns: ['reserved_by_id'])]
-final class ProjectMaterialReservation extends AbstractProductionEntity
+class ProjectMaterialReservation extends AbstractProductionEntity
 {
     #[ORM\ManyToOne(targetEntity: CustomerProject::class, inversedBy: 'materialReservations')]
     #[ORM\JoinColumn(name: 'customer_project_id', nullable: false, onDelete: 'CASCADE')]
@@ -76,4 +76,17 @@ final class ProjectMaterialReservation extends AbstractProductionEntity
     public function setQuantity(int $quantity): self { $this->quantity = $quantity; return $this; }
     public function getReservedBy(): ?User { return $this->reservedBy; }
     public function setReservedBy(?User $user): self { $this->reservedBy = $user; return $this; }
+
+    public function isTransferPending(): bool
+    {
+        $location = $this->sourcePartLot?->getStorageLocation();
+        while ($location instanceof StorageLocation) {
+            if ($location->getId() === $this->site?->getId()) {
+                return false;
+            }
+            $location = $location->getParent();
+        }
+
+        return null !== $this->sourcePartLot && null !== $this->site;
+    }
 }

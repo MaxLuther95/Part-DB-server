@@ -100,6 +100,9 @@ final class PermissionManagerTest extends WebTestCase
         yield ['footprints'];
         yield ['suppliers'];
         yield ['tools'];
+        yield ['production_orders'];
+        yield ['production_build_instances'];
+        yield ['production_material'];
     }
 
     #[DataProvider('getPermissionNames')]
@@ -127,6 +130,9 @@ final class PermissionManagerTest extends WebTestCase
     public function testIsValidOperation(): void
     {
         $this->assertTrue($this->service->isValidOperation('parts', 'read'));
+        $this->assertTrue($this->service->isValidOperation('production_orders', 'import'));
+        $this->assertTrue($this->service->isValidOperation('production_build_instances', 'assign'));
+        $this->assertTrue($this->service->isValidOperation('production_material', 'withdraw'));
 
         //Must return false if either the permission or the operation is not existing
         $this->assertFalse($this->service->isValidOperation('parts', 'invalid'));
@@ -202,6 +208,37 @@ final class PermissionManagerTest extends WebTestCase
         $this->service->setPermission($user, 'parts', 'read', null);
         $this->assertNull($this->service->dontInherit($user, 'parts', 'read'));
         $this->assertNull($this->service->inherit($user, 'parts', 'read'));
+    }
+
+    public function testProductionPermissionDependencies(): void
+    {
+        $importer = new User();
+        $this->service->setPermission($importer, 'production_orders', 'import', true);
+        $this->assertTrue($this->service->ensureCorrectSetOperations($importer));
+        $this->assertTrue($this->service->dontInherit($importer, 'production_orders', 'create'));
+        $this->assertTrue($this->service->dontInherit($importer, 'production_customers', 'create'));
+        $this->assertTrue($this->service->dontInherit($importer, 'production_projects', 'create'));
+        $this->assertTrue($this->service->dontInherit($importer, 'production_system_templates', 'read'));
+        $this->assertTrue($this->service->dontInherit($importer, 'production_import_mappings', 'read'));
+        $this->assertTrue($this->service->dontInherit($importer, 'projects', 'read'));
+        $this->assertTrue($this->service->dontInherit($importer, 'parts', 'read'));
+
+        $materialProvider = new User();
+        $this->service->setPermission($materialProvider, 'production_material', 'provide', true);
+        $this->assertTrue($this->service->ensureCorrectSetOperations($materialProvider));
+        $this->assertTrue($this->service->dontInherit($materialProvider, 'production_material', 'read'));
+        $this->assertTrue($this->service->dontInherit($materialProvider, 'production_orders', 'edit'));
+        $this->assertTrue($this->service->dontInherit($materialProvider, 'parts_stock', 'move'));
+
+        $builder = new User();
+        $this->service->setPermission($builder, 'production_build_instances', 'build', true);
+        $this->assertTrue($this->service->ensureCorrectSetOperations($builder));
+        $this->assertTrue($this->service->dontInherit($builder, 'production_build_instances', 'create'));
+        $this->assertTrue($this->service->dontInherit($builder, 'production_system_templates', 'read'));
+        $this->assertTrue($this->service->dontInherit($builder, 'projects', 'read'));
+        $this->assertTrue($this->service->dontInherit($builder, 'parts', 'read'));
+        $this->assertTrue($this->service->dontInherit($builder, 'production_material', 'withdraw'));
+        $this->assertTrue($this->service->dontInherit($builder, 'parts_stock', 'withdraw'));
     }
 
     public function testSetAllPermissions(): void

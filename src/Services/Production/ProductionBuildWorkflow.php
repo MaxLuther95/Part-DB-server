@@ -25,10 +25,13 @@ use App\Repository\Production\ProjectMaterialReservationRepository;
 
 final readonly class ProductionBuildWorkflow
 {
+    public const DRAFT_VERSION = 2;
+
     public function __construct(
         private EntityManagerInterface $entityManager,
         private PartLotWithdrawAddHelper $withdrawHelper,
         private ProductionHistoryRecorder $historyRecorder,
+        private BuildConfigurationCompatibility $configurationCompatibility,
         private ProjectMaterialReservationRepository $reservationRepository,
         private ProductionReservationManager $reservationManager,
     ) {
@@ -37,11 +40,13 @@ final readonly class ProductionBuildWorkflow
     /** @return array<string, mixed> */
     public function createDraft(SystemTemplate|Project $content, ?ProjectPosition $position = null): array
     {
-        $draft = ['root' => 'n0', 'position_id' => $position?->getId(), 'nodes' => [], 'site_id' => $position?->getCustomerProject() instanceof CustomerProject ? $this->reservationManager->getPreferredSite($position->getCustomerProject())?->getId() : null, 'details' => [], 'lots' => []];
+        $draft = ['version' => self::DRAFT_VERSION, 'root' => 'n0', 'position_id' => $position?->getId(), 'nodes' => [], 'site_id' => $position?->getCustomerProject() instanceof CustomerProject ? $this->reservationManager->getPreferredSite($position->getCustomerProject())?->getId() : null, 'details' => [], 'lots' => [], 'materials_taken' => []];
         if (null !== $position) {
             $this->appendPositionNode($draft, $position, null);
         } else {
-            $this->appendContentNode($draft, $content, null, true);
+            // A free build creates exactly one top-level device. For a system
+            // template its base projects supply the BOM, but no slot content is built.
+            $this->appendContentNode($draft, $content, null, false);
         }
 
         return $draft;
@@ -122,11 +127,11 @@ final readonly class ProductionBuildWorkflow
         }
         foreach ($pending as [$slot, $content, $quantity]) {
             if ($content instanceof Part) {
-                $draft['nodes'][$nodeKey]['parts'][] = ['part_id' => $content->getId(), 'quantity' => $quantity, 'slot' => $slot->getName()];
+                $draft['nodes'][$nodeKey]['parts'][] = ['part_id' => $content->getId(), 'quantity' => $quantity, 'slot' => $slot->getName(), 'slot_id' => $slot->getId()];
                 continue;
             }
             for ($i = 0; $i < $quantity; ++$i) {
-                $this->appendContentNode($draft, $content, $nodeKey, true, $slot->getName());
+                $this->appendContentNode($draft, $content, $nodeKey, true, $quantity > 1 ? sprintf('%s %d', $slot->getName(), $i + 1) : $slot->getName(), null, $slot->getId(), $i);
             }
         }
         $draft['nodes'][$nodeKey]['configured'] = true;
@@ -235,14 +240,17 @@ final readonly class ProductionBuildWorkflow
                 $details = $draft['details'][$key] ?? [];
                 $serial = trim((string) ($details['serial'] ?? ''));
                 $notes = trim((string) ($details['notes'] ?? ''));
+                $status = BuildStatus::tryFrom((string) ($details['status'] ?? BuildStatus::InProgress->value));
                 if ('' === $serial && '' === $notes) {
                     throw new \RuntimeException(sprintf('Für %s muss ohne Seriennummer ein Grund angegeben werden.', $node['name']));
                 }
+                if (!$status instanceof BuildStatus) {
+                    throw new \RuntimeException(sprintf('Für %s wurde ein ungültiger Status gewählt.', $node['name']));
+                }
                 $instance = (new BuildInstance())
                     ->setSerialNumber('' === $serial ? null : $serial)
-                    ->setNotes('' === $notes ? null : $notes)
-                    ->setStatus(BuildStatus::InProgress)
                     ->setLocation($site->getFullPath());
+                $instance->setNotes('' === $notes ? null : $notes)->setStatus($status);
                 $resolved['content'] instanceof SystemTemplate ? $instance->setSystemTemplate($resolved['content']) : $instance->setTemplateProject($resolved['content']);
                 if (null !== $node['position_id']) {
                     $position = $this->entityManager->find(ProjectPosition::class, $node['position_id']);
@@ -250,9 +258,18 @@ final readonly class ProductionBuildWorkflow
                         throw new \RuntimeException(sprintf('Die Projektposition %s ist bereits belegt oder nicht mehr vorhanden.', $node['name']));
                     }
                     $instance->setProjectPosition($position);
+                    if (!$this->configurationCompatibility->synchronizePhysicalRelations($instance, $position)) {
+                        throw new \RuntimeException(sprintf('Die Projektposition %s kann nicht widerspruchsfrei zugewiesen werden.', $node['name']));
+                    }
                 }
                 if (null !== $node['parent']) {
                     $instance->setParent($instances[$node['parent']]);
+                    $installedSlotId = filter_var($node['source_slot_id'] ?? null, FILTER_VALIDATE_INT);
+                    $installedSlot = false === $installedSlotId ? null : $this->entityManager->find(SystemTemplateSlot::class, $installedSlotId);
+                    if (!$installedSlot instanceof SystemTemplateSlot) {
+                        throw new \RuntimeException(sprintf('Für %s ist kein gültiger Steckplatz gespeichert.', $node['name']));
+                    }
+                    $instance->setInstalledSlot($installedSlot)->setInstalledSlotIndex((int) ($node['slot_index'] ?? 0));
                 }
                 $this->entityManager->persist($instance);
                 $instances[$key] = $instance;
@@ -272,31 +289,27 @@ final readonly class ProductionBuildWorkflow
     }
 
     /** @param array<string, mixed> $draft */
-    private function appendPositionNode(array &$draft, ProjectPosition $position, ?string $parent): string
+    private function appendPositionNode(array &$draft, ProjectPosition $position, ?string $parent, ?int $slotIndex = null): string
     {
         $content = $position->getSystemTemplate() ?? $position->getTemplateProject();
         if (!$content instanceof SystemTemplate && !$content instanceof Project) {
             throw new \RuntimeException('Die Projektposition verweist auf einen gelöschten Inhalt.');
         }
-        $key = $this->appendContentNode($draft, $content, $parent, false, $position->getName(), $position->getId());
+        $key = $this->appendContentNode($draft, $content, $parent, false, $position->getName(), $position->getId(), $position->getSourceSlot()?->getId(), $slotIndex);
         foreach ($position->getPartAssignments() as $assignment) {
             if ($assignment->getPart() instanceof Part) {
-                $draft['nodes'][$key]['parts'][] = ['part_id' => $assignment->getPart()->getId(), 'quantity' => $assignment->getQuantity(), 'slot' => $assignment->getSourceSlot()?->getName() ?? 'Zubehör'];
+                $draft['nodes'][$key]['parts'][] = ['part_id' => $assignment->getPart()->getId(), 'quantity' => $assignment->getQuantity(), 'slot' => $assignment->getSourceSlot()?->getName() ?? 'Zubehör', 'slot_id' => $assignment->getSourceSlot()?->getId()];
             }
         }
-        foreach ($position->getChildren() as $child) {
-            $this->appendPositionNode($draft, $child, $key);
-        }
-
         return $key;
     }
 
     /** @param array<string, mixed> $draft */
-    private function appendContentNode(array &$draft, SystemTemplate|Project $content, ?string $parent, bool $needsConfiguration, ?string $name = null, ?int $positionId = null): string
+    private function appendContentNode(array &$draft, SystemTemplate|Project $content, ?string $parent, bool $needsConfiguration, ?string $name = null, ?int $positionId = null, ?int $sourceSlotId = null, ?int $slotIndex = null): string
     {
         $key = 'n'.count($draft['nodes']);
         $isSystem = $content instanceof SystemTemplate;
-        $draft['nodes'][$key] = ['type' => $isSystem ? 'system' : 'project', 'content_id' => $content->getId(), 'name' => $name ?? $content->getName(), 'parent' => $parent, 'position_id' => $positionId, 'configured' => !$isSystem || !$needsConfiguration, 'parts' => []];
+        $draft['nodes'][$key] = ['type' => $isSystem ? 'system' : 'project', 'content_id' => $content->getId(), 'name' => $name ?? $content->getName(), 'parent' => $parent, 'position_id' => $positionId, 'source_slot_id' => $sourceSlotId, 'slot_index' => $slotIndex, 'configured' => !$isSystem || !$needsConfiguration, 'parts' => []];
 
         return $key;
     }
@@ -320,8 +333,10 @@ final readonly class ProductionBuildWorkflow
         $requirements = [];
         foreach ($draft['nodes'] as $key => $node) {
             $resolved = $this->resolveNode($draft, (string) $key);
-            $project = $resolved['content'] instanceof Project ? $resolved['content'] : $resolved['content']->getBaseProject();
-            if ($project instanceof Project) {
+            $projects = $resolved['content'] instanceof Project
+                ? [$resolved['content']]
+                : $resolved['content']->getBaseProjects();
+            foreach ($projects as $project) {
                 foreach ($project->getBomEntries() as $entry) {
                     if ($entry->getPart() instanceof Part && null !== $entry->getPart()->getId()) {
                         $this->addRequirement($requirements, $entry->getPart()->getId(), (int) ceil($entry->getQuantity()), (string) $key);
@@ -329,7 +344,7 @@ final readonly class ProductionBuildWorkflow
                 }
             }
             foreach ($node['parts'] as $part) {
-                $this->addRequirement($requirements, (int) $part['part_id'], (int) $part['quantity'], (string) $key);
+                $this->addRequirement($requirements, (int) $part['part_id'], (int) $part['quantity'], (string) $key, isset($part['slot_id']) ? (int) $part['slot_id'] : null);
             }
         }
 
@@ -337,12 +352,12 @@ final readonly class ProductionBuildWorkflow
     }
 
     /** @param array<int, array{quantity: int, contributions: list<array{node: string, quantity: int}>}> $requirements */
-    private function addRequirement(array &$requirements, int $partId, int $quantity, string $node): void
+    private function addRequirement(array &$requirements, int $partId, int $quantity, string $node, ?int $sourceSlotId = null): void
     {
         if ($quantity < 1) { return; }
         $requirements[$partId] ??= ['quantity' => 0, 'contributions' => []];
         $requirements[$partId]['quantity'] += $quantity;
-        $requirements[$partId]['contributions'][] = ['node' => $node, 'quantity' => $quantity];
+        $requirements[$partId]['contributions'][] = ['node' => $node, 'quantity' => $quantity, 'source_slot_id' => $sourceSlotId];
     }
 
     /** @param array<string, mixed> $draft */
@@ -406,7 +421,10 @@ final readonly class ProductionBuildWorkflow
                     if (!isset($sources[$sourceIndex])) { throw new \RuntimeException('Interner Fehler bei der Materialzuordnung.'); }
                     $source = &$sources[$sourceIndex];
                     $take = min($remaining, $source['quantity']);
-                    $usage = (new BuildMaterialUsage())->setBuildInstance($instances[$contribution['node']])->setPart($item['part'])->setSourcePartLot($source['lot'])->setQuantity($take)->setFromProjectStock($source['project'])->setSerialNumber($source['serial'])->setAllocatedBy($user);
+                    $sourceSlot = isset($contribution['source_slot_id'])
+                        ? $this->entityManager->find(SystemTemplateSlot::class, $contribution['source_slot_id'])
+                        : null;
+                    $usage = (new BuildMaterialUsage())->setBuildInstance($instances[$contribution['node']])->setSourceSlot($sourceSlot)->setPart($item['part'])->setSourcePartLot($source['lot'])->setQuantity($take)->setFromProjectStock($source['project'])->setSerialNumber($source['serial'])->setAllocatedBy($user);
                     $this->entityManager->persist($usage);
                     $remaining -= $take;
                     $source['quantity'] -= $take;

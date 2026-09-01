@@ -53,4 +53,5 @@ final class CustomerProjectRepository extends ServiceEntityRepository
 
         return $queryBuilder->getQuery()->getResult();
     }
+
 }

@@ -1,0 +1,120 @@
+{% extends 'main_card.html.twig' %}
+{% trans_default_domain 'production' %}
+
+{% block title %}Erkannte Auftragsdaten prüfen{% endblock %}
+{% block card_title %}<i class="fa-solid fa-clipboard-check fa-fw"></i> Erkannte Auftragsdaten prüfen{% endblock %}
+
+{% block card_content %}
+    <div class="alert alert-warning py-2 px-3 mb-2">
+        <i class="fa-solid fa-triangle-exclamation fa-fw"></i>
+        Die Angaben sind Erkennungsvorschläge und müssen vor dem Speichern vollständig kontrolliert werden.
+    </div>
+    {% if errors %}
+        <div class="alert alert-danger py-2 px-3 mb-2">
+            <strong>Der Auftrag kann noch nicht gespeichert werden:</strong>
+            <ul class="mb-0 mt-1">{% for error in errors %}<li>{{ error }}</li>{% endfor %}</ul>
+        </div>
+    {% endif %}
+
+    <form method="post" data-order-import-review data-next-line-index="{{ values.lines|length }}" data-order-units="{{ order_unit_options|json_encode|e('html_attr') }}" data-mapping-units="{{ mapping_units|json_encode|e('html_attr') }}">
+        <input type="hidden" name="_token" value="{{ csrf_token('production_order_import_review_' ~ token) }}">
+
+        <div class="card mb-2">
+            <div class="card-header py-2 d-flex justify-content-between align-items-center gap-2">
+                <strong><i class="fa-solid fa-file-pdf fa-fw"></i> Auftrag</strong>
+                <span class="small text-muted text-truncate" title="{{ original_filename }}">{{ original_filename }}</span>
+            </div>
+            <div class="card-body p-2">
+                <div class="row g-2">
+                    <div class="col-md-3 col-xl-2">
+                        <label class="form-label small fw-bold mb-1">Auftragsnummer <span class="badge {{ values.order_number ? 'bg-success' : 'bg-danger' }}">{{ values.order_number ? 'erkannt' : 'fehlt' }}</span></label>
+                        <input class="form-control form-control-sm" name="order_number" maxlength="64" value="{{ values.order_number }}" required>
+                    </div>
+                    <div class="col-md-5 col-xl-5">
+                        <label class="form-label small fw-bold mb-1">Bezeichnung <span class="badge bg-warning text-dark">prüfen</span></label>
+                        <input class="form-control form-control-sm" name="order_name" maxlength="255" value="{{ values.order_name }}" required>
+                    </div>
+                    <div class="col-md-4 col-xl-2">
+                        <label class="form-label small fw-bold mb-1">Auftragsdatum <span class="badge {{ values.order_date ? 'bg-success' : 'bg-danger' }}">{{ values.order_date ? 'erkannt' : 'fehlt' }}</span></label>
+                        <input class="form-control form-control-sm" name="order_date" type="date" value="{{ values.order_date }}" required>
+                    </div>
+                    <div class="col-xl-3">
+                        <label class="form-label small fw-bold mb-1">Notizen / Kundenreferenz <span class="badge bg-warning text-dark">prüfen</span></label>
+                        <textarea class="form-control form-control-sm" name="notes" rows="1" maxlength="50000">{{ values.notes }}</textarea>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card mb-2">
+            <div class="card-body p-2">
+                <div class="row g-3">
+                    <section class="col-xl-6">
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <strong><i class="fa-solid fa-address-book fa-fw"></i> Kunde</strong>
+                            <span class="badge {{ values.customer_number ? 'bg-success' : 'bg-danger' }}">{{ values.customer_number ? 'Nummer erkannt' : 'Nummer fehlt' }}</span>
+                        </div>
+                        <select class="form-select form-select-sm mb-2" id="import-customer" name="customer_id">
+                            <option value="0">Neuen Kunden aus den geprüften Angaben anlegen</option>
+                            {% for customer in customers %}<option value="{{ customer.id }}" data-number="{{ customer.customerNumber }}" data-name="{{ customer.name }}"{{ values.customer_id == customer.id ? ' selected' : '' }}>{{ customer }}</option>{% endfor %}
+                        </select>
+                        <div class="row g-2">
+                            <div class="col-sm-4"><label class="form-label small fw-bold mb-1">Kundennummer</label><input class="form-control form-control-sm" id="import-customer-number" name="customer_number" maxlength="64" value="{{ values.customer_number }}" required></div>
+                            <div class="col-sm-8"><label class="form-label small fw-bold mb-1">Kundenname</label><input class="form-control form-control-sm" id="import-customer-name" name="customer_name" maxlength="255" value="{{ values.customer_name }}" required></div>
+                        </div>
+                    </section>
+                    <section class="col-xl-6 border-start">
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <strong><i class="fa-solid fa-diagram-project fa-fw"></i> Projekt</strong>
+                            <span class="badge {{ values.project_number ? 'bg-success' : 'bg-danger' }}">{{ values.project_number ? 'Nummer erkannt' : 'Nummer fehlt' }}</span>
+                        </div>
+                        <select class="form-select form-select-sm mb-2" id="import-project" name="project_id">
+                            <option value="0">Neues Projekt aus den geprüften Angaben anlegen</option>
+                            {% for project in projects %}<option value="{{ project.id }}" data-number="{{ project.projectNumber }}" data-name="{{ project.name }}"{{ values.project_id == project.id ? ' selected' : '' }}>{{ project }}</option>{% endfor %}
+                        </select>
+                        <div class="row g-2">
+                            <div class="col-sm-4"><label class="form-label small fw-bold mb-1">Projektnummer</label><input class="form-control form-control-sm" id="import-project-number" name="project_number" maxlength="64" value="{{ values.project_number }}" required></div>
+                            <div class="col-sm-8"><label class="form-label small fw-bold mb-1">Projektbezeichnung <span class="text-danger">*</span></label><input class="form-control form-control-sm" id="import-project-name" name="project_name" maxlength="255" value="{{ values.project_name }}" placeholder="Bei neuem Projekt verpflichtend" required></div>
+                        </div>
+                    </section>
+                </div>
+            </div>
+        </div>
+
+        <div class="card mb-2">
+            <div class="card-header py-2 d-flex flex-wrap justify-content-between align-items-center gap-2">
+                <strong><i class="fa-solid fa-list-ol fa-fw"></i> Auftragspositionen <span class="badge bg-secondary" data-import-line-count>{{ values.lines|length }}</span></strong>
+                <div class="d-flex gap-2">
+                    <button class="btn btn-sm btn-success" type="button" data-add-import-line><i class="fa-solid fa-plus fa-fw"></i> Position</button>
+                    <a class="btn btn-sm btn-outline-secondary" href="{{ path('production_order_import_mapping_index') }}" target="_blank"><i class="fa-solid fa-table-list fa-fw"></i> Zuordnungen</a>
+                </div>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-sm table-hover align-middle mb-0">
+                    <thead><tr><th class="text-center" style="width:5rem">Pos.</th><th>Beschreibung aus PDF</th><th class="text-center" style="width:6rem">Anzahl</th><th style="width:7rem">Einheit</th><th style="min-width:19rem">Zuordnung</th><th style="width:3rem"></th></tr></thead>
+                    <tbody data-import-lines>
+                    {% for line in values.lines %}
+                        <tr>
+                            <td><input class="form-control form-control-sm text-center" type="number" min="1" max="1000000" name="lines[{{ loop.index0 }}][number]" value="{{ line.number }}" required></td>
+                            <td><input class="form-control form-control-sm" maxlength="255" name="lines[{{ loop.index0 }}][description]" value="{{ line.description }}" placeholder="Positionsbezeichnung oder Notiz" required></td>
+                            <td><input class="form-control form-control-sm text-center" type="number" min="1" max="10000" name="lines[{{ loop.index0 }}][quantity]" value="{{ line.quantity }}" required></td>
+                            <td><select class="form-select form-select-sm" name="lines[{{ loop.index0 }}][unit]" data-import-unit>{% for unit in order_units %}<option value="{{ unit.value }}"{{ line.unit == unit.value ? ' selected' : '' }}>{{ unit.label }}</option>{% endfor %}</select></td>
+                            <td><select class="form-select form-select-sm" name="lines[{{ loop.index0 }}][mapping_id]"><option value="0">Keine Zuordnung – reine Textposition</option>{% for mapping in mappings %}<option value="{{ mapping.id }}"{{ line.mapping_id|default(0) == mapping.id ? ' selected' : '' }}{{ not mapping.active ? ' disabled' : '' }}>{{ mapping.sourceDescription }} → {{ mapping.targetType }}: {{ mapping.targetLabel }}</option>{% endfor %}</select></td>
+                            <td class="text-end"><button class="btn btn-sm btn-outline-danger" type="button" data-remove-import-line title="Position entfernen"><i class="fa-solid fa-trash fa-fw"></i></button></td>
+                        </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            <div class="card-footer py-1 small text-muted">Eine Position ohne Zuordnung wird als reine Textposition am Auftrag gespeichert. Sie erzeugt bewusst keine Fertigungsposition, BOM oder Lagerbedarf.</div>
+        </div>
+
+        <div class="d-flex gap-2 justify-content-end pt-1">
+            <a class="btn btn-sm btn-secondary" href="{{ path('production_order_import') }}">Abbrechen</a>
+            <button class="btn btn-sm btn-success" type="submit"><i class="fa-solid fa-check fa-fw"></i> Geprüften Auftrag speichern</button>
+        </div>
+    </form>
+
+    <template id="import-line-template"><tr><td><input class="form-control form-control-sm text-center" type="number" min="1" max="1000000" name="lines[__INDEX__][number]" value="__NUMBER__" required></td><td><input class="form-control form-control-sm" maxlength="255" name="lines[__INDEX__][description]" placeholder="Positionsbezeichnung oder Notiz" required></td><td><input class="form-control form-control-sm text-center" type="number" min="1" max="10000" name="lines[__INDEX__][quantity]" value="1" required></td><td><input class="form-control form-control-sm" maxlength="32" name="lines[__INDEX__][unit]" value="pcs."></td><td><select class="form-select form-select-sm" name="lines[__INDEX__][mapping_id]"><option value="0">Keine Zuordnung – reine Textposition</option>{% for mapping in mappings %}{% if mapping.active %}<option value="{{ mapping.id }}">{{ mapping.sourceDescription }} → {{ mapping.targetType }}: {{ mapping.targetLabel }}</option>{% endif %}{% endfor %}</select></td><td class="text-end"><button class="btn btn-sm btn-outline-danger" type="button" data-remove-import-line title="Position entfernen"><i class="fa-solid fa-trash fa-fw"></i></button></td></tr></template>
+    <script src="{{ asset('js/production/order_import_review.js') }}"></script>
+{% endblock %}

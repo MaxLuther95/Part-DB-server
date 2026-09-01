@@ -9,10 +9,12 @@
         <a class="btn btn-outline-secondary" href="{{ path('production_customer_index') }}">
             <i class="fa-solid fa-arrow-left fa-fw"></i> {{ 'production.customer.plural'|trans }}
         </a>
-        {% if is_granted('@projects.edit') %}
+        {% if is_granted('@production_customers.edit') %}
             <a class="btn btn-primary" href="{{ path('production_customer_edit', {id: customer.id}) }}">
                 <i class="fa-solid fa-pen fa-fw"></i> {{ 'production.action.edit'|trans }}
             </a>
+        {% endif %}
+        {% if is_granted('@production_orders.create') %}
             <a class="btn btn-success" href="{{ path('production_customer_project_new', {customer: customer.id}) }}">
                 <i class="fa-solid fa-plus fa-fw"></i> {{ 'production.customer_project.new'|trans }}
             </a>
@@ -23,7 +25,7 @@
         <dt class="col-sm-3">{{ 'production.customer.active'|trans }}</dt><dd class="col-sm-9">{{ (customer.active ? 'production.common.yes' : 'production.common.no')|trans }}</dd>
         <dt class="col-sm-3">{{ 'production.common.description'|trans }}</dt><dd class="col-sm-9">{{ customer.description|default('–')|nl2br }}</dd>
     </dl>
-    <h2 class="h5 mt-4">{{ 'production.customer_project.plural'|trans }}</h2>
+    {% if is_granted('@production_orders.read') %}<h2 class="h5 mt-4">{{ 'production.customer_project.plural'|trans }}</h2>
     <div class="list-group">
         {% for project in customer.projects %}
             <a class="list-group-item list-group-item-action d-flex justify-content-between" href="{{ path('production_customer_project_show', {id: project.id}) }}">
@@ -32,5 +34,5 @@
         {% else %}
             <div class="list-group-item text-muted">{{ 'production.common.empty'|trans }}</div>
         {% endfor %}
-    </div>
+    </div>{% endif %}
 {% endblock %}

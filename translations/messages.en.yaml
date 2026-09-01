@@ -1,3 +1,22 @@
 production:
   flash:
     saved: The changes were saved.
+
+perm:
+  group:
+    production: Production
+  production:
+    orders: Orders
+    projects: Projects
+    customers: Customers
+    system_templates: System templates
+    build_instances: Devices and assemblies
+    material: Material operations
+    import_mappings: Import mappings
+    operation:
+      import: Import order confirmations
+      assign: Assign or unassign devices and assemblies
+      build: Build devices and assemblies
+      reserve: Reserve or release material
+      provide: Provide material
+      withdraw: Withdraw material

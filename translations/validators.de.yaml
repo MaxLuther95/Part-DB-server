@@ -4,7 +4,7 @@ production:
       unique: Diese Kundennummer ist bereits vergeben.
   customer_project:
     number:
-      unique: Diese Projektnummer ist bereits vergeben.
+      unique: Diese Auftragsnummer ist bereits vergeben. Bitte eine andere Auftragsnummer verwenden oder den vorhandenen Auftrag öffnen.
     completion_requires_serials: Fertigstellen oder Ausliefern ist erst möglich, wenn jede Projektposition genau ein Gerät oder eine Baugruppe mit gültiger Seriennummer besitzt.
   build_instance:
     template_required: Bitte eine Systemvorlage oder ein Part-DB-Bauprojekt auswählen.

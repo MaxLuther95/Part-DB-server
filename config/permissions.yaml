@@ -10,6 +10,8 @@ groups:
     label: "perm.group.data"
   system:
     label: "perm.group.system"
+  production:
+    label: "perm.group.production"
 
 
 perms: # Here comes a list with all Permission names (they have a perm_[name] coloumn in DB)
@@ -123,6 +125,177 @@ perms: # Here comes a list with all Permission names (they have a perm_[name] co
   projects:
     <<: *PART_CONTAINING
     label: "[[Project]]"
+
+  # Permissions for the optional production extension. These are deliberately
+  # separate from Part-DB's own write permissions. Production views which show
+  # native BOM/part data explicitly depend on the corresponding core reads.
+  production_orders: &PRODUCTION_CRUD
+    group: "production"
+    label: "perm.production.orders"
+    operations:
+      read:
+        label: "perm.read"
+        alsoSet: ['production_customers.read', 'production_projects.read',
+                  'production_system_templates.read']
+        apiTokenRole: ROLE_API_READ_ONLY
+      edit:
+        label: "perm.edit"
+        alsoSet: ['read', 'production_customers.read', 'production_projects.read',
+                  'production_system_templates.read']
+        apiTokenRole: ROLE_API_EDIT
+      create:
+        label: "perm.create"
+        alsoSet: ['read', 'edit']
+        apiTokenRole: ROLE_API_EDIT
+      delete:
+        label: "perm.delete"
+        alsoSet: ['read', 'edit']
+        apiTokenRole: ROLE_API_EDIT
+      import:
+        label: "perm.production.operation.import"
+        alsoSet: ['read', 'create', 'production_customers.read', 'production_customers.create',
+                  'production_projects.read', 'production_projects.create',
+                  'production_system_templates.read', 'production_import_mappings.read']
+        apiTokenRole: ROLE_API_EDIT
+
+  production_projects:
+    <<: *PRODUCTION_CRUD
+    label: "perm.production.projects"
+    operations:
+      read:
+        label: "perm.read"
+        alsoSet: ['production_customers.read']
+        apiTokenRole: ROLE_API_READ_ONLY
+      edit:
+        label: "perm.edit"
+        alsoSet: ['read']
+        apiTokenRole: ROLE_API_EDIT
+      create:
+        label: "perm.create"
+        alsoSet: ['read', 'edit']
+        apiTokenRole: ROLE_API_EDIT
+      delete:
+        label: "perm.delete"
+        alsoSet: ['read', 'edit']
+        apiTokenRole: ROLE_API_EDIT
+
+  production_customers:
+    <<: *PRODUCTION_CRUD
+    label: "perm.production.customers"
+    operations:
+      read:
+        label: "perm.read"
+        apiTokenRole: ROLE_API_READ_ONLY
+      edit:
+        label: "perm.edit"
+        alsoSet: ['read']
+        apiTokenRole: ROLE_API_EDIT
+      create:
+        label: "perm.create"
+        alsoSet: ['read', 'edit']
+        apiTokenRole: ROLE_API_EDIT
+      delete:
+        label: "perm.delete"
+        alsoSet: ['read', 'edit']
+        apiTokenRole: ROLE_API_EDIT
+
+  production_system_templates:
+    <<: *PRODUCTION_CRUD
+    label: "perm.production.system_templates"
+    operations:
+      read:
+        label: "perm.read"
+        # Template contents expose Part-DB BOM and part names. Keep those
+        # native read permissions as explicit prerequisites.
+        alsoSet: ['projects.read', 'parts.read']
+        apiTokenRole: ROLE_API_READ_ONLY
+      edit:
+        label: "perm.edit"
+        alsoSet: ['read']
+        apiTokenRole: ROLE_API_EDIT
+      create:
+        label: "perm.create"
+        alsoSet: ['read', 'edit']
+        apiTokenRole: ROLE_API_EDIT
+      delete:
+        label: "perm.delete"
+        alsoSet: ['read', 'edit']
+        apiTokenRole: ROLE_API_EDIT
+
+  production_build_instances:
+    <<: *PRODUCTION_CRUD
+    label: "perm.production.build_instances"
+    operations:
+      read:
+        label: "perm.read"
+        alsoSet: ['production_orders.read', 'production_system_templates.read']
+        apiTokenRole: ROLE_API_READ_ONLY
+      edit:
+        label: "perm.edit"
+        alsoSet: ['read']
+        apiTokenRole: ROLE_API_EDIT
+      create:
+        label: "perm.create"
+        alsoSet: ['read', 'edit']
+        apiTokenRole: ROLE_API_EDIT
+      delete:
+        label: "perm.delete"
+        alsoSet: ['read', 'edit']
+        apiTokenRole: ROLE_API_EDIT
+      assign:
+        label: "perm.production.operation.assign"
+        alsoSet: ['read', 'edit', 'production_orders.read', 'production_orders.edit']
+        apiTokenRole: ROLE_API_EDIT
+      build:
+        label: "perm.production.operation.build"
+        # A build always reaches the material step. Granting a button that can
+        # never be completed would be misleading, therefore the stock-backed
+        # production withdrawal is an explicit prerequisite.
+        alsoSet: ['read', 'create', 'production_system_templates.read',
+                  'production_material.withdraw']
+        apiTokenRole: ROLE_API_EDIT
+
+  production_material:
+    group: "production"
+    label: "perm.production.material"
+    operations:
+      read:
+        label: "perm.read"
+        alsoSet: ['production_orders.read']
+        apiTokenRole: ROLE_API_READ_ONLY
+      reserve:
+        label: "perm.production.operation.reserve"
+        alsoSet: ['read', 'production_orders.edit']
+        apiTokenRole: ROLE_API_EDIT
+      provide:
+        label: "perm.production.operation.provide"
+        alsoSet: ['read', 'production_orders.edit', 'parts_stock.move']
+        apiTokenRole: ROLE_API_EDIT
+      withdraw:
+        label: "perm.production.operation.withdraw"
+        alsoSet: ['read', 'production_orders.edit', 'parts_stock.withdraw']
+        apiTokenRole: ROLE_API_EDIT
+
+  production_import_mappings:
+    <<: *PRODUCTION_CRUD
+    label: "perm.production.import_mappings"
+    operations:
+      read:
+        label: "perm.read"
+        alsoSet: ['production_system_templates.read', 'projects.read', 'parts.read']
+        apiTokenRole: ROLE_API_READ_ONLY
+      edit:
+        label: "perm.edit"
+        alsoSet: ['read']
+        apiTokenRole: ROLE_API_EDIT
+      create:
+        label: "perm.create"
+        alsoSet: ['read', 'edit']
+        apiTokenRole: ROLE_API_EDIT
+      delete:
+        label: "perm.delete"
+        alsoSet: ['read', 'edit']
+        apiTokenRole: ROLE_API_EDIT
 
   attachment_types:
     <<: *PART_CONTAINING

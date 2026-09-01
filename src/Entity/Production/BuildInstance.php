@@ -17,7 +17,11 @@ use Symfony\Component\Validator\Constraints as Assert;
 #[ORM\Table(name: 'production_build_instances')]
 #[ORM\Index(name: 'IDX_PROD_BUILD_SYSTEM_TEMPLATE', columns: ['system_template_id'])]
 #[ORM\Index(name: 'IDX_PROD_BUILD_PARENT', columns: ['parent_id'])]
+#[ORM\Index(name: 'IDX_PROD_BUILD_INSTALLED_SLOT', columns: ['installed_slot_id'])]
+#[ORM\Index(name: 'IDX_PROD_BUILD_STATUS_DATE', columns: ['status', 'datetime_added'])]
+#[ORM\Index(name: 'IDX_PROD_BUILD_ORDER_STATUS', columns: ['customer_project_id', 'status'])]
 #[ORM\UniqueConstraint(name: 'UNIQ_PROD_BUILD_POSITION', columns: ['project_position_id'])]
+#[ORM\UniqueConstraint(name: 'UNIQ_PROD_BUILD_PARENT_SLOT_INDEX', columns: ['parent_id', 'installed_slot_id', 'installed_slot_index'])]
 #[UniqueEntity(fields: ['serialNumber'], message: 'production.build_instance.serial_number.unique')]
 #[UniqueEntity(fields: ['projectPosition'], message: 'production.build_instance.project_position.unique')]
 class BuildInstance extends AbstractProductionEntity
@@ -55,6 +59,14 @@ class BuildInstance extends AbstractProductionEntity
     #[ORM\ManyToOne(targetEntity: self::class, inversedBy: 'children')]
     #[ORM\JoinColumn(name: 'parent_id', nullable: true, onDelete: 'SET NULL')]
     private ?self $parent = null;
+
+    #[ORM\ManyToOne(targetEntity: SystemTemplateSlot::class)]
+    #[ORM\JoinColumn(name: 'installed_slot_id', nullable: true, onDelete: 'SET NULL')]
+    private ?SystemTemplateSlot $installedSlot = null;
+
+    #[ORM\Column(name: 'installed_slot_index', type: Types::INTEGER, nullable: true)]
+    #[Assert\PositiveOrZero]
+    private ?int $installedSlotIndex = null;
 
     /** @var Collection<int, self> */
     #[ORM\OneToMany(mappedBy: 'parent', targetEntity: self::class)]
@@ -164,6 +176,16 @@ class BuildInstance extends AbstractProductionEntity
         return $this->templateProject ?? $this->systemTemplate?->getBaseProject();
     }
 
+    /** @return list<Project> */
+    public function getBuildProjects(): array
+    {
+        if (null !== $this->templateProject) {
+            return [$this->templateProject];
+        }
+
+        return null === $this->systemTemplate ? [] : array_values($this->systemTemplate->getBaseProjects()->toArray());
+    }
+
     public function getCustomerProject(): ?CustomerProject
     {
         return $this->customerProject;
@@ -239,9 +261,40 @@ class BuildInstance extends AbstractProductionEntity
         $previousParent = $this->parent;
         $previousParent?->getChildren()->removeElement($this);
         $this->parent = $parent;
+        if (null === $parent) {
+            $this->installedSlot = null;
+            $this->installedSlotIndex = null;
+        }
         if (null !== $parent && !$parent->getChildren()->contains($this)) {
             $parent->getChildren()->add($this);
         }
+
+        return $this;
+    }
+
+    public function getInstalledSlot(): ?SystemTemplateSlot
+    {
+        return $this->installedSlot;
+    }
+
+    public function setInstalledSlot(?SystemTemplateSlot $installedSlot): self
+    {
+        $this->installedSlot = $installedSlot;
+        if (null === $installedSlot) {
+            $this->installedSlotIndex = null;
+        }
+
+        return $this;
+    }
+
+    public function getInstalledSlotIndex(): ?int
+    {
+        return $this->installedSlotIndex;
+    }
+
+    public function setInstalledSlotIndex(?int $installedSlotIndex): self
+    {
+        $this->installedSlotIndex = $installedSlotIndex;
 
         return $this;
     }
@@ -328,5 +381,22 @@ class BuildInstance extends AbstractProductionEntity
                 ->atPath('serialNumber')
                 ->addViolation();
         }
+        if (null !== $this->installedSlot) {
+            if (null === $this->parent || $this->parent->getSystemTemplate() !== $this->installedSlot->getSystemTemplate()) {
+                $context->buildViolation('Der gespeicherte Steckplatz gehört nicht zum übergeordneten Gerät.')
+                    ->atPath('installedSlot')
+                    ->addViolation();
+            } elseif (!$this->slotAllowsCurrentContent($this->installedSlot)) {
+                $context->buildViolation('Der Inhalt ist für den gespeicherten Steckplatz nicht erlaubt.')
+                    ->atPath('installedSlot')
+                    ->addViolation();
+            }
+        }
+    }
+
+    private function slotAllowsCurrentContent(SystemTemplateSlot $slot): bool
+    {
+        return (null !== $this->systemTemplate && $slot->getAllowedSystemTemplates()->contains($this->systemTemplate))
+            || (null !== $this->templateProject && $slot->getAllowedProjects()->contains($this->templateProject));
     }
 }

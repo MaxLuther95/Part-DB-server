@@ -15,19 +15,17 @@
             <button class="btn btn-primary" type="submit">
                 <i class="fa-solid fa-floppy-disk fa-fw"></i> {{ 'production.action.save'|trans }}
             </button>
-            {% if delete_route|default(null) %}
-                <div class="d-flex gap-2 ms-auto">
-                    <a class="btn btn-secondary" href="{{ path(cancel_route, cancel_route_params|default({})) }}">{{ 'production.action.cancel'|trans }}</a>
+            <div class="d-flex gap-2 ms-auto">
+                <a class="btn btn-secondary" href="{{ path(cancel_route, cancel_route_params|default({})) }}">{{ 'production.action.cancel'|trans }}</a>
+                {% if delete_route|default(null) and (delete_permission is not defined or is_granted(delete_permission)) %}
                     <button class="btn btn-outline-danger" type="submit" form="production-delete-form">
                         <i class="fa-solid fa-trash fa-fw"></i> {{ 'production.action.delete'|trans }}
                     </button>
-                </div>
-            {% else %}
-                <a class="btn btn-secondary" href="{{ path(cancel_route, cancel_route_params|default({})) }}">{{ 'production.action.cancel'|trans }}</a>
-            {% endif %}
+                {% endif %}
+            </div>
         </div>
     {{ form_end(form) }}
-    {% if delete_route|default(null) %}
+    {% if delete_route|default(null) and (delete_permission is not defined or is_granted(delete_permission)) %}
         <form id="production-delete-form" method="post" action="{{ path(delete_route, delete_route_params|default({})) }}" data-turbo-confirm="{{ delete_confirm }}">
             <input type="hidden" name="_token" value="{{ csrf_token(delete_token_id) }}">
         </form>

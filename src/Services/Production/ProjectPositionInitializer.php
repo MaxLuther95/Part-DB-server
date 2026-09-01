@@ -29,6 +29,24 @@ final readonly class ProjectPositionInitializer
         $this->initialize($position, []);
     }
 
+    /**
+     * Applies newly added unambiguous required slots to all existing positions
+     * which use the changed template. Existing assignments are never replaced.
+     */
+    public function synchronizeTemplatePositions(SystemTemplate $template): void
+    {
+        /** @var list<ProjectPosition> $positions */
+        $positions = $this->entityManager->getRepository(ProjectPosition::class)->findBy([
+            'systemTemplate' => $template,
+        ]);
+
+        foreach ($positions as $position) {
+            $this->initializeRequiredDefaults($position);
+        }
+
+        $this->entityManager->flush();
+    }
+
     /** @param array<int, true> $templatePath */
     private function initialize(ProjectPosition $position, array $templatePath): void
     {

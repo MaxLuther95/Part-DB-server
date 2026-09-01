@@ -11,7 +11,6 @@ use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
 use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
-use Symfony\Bridge\Doctrine\Validator\Constraints\UniqueEntity;
 use Symfony\Component\Validator\Constraints as Assert;
 use Symfony\Component\Validator\Context\ExecutionContextInterface;
 
@@ -19,7 +18,6 @@ use Symfony\Component\Validator\Context\ExecutionContextInterface;
 #[ORM\Table(name: 'production_system_template_slots')]
 #[ORM\Index(name: 'IDX_PROD_SLOT_TEMPLATE', columns: ['system_template_id'])]
 #[ORM\UniqueConstraint(name: 'UNIQ_PROD_SLOT_POSITION', columns: ['system_template_id', 'position'])]
-#[UniqueEntity(fields: ['systemTemplate', 'position'], message: 'production.system_template.slot.position.unique')]
 class SystemTemplateSlot extends AbstractProductionEntity
 {
     #[ORM\ManyToOne(targetEntity: SystemTemplate::class, inversedBy: 'slots')]
@@ -54,7 +52,7 @@ class SystemTemplateSlot extends AbstractProductionEntity
     private Collection $allowedProjects;
 
     /** @var Collection<int, SystemTemplate> */
-    #[ORM\ManyToMany(targetEntity: SystemTemplate::class)]
+    #[ORM\ManyToMany(targetEntity: SystemTemplate::class, inversedBy: 'usedInSlots')]
     #[ORM\JoinTable(name: 'production_system_template_slot_templates')]
     #[ORM\JoinColumn(name: 'slot_id', referencedColumnName: 'id', onDelete: 'CASCADE')]
     #[ORM\InverseJoinColumn(name: 'allowed_template_id', referencedColumnName: 'id', onDelete: 'CASCADE')]
@@ -193,6 +191,7 @@ class SystemTemplateSlot extends AbstractProductionEntity
     {
         if (!$this->allowedSystemTemplates->contains($template)) {
             $this->allowedSystemTemplates->add($template);
+            $template->addUsedInSlot($this);
         }
 
         return $this;
@@ -200,7 +199,9 @@ class SystemTemplateSlot extends AbstractProductionEntity
 
     public function removeAllowedSystemTemplate(SystemTemplate $template): self
     {
-        $this->allowedSystemTemplates->removeElement($template);
+        if ($this->allowedSystemTemplates->removeElement($template)) {
+            $template->removeUsedInSlot($this);
+        }
 
         return $this;
     }

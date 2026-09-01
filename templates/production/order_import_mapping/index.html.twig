@@ -1,0 +1,15 @@
+{% extends 'main_card.html.twig' %}
+{% trans_default_domain 'production' %}
+
+{% block title %}Importzuordnungen{% endblock %}
+{% block card_title %}<i class="fa-solid fa-table-list fa-fw"></i> Importzuordnungen{% endblock %}
+
+{% block card_content %}
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <p class="text-muted mb-0">Ordnet eine Beschreibung aus einer PDF-Auftragsbestätigung genau einer Systemvorlage, einem Part-DB-Bauprojekt oder einem Lagerteil zu.</p>
+        {% if is_granted('@production_import_mappings.create') %}<a class="btn btn-success text-nowrap" href="{{ path('production_order_import_mapping_new') }}"><i class="fa-solid fa-plus fa-fw"></i> Zuordnung anlegen</a>{% endif %}
+    </div>
+    <div class="table-responsive"><table class="table table-striped table-hover align-middle"><thead><tr><th>PDF-Beschreibung</th><th>Zielart</th><th>Ziel</th><th>Einheit</th><th>Status</th><th></th></tr></thead><tbody>
+    {% for mapping in mappings %}<tr><td><strong>{{ mapping.sourceDescription }}</strong></td><td>{{ mapping.targetType }}</td><td>{{ mapping.targetLabel }}</td><td>{{ mapping.orderUnit.label }}</td><td>{% if mapping.active %}<span class="badge bg-success">Aktiv</span>{% else %}<span class="badge bg-secondary">Inaktiv</span>{% endif %}</td><td class="text-end">{% if is_granted('@production_import_mappings.edit') %}<a class="btn btn-sm btn-outline-primary" href="{{ path('production_order_import_mapping_edit', {id: mapping.id}) }}"><i class="fa-solid fa-pen fa-fw"></i></a>{% endif %}</td></tr>{% else %}<tr><td colspan="6" class="text-center text-muted py-4">Noch keine Importzuordnung vorhanden.</td></tr>{% endfor %}
+    </tbody></table></div>
+{% endblock %}

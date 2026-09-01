@@ -90,6 +90,27 @@ final class PermissionPresetsHelperTest extends WebTestCase
         $this->assertNotTrue($createValue);
     }
 
+    public function testEditorPresetDoesNotAutomaticallyAllowProductionAccess(): void
+    {
+        $user = $this->createUser();
+        self::$service->applyPreset($user, PermissionPresetsHelper::PRESET_EDITOR);
+
+        $this->assertNotTrue(self::$permissionManager->dontInherit($user, 'production_orders', 'read'));
+        $this->assertNotTrue(self::$permissionManager->dontInherit($user, 'production_orders', 'create'));
+        $this->assertNotTrue(self::$permissionManager->dontInherit($user, 'production_material', 'withdraw'));
+    }
+
+    public function testAdminPresetAllowsAllProductionOperations(): void
+    {
+        $user = $this->createUser();
+        self::$service->applyPreset($user, PermissionPresetsHelper::PRESET_ADMIN);
+
+        $this->assertTrue(self::$permissionManager->dontInherit($user, 'production_orders', 'import'));
+        $this->assertTrue(self::$permissionManager->dontInherit($user, 'production_build_instances', 'assign'));
+        $this->assertTrue(self::$permissionManager->dontInherit($user, 'production_material', 'withdraw'));
+        $this->assertTrue(self::$permissionManager->dontInherit($user, 'production_import_mappings', 'delete'));
+    }
+
     public function testUnknownPresetThrowsException(): void
     {
         $this->expectException(\InvalidArgumentException::class);

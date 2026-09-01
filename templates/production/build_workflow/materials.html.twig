@@ -5,12 +5,73 @@
     {% include 'production/build_workflow/_steps.html.twig' with {current_step: 3} %}
     {% for error in errors %}<div class="alert alert-danger">{{ error }}</div>{% endfor %}
     {% if not plan.complete %}<div class="alert alert-danger"><i class="fa-solid fa-triangle-exclamation fa-fw"></i> Am gewählten Standort fehlt Material. Der Bau kann erst fortgesetzt werden, wenn der Bedarf vollständig gedeckt ist.</div>{% endif %}
-    <form method="post"><input type="hidden" name="_token" value="{{ csrf_token('build_materials_' ~ token) }}">
-    {% for item in plan.items %}<div class="card mb-3"><div class="card-header d-flex justify-content-between"><strong>{{ item.part.name }}</strong><span>Benötigt: {{ item.required }}</span></div><div class="card-body p-0"><table class="table table-sm mb-0 align-middle"><thead><tr><th>Quelle</th><th>Verfügbar</th><th style="width:12rem">Entnehmen</th></tr></thead><tbody>
-        {% if item.project_stock > 0 %}<tr class="table-info"><td>Bereits im Projektbestand</td><td>{{ item.project_stock }}</td><td>{{ item.project_stock }} (automatisch)</td></tr>{% endif %}
-        {% if item.project_reserved > 0 %}<tr class="table-warning"><td>Für dieses Projekt reserviert</td><td>{{ item.project_reserved }}</td><td>{{ item.project_reserved }} (wird beim Bau gelöst und ausgebucht)</td></tr>{% endif %}
-        {% for row in item.lots %}<tr><td>{{ row.lot.storageLocation ? row.lot.storageLocation.fullPath : 'Ohne Lagerort' }}{% if row.lot.name %} · {{ row.lot.name }}{% endif %}</td><td>{{ row.available }}</td><td><input class="form-control form-control-sm" type="number" min="0" max="{{ row.available }}" name="lots[{{ item.part.id }}][{{ row.lot.id }}]" value="{{ draft.lots[item.part.id ~ ''][row.lot.id ~ '']|default(0) }}"></td></tr>{% else %}<tr><td colspan="3" class="text-muted">Keine passenden Lagerlose an diesem Standort.</td></tr>{% endfor %}
-    </tbody></table></div>{% if item.missing > 0 %}<div class="card-footer text-danger">Es fehlen {{ item.missing }} Stück.</div>{% endif %}</div>{% else %}<div class="alert alert-info">Die ausgewählte Baugruppe besitzt keine Lagerteile in ihrer BOM.</div>{% endfor %}
-    <button class="btn btn-success" type="submit" {{ not plan.complete ? 'disabled' : '' }}><i class="fa-solid fa-arrow-right fa-fw"></i> Auswahl prüfen</button>
-    <a class="btn btn-outline-secondary" href="{{ path('production_build_workflow_details', {token: token}) }}">Zurück</a></form>
+    <form method="post" data-production-build-materials><input type="hidden" name="_token" value="{{ csrf_token('build_materials_' ~ token) }}">
+        {% if plan.items is not empty %}
+            <div class="d-flex justify-content-end mb-2">
+                <button class="btn btn-outline-success" type="submit" name="mark_all" value="1" data-mark-all-materials-taken {{ not plan.complete ? 'disabled' : '' }}><i class="fa-solid fa-check-double fa-fw"></i> Alles als entnommen markieren</button>
+            </div>
+        {% endif %}
+        {% if plan.items is not empty %}
+            <div class="table-responsive border rounded mb-3">
+                <table class="table table-sm table-hover align-middle mb-0">
+                    <thead><tr><th>Bauteil</th><th class="text-center text-nowrap">Benötigt</th><th class="text-center text-nowrap">Am Standort verfügbar</th><th class="text-center">Entnommen</th></tr></thead>
+                    <tbody>
+                    {% for item in plan.items %}
+                        {% set thumbnail = entity_thumbnail(item.part, 'thumbnail_xs') %}
+                        {% set description = item.part.description|striptags|trim %}
+                        {% set available_at_site = item.available + item.project_reserved %}
+                        {% set required_at_site = item.required - item.project_stock %}
+                        <tr class="{{ item.missing > 0 ? 'table-danger' : '' }}">
+                            <td>
+                                <div class="d-flex align-items-center gap-2">
+                                    {% if thumbnail %}<img src="{{ thumbnail }}" alt="" class="img-thumbnail flex-shrink-0" style="width: 44px; height: 44px; object-fit: contain;">{% endif %}
+                                    <div>
+                                        <a href="{{ path('part_info', {id: item.part.id}) }}" class="fw-semibold">{{ item.part.name }}</a>
+                                        {% if description %}<div class="small text-muted">{{ description|u.truncate(160, '…') }}</div>{% endif %}
+                                    </div>
+                                </div>
+                                {% for row in item.lots %}<input type="hidden" name="lots[{{ item.part.id }}][{{ row.lot.id }}]" value="{{ draft.lots[item.part.id ~ ''][row.lot.id ~ '']|default(0) }}">{% endfor %}
+                            </td>
+                            <td class="text-center fw-semibold">{{ item.required }}</td>
+                            <td class="text-center"><span class="badge {{ available_at_site >= required_at_site ? 'bg-success' : 'bg-danger' }}">{{ available_at_site }}</span>{% if item.project_stock > 0 %}<div class="small text-muted">+ {{ item.project_stock }} im Auftragsbestand</div>{% endif %}</td>
+                            <td class="text-center">
+                                <input class="btn-check" type="checkbox" name="taken[{{ item.part.id }}]" value="1" id="material-taken-{{ item.part.id }}" autocomplete="off" data-material-taken {{ draft.materials_taken[item.part.id ~ '']|default(false) ? 'checked' : '' }} {{ item.missing > 0 ? 'disabled' : '' }}>
+                                <label class="btn btn-sm btn-outline-success {{ item.missing > 0 ? 'disabled' : '' }}" for="material-taken-{{ item.part.id }}" title="{{ item.missing > 0 ? 'Nicht ausreichend am Standort verfügbar' : '' }}"><i class="fa-solid fa-check fa-fw"></i> Entnommen</label>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <div class="alert alert-info">Die ausgewählte Baugruppe besitzt keine Lagerteile in ihrer BOM.</div>
+        {% endif %}
+        <button class="btn btn-success" type="submit" {{ not plan.complete ? 'disabled' : '' }}><i class="fa-solid fa-arrow-right fa-fw"></i> Auswahl prüfen</button>
+        <a class="btn btn-outline-secondary" href="{{ path('production_build_workflow_details', {token: token}) }}">Zurück</a>
+    </form>
+
+    <script nonce="{{ csp_nonce('script') }}">
+        (() => {
+            if (!window.initializeProductionBuildMaterials) {
+                const boundForms = new WeakSet();
+                window.initializeProductionBuildMaterials = () => {
+                    const form = document.querySelector('[data-production-build-materials]');
+                    if (!form || boundForms.has(form)) {
+                        return;
+                    }
+                    boundForms.add(form);
+                    form.querySelector('[data-mark-all-materials-taken]')?.addEventListener('click', (event) => {
+                        event.preventDefault();
+                        form.querySelectorAll('[data-material-taken]').forEach((checkbox) => {
+                            if (!checkbox.disabled) {
+                                checkbox.checked = true;
+                            }
+                        });
+                    });
+                };
+                document.addEventListener('turbo:load', window.initializeProductionBuildMaterials);
+            }
+            window.initializeProductionBuildMaterials();
+        })();
+    </script>
 {% endblock %}

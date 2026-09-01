@@ -1,3 +1,22 @@
 production:
   flash:
     saved: Die Änderungen wurden gespeichert.
+
+perm:
+  group:
+    production: Fertigung
+  production:
+    orders: Aufträge
+    projects: Projekte
+    customers: Kunden
+    system_templates: Systemvorlagen
+    build_instances: Geräte und Baugruppen
+    material: Materialvorgänge
+    import_mappings: Import-Zuordnungen
+    operation:
+      import: Auftragsbestätigungen importieren
+      assign: Geräte und Baugruppen zuweisen oder lösen
+      build: Geräte und Baugruppen bauen
+      reserve: Material reservieren oder freigeben
+      provide: Material bereitstellen
+      withdraw: Material abbuchen

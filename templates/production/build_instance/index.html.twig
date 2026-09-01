@@ -5,23 +5,14 @@
 {% block card_title %}<i class="fa-solid fa-screwdriver-wrench fa-fw"></i> {{ 'production.build_instance.plural'|trans }}{% endblock %}
 
 {% block card_content %}
-    <div class="d-flex justify-content-between mb-3">
-        <a href="{{ path('production_build') }}" class="btn btn-outline-secondary"><i class="fa-solid fa-arrow-left fa-fw"></i> {{ 'production.navigation.build'|trans }}</a>
+    <div class="d-flex justify-content-end mb-2">
+        {% if is_granted('@production_build_instances.build') %}<a href="{{ path('production_build') }}" class="btn btn-success"><i class="fa-solid fa-hammer fa-fw"></i> {{ 'production.navigation.build'|trans }}</a>{% endif %}
     </div>
-    <div class="table-responsive"><table class="table table-striped table-hover align-middle">
-        <thead><tr><th>{{ 'production.build_instance.serial_number'|trans }}</th><th>{{ 'production.build_instance.template'|trans }}</th><th>{{ 'production.common.status'|trans }}</th><th>{{ 'production.build_instance.location'|trans }}</th><th>{{ 'production.customer_project.label'|trans }}</th><th>{{ 'production.project_position.label'|trans }}</th><th></th></tr></thead>
-        <tbody>
-        {% for instance in build_instances %}
-            <tr>
-                <td><a href="{{ path('production_build_instance_show', {id: instance.id}) }}">{{ instance.displayIdentifier }}</a></td>
-                <td>{{ instance.contentName }}{% if not instance.systemTemplate and not instance.templateProject %} <span class="text-muted">({{ 'production.common.deleted_reference'|trans }})</span>{% endif %}</td>
-                <td><span class="badge bg-secondary">{{ ('production.build_instance.status.' ~ instance.status.value)|trans }}</span></td>
-                <td>{{ instance.location|default('–') }}</td>
-                <td>{% if instance.customerProject %}<a href="{{ path('production_customer_project_show', {id: instance.customerProject.id}) }}">{{ instance.customerProject }}</a>{% else %}<span class="text-muted">{{ 'production.build_instance.unassigned'|trans }}</span>{% endif %}</td>
-                <td>{{ instance.projectPosition ? instance.projectPosition.name : '–' }}</td>
-                <td class="text-end">{% if is_granted('@projects.edit') %}<a class="btn btn-sm btn-outline-primary" href="{{ path('production_build_instance_edit', {id: instance.id}) }}"><i class="fa-solid fa-pen fa-fw"></i></a>{% endif %}</td>
-            </tr>
-        {% else %}<tr><td colspan="7" class="text-center text-muted">{{ 'production.common.empty'|trans }}</td></tr>{% endfor %}
-        </tbody>
-    </table></div>
+    {% include 'production/_list_datatable.html.twig' with {
+        datatable: datatable, state_tag: 'production_build_instances_v3',
+        filter_id: 'build', filter_route: 'production_build_instance_index', active_label: 'Aktive Geräte', search_placeholder: 'Seriennummer, System oder Bauprojekt',
+        status_options: build_statuses, status_translation_prefix: 'production.build_instance.status.',
+        filters_open: filters_open, search_query: search_query, selected_status_filter: selected_status_filter,
+        selected_customer: selected_customer, selected_year: selected_year, customers: customers
+    } only %}
 {% endblock %}

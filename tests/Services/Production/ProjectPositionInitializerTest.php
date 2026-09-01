@@ -25,7 +25,7 @@ final class ProjectPositionInitializerTest extends TestCase
             $persisted[] = $entity;
         });
 
-        $batBox = (new Project())->setName('BatBox');
+        $powerUnit = (new Project())->setName('Demo power unit');
         $interface = (new Project())->setName('Interface');
         $channel = (new Project())->setName('Channel');
         $mainboard = (new SystemTemplate())->setName('Mainboard');
@@ -35,12 +35,12 @@ final class ProjectPositionInitializerTest extends TestCase
             ->setMaxQuantity(1)
             ->addAllowedProject($channel));
 
-        $batBoxSlot = (new SystemTemplateSlot())
-            ->setName('BatBox')
+        $powerUnitSlot = (new SystemTemplateSlot())
+            ->setName('Power unit')
             ->setPosition(0)
             ->setMinQuantity(1)
             ->setMaxQuantity(1)
-            ->addAllowedProject($batBox);
+            ->addAllowedProject($powerUnit);
         $interfaceSlot = (new SystemTemplateSlot())
             ->setName('Interface')
             ->setPosition(1)
@@ -55,7 +55,7 @@ final class ProjectPositionInitializerTest extends TestCase
             ->addAllowedSystemTemplate($mainboard);
         $system = (new SystemTemplate())
             ->setName('System')
-            ->addSlot($batBoxSlot)
+            ->addSlot($powerUnitSlot)
             ->addSlot($interfaceSlot)
             ->addSlot($mainboardSlot);
         $project = (new CustomerProject())->setProjectNumber('P-1');
@@ -68,7 +68,7 @@ final class ProjectPositionInitializerTest extends TestCase
         $initializer->initializeRequiredDefaults($position);
 
         self::assertCount(4, $position->getChildren());
-        self::assertSame($batBox, $position->getAssignmentForSlot($batBoxSlot)?->getTemplateProject());
+        self::assertSame($powerUnit, $position->getAssignmentForSlot($powerUnitSlot)?->getTemplateProject());
         self::assertSame($interface, $position->getAssignmentForSlot($interfaceSlot)?->getTemplateProject());
         self::assertSame(['Mainboard 1', 'Mainboard 2'], array_map(
             static fn(ProjectPosition $assignment): string => $assignment->getName(),

@@ -1,0 +1,24 @@
+{% extends 'main_card.html.twig' %}
+{% block title %}Transfer eingetroffen – {{ project.projectNumber }}{% endblock %}
+{% block card_title %}<i class="fa-solid fa-truck-ramp-box fa-fw"></i> Transfer für {{ project.projectNumber }} übernehmen{% endblock %}
+{% block card_content %}
+    <div class="alert alert-info">
+        <strong>{{ reservation.quantity }} × {{ reservation.partName }}</strong> wurde in
+        <strong>{{ source_lot.storageLocation ? source_lot.storageLocation.fullPath : 'unbekanntem Standort' }}</strong>
+        reserviert und soll nach <strong>{{ site.fullPath }}</strong> übernommen werden.
+    </div>
+    <p>Beim Bestätigen wird die Menge innerhalb der normalen Part-DB vom Quell-Lagerlos an den ausgewählten Ziel-Lagerort verschoben. Die Projektreservierung bleibt dabei erhalten.</p>
+    <form method="post">
+        <input type="hidden" name="_token" value="{{ csrf_token('receive_material_reservation_' ~ reservation.id) }}">
+        <div class="mb-3">
+            <label class="form-label fw-bold" for="target_location_id">Ziel-Lagerort</label>
+            <select class="form-select" id="target_location_id" name="target_location_id" required>
+                <option value="">Bitte Ziel-Lagerort auswählen</option>
+                {% for location in locations %}<option value="{{ location.id }}">{{ location.fullPath }}</option>{% endfor %}
+            </select>
+            <div class="form-text">Es wird ein eigenes Lagerlos für diesen Transfer angelegt, damit die Herkunft nachvollziehbar bleibt.</div>
+        </div>
+        <button class="btn btn-success" type="submit"><i class="fa-solid fa-truck-ramp-box fa-fw"></i> Transfer eingetroffen</button>
+        <a class="btn btn-secondary" href="{{ path('production_material_reservation', {id: project.id, site_id: site.id}) }}">Abbrechen</a>
+    </form>
+{% endblock %}

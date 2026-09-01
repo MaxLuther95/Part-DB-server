@@ -173,4 +173,40 @@ class PermissionSchemaUpdater
             $permissions->setPermissionValue('parts_stock', 'stocktake', $new_value);
         }
     }
+
+    private function upgradeSchemaToVersion5(HasPermissionsInterface $holder): void //@phpstan-ignore-line This is called via reflection
+    {
+        $permissions = $holder->getPermissions();
+
+        // The production extension has its own permissions. Existing
+        // administrators retain full access after the upgrade, while regular
+        // users and editor groups inherit no production access until it is
+        // assigned explicitly in Part-DB's user/group settings.
+        $is_admin = TrinaryLogicHelper::or(
+            $permissions->getPermissionValue('users', 'edit_permissions'),
+            $permissions->getPermissionValue('groups', 'edit_permissions')
+        );
+
+        if (true !== $is_admin) {
+            return;
+        }
+
+        $production_operations = [
+            'production_orders' => ['read', 'edit', 'create', 'delete', 'import'],
+            'production_projects' => ['read', 'edit', 'create', 'delete'],
+            'production_customers' => ['read', 'edit', 'create', 'delete'],
+            'production_system_templates' => ['read', 'edit', 'create', 'delete'],
+            'production_build_instances' => ['read', 'edit', 'create', 'delete', 'assign', 'build'],
+            'production_material' => ['read', 'reserve', 'provide', 'withdraw'],
+            'production_import_mappings' => ['read', 'edit', 'create', 'delete'],
+        ];
+
+        foreach ($production_operations as $permission => $operations) {
+            foreach ($operations as $operation) {
+                if (!$permissions->isPermissionSet($permission, $operation)) {
+                    $permissions->setPermissionValue($permission, $operation, PermissionData::ALLOW);
+                }
+            }
+        }
+    }
 }

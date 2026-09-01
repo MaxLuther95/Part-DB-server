@@ -1,0 +1,18 @@
+{% extends 'main_card.html.twig' %}
+{% trans_default_domain 'production' %}
+
+{% block title %}{{ 'production.project.plural'|trans }}{% endblock %}
+{% block card_title %}<i class="fa-solid fa-diagram-project fa-fw"></i> {{ 'production.project.plural'|trans }}{% endblock %}
+
+{% block card_content %}
+    <div class="d-flex justify-content-end mb-2">
+        {% if is_granted('@production_projects.create') %}<a class="btn btn-success" href="{{ path('production_project_new') }}"><i class="fa-solid fa-plus fa-fw"></i> {{ 'production.project.new'|trans }}</a>{% endif %}
+    </div>
+    {% include 'production/_list_datatable.html.twig' with {
+        datatable: datatable, state_tag: 'production_projects_v3',
+        filter_id: 'project', filter_route: 'production_project_index', active_label: 'Aktive Projekte', search_placeholder: 'Projektnummer oder Bezeichnung',
+        status_options: project_statuses, status_translation_prefix: 'production.project.status.',
+        filters_open: filters_open, search_query: search_query, selected_status_filter: selected_status_filter,
+        selected_customer: selected_customer, selected_year: selected_year, customers: customers
+    } only %}
+{% endblock %}

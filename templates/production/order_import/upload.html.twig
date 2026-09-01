@@ -1,0 +1,25 @@
+{% extends 'main_card.html.twig' %}
+{% trans_default_domain 'production' %}
+
+{% block title %}Auftrag aus PDF importieren{% endblock %}
+{% block card_title %}<i class="fa-solid fa-file-pdf fa-fw"></i> Auftrag aus PDF importieren{% endblock %}
+
+{% block card_content %}
+    <div class="alert alert-info py-2">
+        <i class="fa-solid fa-circle-info fa-fw"></i>
+        Die erkannten Daten sind nur Vorschläge. Vor dem Speichern müssen Auftrags-, Kunden-, Projekt- und Positionsdaten vollständig geprüft werden.
+    </div>
+    <p class="text-muted">Unterstützt werden digital erzeugte PDF-Auftragsbestätigungen. Eingescannte Dokumente werden nicht per OCR verarbeitet.</p>
+    <form method="post" enctype="multipart/form-data">
+        <input type="hidden" name="_token" value="{{ csrf_token('production_order_import') }}">
+        <div class="mb-3">
+            <label class="form-label fw-bold" for="order-import-pdf">PDF-Auftragsbestätigung</label>
+            <input class="form-control" id="order-import-pdf" name="pdf" type="file" accept="application/pdf,.pdf" required>
+            <div class="form-text">Maximal {{ max_upload_size|format_bytes }} gemäß der Part-DB-Anhangseinstellung. Die Originaldatei wird nach der Bestätigung am Auftrag gespeichert.</div>
+        </div>
+        <div class="d-flex gap-2">
+            <button class="btn btn-success" type="submit"><i class="fa-solid fa-magnifying-glass fa-fw"></i> PDF auslesen</button>
+            <a class="btn btn-secondary" href="{{ path('production_customer_project_index') }}">Abbrechen</a>
+        </div>
+    </form>
+{% endblock %}

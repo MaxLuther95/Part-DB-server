@@ -9,7 +9,12 @@ use App\Entity\Production\BuildStatus;
 use App\Entity\Production\Customer;
 use App\Entity\Production\CustomerProject;
 use App\Entity\Production\CustomerProjectStatus;
+use App\Entity\Production\OrderImportLine;
+use App\Entity\Production\OrderImportMapping;
+use App\Entity\Production\OrderPositionUnit;
 use App\Entity\Production\ProjectPosition;
+use App\Entity\Production\ProductionProject;
+use App\Entity\Production\ProductionProjectStatus;
 use App\Entity\Production\ProjectMaterialAllocation;
 use App\Entity\Production\ProjectMaterialReservation;
 use App\Entity\Production\SystemTemplate;
@@ -33,12 +38,19 @@ final class ProductionEntitiesTest extends TestCase
             ->setNotes(' Projekt intern abstimmen. ')
             ->setCustomer($customer);
 
+        $productionProject = (new ProductionProject())
+            ->setProjectNumber('PR-100')
+            ->setName('Messsystem-Familie');
+        $project->setProductionProject($productionProject);
+
         self::assertSame('K-100', $customer->getCustomerNumber());
         self::assertSame('ACME GmbH', $customer->getName());
         self::assertTrue($customer->isActive());
         self::assertSame(CustomerProjectStatus::Planning, $project->getStatus());
         self::assertSame('Projekt intern abstimmen.', $project->getNotes());
         self::assertSame($customer, $project->getCustomer());
+        self::assertSame($productionProject, $project->getProductionProject());
+        self::assertSame(ProductionProjectStatus::Planning, $productionProject->getStatus());
     }
 
     public function testProjectCanBeAssignedToMultipleUsers(): void
@@ -139,11 +151,13 @@ final class ProductionEntitiesTest extends TestCase
     public function testSystemTemplateDefinesProjectAndInventoryChoices(): void
     {
         $baseProject = new Project();
+        $secondBaseProject = new Project();
         $builtChoice = new Project();
         $purchasedChoice = new Part();
         $template = (new SystemTemplate())
             ->setName('System A')
-            ->setBaseProject($baseProject);
+            ->addBaseProject($baseProject)
+            ->addBaseProject($secondBaseProject);
         $nestedTemplate = (new SystemTemplate())->setName('Nested system');
         $slot = (new SystemTemplateSlot())
             ->setSystemTemplate($template)
@@ -160,11 +174,28 @@ final class ProductionEntitiesTest extends TestCase
         self::assertSame($template, $position->getSystemTemplate());
         self::assertNull($position->getTemplateProject());
         self::assertSame($baseProject, $position->getBuildProject());
+        self::assertSame([$baseProject, $secondBaseProject], $position->getBuildProjects());
         self::assertTrue($slot->isRequired());
         self::assertTrue($slot->isSerialTracking());
         self::assertTrue($slot->getAllowedSystemTemplates()->contains($nestedTemplate));
+        self::assertSame([$template], $nestedTemplate->getParentTemplates());
         self::assertTrue($slot->allows($builtChoice));
         self::assertTrue($slot->getAllowedParts()->contains($purchasedChoice));
+    }
+
+    public function testOrderPositionUnitsAreFixedByTheirMappedTarget(): void
+    {
+        $template = (new SystemTemplate())->setOrderUnit(OrderPositionUnit::Set);
+        $systemMapping = (new OrderImportMapping())->setSystemTemplate($template);
+        $partMapping = (new OrderImportMapping())->setPart(new Part());
+        $line = (new OrderImportLine())->setUnit('pieces');
+
+        self::assertSame(OrderPositionUnit::Set, $systemMapping->getOrderUnit());
+        self::assertSame(OrderPositionUnit::Piece, $partMapping->getOrderUnit());
+        self::assertSame('pcs.', $line->getUnit());
+
+        $this->expectException(\InvalidArgumentException::class);
+        $line->setUnit('free text');
     }
 
     public function testProjectMaterialAllocationKeepsSerialNumber(): void
@@ -224,10 +255,10 @@ final class ProductionEntitiesTest extends TestCase
         $mainboards = (new SystemTemplateSlot())->setName('Mainboards')->setPosition(0);
         $interface = (new SystemTemplateSlot())->setName('Interface')->setPosition(1);
         $template = (new SystemTemplate())
-            ->setName('MCFLL System')
+            ->setName('Demo system')
             ->addSlot($mainboards)
             ->addSlot($interface);
-        $position = (new ProjectPosition())->setName('MCFLL System')->setSystemTemplate($template);
+        $position = (new ProjectPosition())->setName('Demo system')->setSystemTemplate($template);
 
         $mainboardOne = (new ProjectPosition())->setName('Mainboard 1')->setSourceSlot($mainboards);
         $mainboardTwo = (new ProjectPosition())->setName('Mainboard 2')->setSourceSlot($mainboards);

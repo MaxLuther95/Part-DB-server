@@ -18,11 +18,16 @@ use Symfony\Component\Validator\Constraints as Assert;
 #[ORM\Index(name: 'IDX_PROD_USAGE_PART', columns: ['part_id'])]
 #[ORM\Index(name: 'IDX_PROD_USAGE_LOT', columns: ['source_part_lot_id'])]
 #[ORM\Index(name: 'IDX_PROD_USAGE_USER', columns: ['allocated_by_id'])]
-final class BuildMaterialUsage extends AbstractProductionEntity
+#[ORM\Index(name: 'IDX_PROD_USAGE_SLOT', columns: ['source_slot_id'])]
+class BuildMaterialUsage extends AbstractProductionEntity
 {
     #[ORM\ManyToOne(targetEntity: BuildInstance::class, inversedBy: 'materialUsages')]
     #[ORM\JoinColumn(name: 'build_instance_id', nullable: false, onDelete: 'CASCADE')]
     private ?BuildInstance $buildInstance = null;
+
+    #[ORM\ManyToOne(targetEntity: SystemTemplateSlot::class)]
+    #[ORM\JoinColumn(name: 'source_slot_id', nullable: true, onDelete: 'SET NULL')]
+    private ?SystemTemplateSlot $sourceSlot = null;
 
     #[ORM\ManyToOne(targetEntity: Part::class)]
     #[ORM\JoinColumn(name: 'part_id', nullable: true, onDelete: 'SET NULL')]
@@ -72,6 +77,8 @@ final class BuildMaterialUsage extends AbstractProductionEntity
         return $this;
     }
     public function getPart(): ?Part { return $this->part; }
+    public function getSourceSlot(): ?SystemTemplateSlot { return $this->sourceSlot; }
+    public function setSourceSlot(?SystemTemplateSlot $sourceSlot): self { $this->sourceSlot = $sourceSlot; return $this; }
     public function setPart(?Part $part): self { $this->part = $part; if (null !== $part) { $this->partName = $part->getName(); $this->partReferenceId = $part->getId(); } return $this; }
     public function getPartName(): string { return $this->part?->getName() ?? $this->partName; }
     public function getPartReferenceId(): ?int { return $this->part?->getId() ?? $this->partReferenceId; }

@@ -6,6 +6,11 @@ docs/
 .git
 
 /public/media/*
+/public_media/
+/db/
+/development_backups/
+/.tmp/
+/public/build.*/
 
 ###> symfony/framework-bundle ###
 /.env.local

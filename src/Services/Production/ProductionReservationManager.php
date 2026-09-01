@@ -24,20 +24,26 @@ final readonly class ProductionReservationManager
     ) {
     }
 
-    /** @return array{reserved: int, missing: int, lines: int} */
-    public function refresh(CustomerProject $project, StorageLocation $site, User $user): array
+    /**
+     * @param array<int|string, int|string> $remoteLotQuantities
+     * @return array{reserved: int, missing: int, transfer_pending: int, missing_at_site: int, lines: int}
+     */
+    public function refresh(CustomerProject $project, StorageLocation $site, User $user, array $remoteLotQuantities = []): array
     {
         if (!in_array($project->getStatus(), [CustomerProjectStatus::Commissioned, CustomerProjectStatus::InProduction], true)) {
             throw new \DomainException('Material kann nur für beauftragte oder in Produktion befindliche Kundenprojekte reserviert werden.');
         }
 
-        return $this->entityManager->wrapInTransaction(function () use ($project, $site, $user): array {
+        return $this->entityManager->wrapInTransaction(function () use ($project, $site, $user, $remoteLotQuantities): array {
+            $project->setProductionSite($site);
             foreach ($project->getMaterialReservations()->toArray() as $reservation) {
                 $this->entityManager->remove($reservation);
                 $project->getMaterialReservations()->removeElement($reservation);
             }
             $reservedTotal = 0;
             $missingTotal = 0;
+            $missingAtSiteTotal = 0;
+            $transferPendingTotal = 0;
             $lines = 0;
             foreach ($this->materialPlanner->createPlan($project)['items'] as $item) {
                 $part = $item['part'];
@@ -61,12 +67,38 @@ final readonly class ProductionReservationManager
                     $reservedTotal += $quantity;
                     ++$lines;
                 }
+                $missingAtSiteTotal += $remaining;
+                foreach ($remoteLotQuantities as $lotId => $requestedQuantity) {
+                    if ($remaining < 1 || (int) $requestedQuantity < 1) { continue; }
+                    $lot = $this->entityManager->find(PartLot::class, (int) $lotId);
+                    if (!$lot instanceof PartLot
+                        || $lot->getPart() !== $part
+                        || $this->lotBelongsToSite($lot, $site)
+                        || $lot->isInstockUnknown()) {
+                        continue;
+                    }
+                    $available = $this->availableToProject($lot, $project);
+                    if ($available < 1) { continue; }
+                    $quantity = min($remaining, $available, (int) $requestedQuantity);
+                    $reservation = (new ProjectMaterialReservation())
+                        ->setCustomerProject($project)
+                        ->setPart($part)
+                        ->setSourcePartLot($lot)
+                        ->setSite($site)
+                        ->setQuantity($quantity)
+                        ->setReservedBy($user);
+                    $this->entityManager->persist($reservation);
+                    $remaining -= $quantity;
+                    $reservedTotal += $quantity;
+                    $transferPendingTotal += $quantity;
+                    ++$lines;
+                }
                 $missingTotal += $remaining;
             }
-            $this->historyRecorder->record($project, 'material_reservation_updated', sprintf('%s reserviert, %s offen', $reservedTotal, $missingTotal));
+            $this->historyRecorder->record($project, 'material_reservation_updated', sprintf('%s reserviert, %s im Transfer, %s ungesichert', $reservedTotal, $transferPendingTotal, $missingTotal));
             $this->entityManager->flush();
 
-            return ['reserved' => $reservedTotal, 'missing' => $missingTotal, 'lines' => $lines];
+            return ['reserved' => $reservedTotal, 'missing' => $missingTotal, 'transfer_pending' => $transferPendingTotal, 'missing_at_site' => $missingAtSiteTotal, 'lines' => $lines];
         });
     }
 
@@ -118,6 +150,9 @@ final readonly class ProductionReservationManager
 
     public function getPreferredSite(CustomerProject $project): ?StorageLocation
     {
+        if ($project->getProductionSite() instanceof StorageLocation) {
+            return $project->getProductionSite();
+        }
         foreach ($project->getMaterialReservations() as $reservation) {
             if ($reservation->getSite() instanceof StorageLocation) { return $reservation->getSite(); }
         }
@@ -132,7 +167,11 @@ final readonly class ProductionReservationManager
 
     public function lotBelongsToSite(PartLot $lot, StorageLocation $site): bool
     {
-        $location = $lot->getStorageLocation();
+        return $this->locationBelongsToSite($lot->getStorageLocation(), $site);
+    }
+
+    public function locationBelongsToSite(?StorageLocation $location, StorageLocation $site): bool
+    {
         while ($location instanceof StorageLocation) {
             if ($location->getId() === $site->getId()) { return true; }
             $location = $location->getParent();

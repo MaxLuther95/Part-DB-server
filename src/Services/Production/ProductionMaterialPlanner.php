@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace App\Services\Production;
 
 use App\Entity\Parts\Part;
+use App\Entity\Parts\PartLot;
+use App\Entity\Parts\StorageLocation;
 use App\Entity\Production\CustomerProject;
 use App\Entity\Production\ProjectPosition;
 use App\Repository\Production\ProjectMaterialReservationRepository;
@@ -20,14 +22,14 @@ final readonly class ProductionMaterialPlanner
     {
         $requirements = [];
         foreach ($project->getPositions() as $position) {
-            $templateProject = $position->getBuildProject();
-            if (null === $templateProject) { continue; }
-            foreach ($templateProject->getBomEntries() as $entry) {
-                $part = $entry->getPart();
-                if (!$part instanceof Part || null === $part->getId()) { continue; }
-                $partId = $part->getId();
-                $requirements[$partId] ??= ['part' => $part, 'required' => 0.0];
-                $requirements[$partId]['required'] += $entry->getQuantity() * $position->getQuantity();
+            foreach ($position->getBuildProjects() as $templateProject) {
+                foreach ($templateProject->getBomEntries() as $entry) {
+                    $part = $entry->getPart();
+                    if (!$part instanceof Part || null === $part->getId()) { continue; }
+                    $partId = $part->getId();
+                    $requirements[$partId] ??= ['part' => $part, 'required' => 0.0];
+                    $requirements[$partId]['required'] += $entry->getQuantity() * $position->getQuantity();
+                }
             }
         }
         foreach ($project->getAccessories() as $accessory) {
@@ -42,7 +44,7 @@ final readonly class ProductionMaterialPlanner
     }
 
     /** @return array{items: list<array<string, mixed>>, complete: bool, configuration_complete: bool, fully_reserved: bool, reservation_stale: bool, reservation_conflict: bool} */
-    public function createPlan(CustomerProject $project): array
+    public function createPlan(CustomerProject $project, ?StorageLocation $site = null): array
     {
         $requirements = $this->getRequirements($project);
         $configurationComplete = $this->isConfigurationComplete($project);
@@ -59,6 +61,11 @@ final readonly class ProductionMaterialPlanner
             }
         }
         $reserved = [];
+        $localReserved = [];
+        $coveredLocalReserved = [];
+        $remoteReservations = [];
+        $reservationsByLot = [];
+        $reservationCapacityByLot = [];
         $reservationConflict = false;
         $orphanedReservation = false;
         foreach ($project->getMaterialReservations() as $reservation) {
@@ -70,6 +77,25 @@ final readonly class ProductionMaterialPlanner
                 continue;
             }
             $reserved[$partId] = ($reserved[$partId] ?? 0) + $reservation->getQuantity();
+            $lotId = $lot->getId();
+            if (null !== $lotId) {
+                $reservationsByLot[$lotId] = ($reservationsByLot[$lotId] ?? 0) + $reservation->getQuantity();
+                $reservationCapacityByLot[$lotId] ??= max(0, (int) floor($lot->getAmount()) - $this->reservationRepository->quantityForLot($lot, $project));
+                $coveredQuantity = min($reservation->getQuantity(), $reservationCapacityByLot[$lotId]);
+                $reservationCapacityByLot[$lotId] -= $coveredQuantity;
+                if (null === $site || $this->lotBelongsToSite($lot, $site)) {
+                    $coveredLocalReserved[$partId] = ($coveredLocalReserved[$partId] ?? 0) + $coveredQuantity;
+                }
+            }
+            if (null === $site || $this->lotBelongsToSite($lot, $site)) {
+                $localReserved[$partId] = ($localReserved[$partId] ?? 0) + $reservation->getQuantity();
+            } else {
+                $remoteReservations[$partId][] = [
+                    'reservation' => $reservation,
+                    'quantity' => $reservation->getQuantity(),
+                    'location' => $lot->getStorageLocation(),
+                ];
+            }
             if ($this->reservationRepository->quantityForLot($lot) > (int) floor($lot->getAmount())) {
                 $reservationConflict = true;
             }
@@ -80,18 +106,58 @@ final readonly class ProductionMaterialPlanner
         $complete = $configurationComplete;
         $fullyReserved = true;
         $reservationStale = $orphanedReservation;
+        $remoteReservedTotal = 0;
         foreach ($requirements as $partId => $requirement) {
             $part = $requirement['part'];
             $required = $requirement['required'];
             $projectStock = $allocated[$partId] ?? 0;
             $used = $consumed[$partId] ?? 0;
             $ownReserved = $reserved[$partId] ?? 0;
+            $ownLocalReserved = $localReserved[$partId] ?? 0;
+            $coveredOwnLocalReserved = $coveredLocalReserved[$partId] ?? 0;
+            $ownRemoteReservations = $remoteReservations[$partId] ?? [];
+            $ownRemoteReserved = array_sum(array_column($ownRemoteReservations, 'quantity'));
+            $remoteReservedTotal += $ownRemoteReserved;
             $remaining = max(0, $required - $projectStock - $used);
             $unreservedRemaining = max(0, $remaining - $ownReserved);
-            $physical = (int) floor($part->getAmountSum());
-            $reservedTotal = $this->reservationRepository->quantityForPart($part);
-            $freeAvailable = max(0, $physical - $reservedTotal);
-            $missing = max(0, $unreservedRemaining - $freeAvailable);
+            $remoteLots = [];
+            if (null === $site) {
+                $physical = (int) floor($part->getAmountSum());
+                $reservedTotal = $this->reservationRepository->quantityForPart($part);
+                $freeAvailable = max(0, $physical - $reservedTotal);
+            } else {
+                $physical = 0;
+                $reservedTotal = 0;
+                $freeAvailable = 0;
+                foreach ($part->getPartLots() as $lot) {
+                    if ($lot->isInstockUnknown() || $lot->getAmount() <= 0) {
+                        continue;
+                    }
+                    $lotAmount = (int) floor($lot->getAmount());
+                    if ($this->lotBelongsToSite($lot, $site)) {
+                        $lotReserved = $this->reservationRepository->quantityForLot($lot);
+                        $physical += $lotAmount;
+                        $reservedTotal += $lotReserved;
+                        $freeAvailable += max(0, $lotAmount - $lotReserved);
+                    } else {
+                        $availableToProject = max(0, $lotAmount - $this->reservationRepository->quantityForLot($lot, $project));
+                        $selectedQuantity = null === $lot->getId() ? 0 : ($reservationsByLot[$lot->getId()] ?? 0);
+                        if ($availableToProject > 0 || $selectedQuantity > 0) {
+                            $remoteLots[] = [
+                                'lot' => $lot,
+                                'available' => $availableToProject,
+                                'selected' => $selectedQuantity,
+                            ];
+                        }
+                    }
+                }
+            }
+            usort($remoteLots, static fn(array $left, array $right): int => strcasecmp(
+                $left['lot']->getStorageLocation()?->getFullPath() ?? '',
+                $right['lot']->getStorageLocation()?->getFullPath() ?? '',
+            ));
+            $uncoveredRemaining = max(0, $remaining - $coveredOwnLocalReserved);
+            $missing = max(0, $uncoveredRemaining - $freeAvailable);
             $overstock = max(0, $projectStock + $used + $ownReserved - $required);
             $stale = $ownReserved !== $remaining;
             $reservationStale = $reservationStale || $stale;
@@ -103,6 +169,11 @@ final readonly class ProductionMaterialPlanner
                 'allocated' => $projectStock,
                 'consumed' => $used,
                 'reserved' => $ownReserved,
+                'reserved_local' => $ownLocalReserved,
+                'reserved_remote' => $ownRemoteReserved,
+                'remote_reservations' => $ownRemoteReservations,
+                'remote_lots' => $remoteLots,
+                'reserved_covered_local' => $coveredOwnLocalReserved,
                 'secured' => $projectStock + $ownReserved,
                 'reserved_total' => $reservedTotal,
                 'remaining' => $remaining,
@@ -116,7 +187,20 @@ final readonly class ProductionMaterialPlanner
         }
         usort($items, static fn(array $left, array $right): int => strcasecmp($left['part']->getName(), $right['part']->getName()));
 
-        return ['items' => $items, 'complete' => $complete, 'configuration_complete' => $configurationComplete, 'fully_reserved' => $fullyReserved && !$orphanedReservation, 'reservation_stale' => $reservationStale, 'reservation_conflict' => $reservationConflict];
+        return ['items' => $items, 'complete' => $complete, 'configuration_complete' => $configurationComplete, 'fully_reserved' => $fullyReserved && !$orphanedReservation, 'reservation_stale' => $reservationStale, 'reservation_conflict' => $reservationConflict, 'remote_reserved_total' => $remoteReservedTotal];
+    }
+
+    private function lotBelongsToSite(PartLot $lot, StorageLocation $site): bool
+    {
+        $location = $lot->getStorageLocation();
+        while ($location instanceof StorageLocation) {
+            if ($location->getId() === $site->getId()) {
+                return true;
+            }
+            $location = $location->getParent();
+        }
+
+        return false;
     }
 
     public function isConfigurationComplete(CustomerProject $project): bool

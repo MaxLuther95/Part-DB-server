@@ -109,6 +109,20 @@ class PermissionPresetsHelper
         $this->permissionResolver->setAllOperationsOfPermission($perm_holder, 'suppliers', PermissionData::ALLOW);
         $this->permissionResolver->setAllOperationsOfPermission($perm_holder, 'projects', PermissionData::ALLOW);
 
+        //Production extension permissions stay restricted for the editor and
+        //read-only presets, but are included in the administrator preset.
+        foreach ([
+            'production_orders',
+            'production_projects',
+            'production_customers',
+            'production_system_templates',
+            'production_build_instances',
+            'production_material',
+            'production_import_mappings',
+        ] as $production_permission) {
+            $this->permissionResolver->setAllOperationsOfPermission($perm_holder, $production_permission, PermissionData::ALLOW);
+        }
+
         //Allow to change system settings
         $this->permissionResolver->setPermission($perm_holder, 'config', 'change_system_settings', PermissionData::ALLOW);
 

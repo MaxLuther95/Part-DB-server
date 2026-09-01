@@ -1,0 +1,62 @@
+<div {{ stimulus_controller('production/list-datatable', {'stateSaveTag': state_tag}) }}
+     data-dt-settings='{{ datatable_settings(datatable)|escape('html_attr') }}'
+     data-dt-url="{{ uri_without_host(app.request) }}">
+    <template {{ stimulus_target('production/list-datatable', 'filterTemplate') }}>
+        <div class="dropdown me-1">
+            <button class="btn btn-outline-secondary" type="button" data-bs-toggle="dropdown" data-bs-auto-close="outside"
+                    aria-expanded="false" title="Suchen und filtern" aria-label="Suchen und filtern">
+                <i class="fa-solid fa-magnifying-glass fa-fw"></i>
+                <span class="ms-1">Filter</span>
+                {% if filters_open|default(false) %}<span class="d-inline-block rounded-circle bg-primary ms-1" style="width: .45rem; height: .45rem;"></span>{% endif %}
+            </button>
+            <div class="dropdown-menu p-3 shadow" style="width: min(36rem, calc(100vw - 2rem));">
+                <form method="get" class="row g-2 align-items-end">
+                    <div class="col-12">
+                        <label class="form-label mb-1" for="{{ filter_id }}-query">Suche</label>
+                        <input class="form-control form-control-sm" id="{{ filter_id }}-query" name="q" type="search" maxlength="200"
+                               value="{{ search_query|default('') }}" placeholder="{{ search_placeholder }}">
+                    </div>
+                    <div class="col-sm-6">
+                        <label class="form-label mb-1" for="{{ filter_id }}-status">Status</label>
+                        <select class="form-select form-select-sm" id="{{ filter_id }}-status" name="status">
+                            <option value="active"{{ selected_status_filter|default('active') == 'active' ? ' selected' : '' }}>{{ active_label }}</option>
+                            <option value="all"{{ selected_status_filter|default('active') == 'all' ? ' selected' : '' }}>Alle Status</option>
+                            {% for status in status_options %}
+                                <option value="{{ status.value }}"{{ selected_status_filter|default('active') == status.value ? ' selected' : '' }}>{{ (status_translation_prefix ~ status.value)|trans({}, 'production') }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-sm-6">
+                        <label class="form-label mb-1" for="{{ filter_id }}-customer">Kunde</label>
+                        <select class="form-select form-select-sm" id="{{ filter_id }}-customer" name="customer">
+                            <option value="">Alle Kunden</option>
+                            {% for customer in customers|default([]) %}
+                                <option value="{{ customer.id }}"{{ selected_customer|default(null) == customer.id ? ' selected' : '' }}>{{ customer.customerNumber }} – {{ customer.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-4">
+                        <label class="form-label mb-1" for="{{ filter_id }}-year">Jahr</label>
+                        <input class="form-control form-control-sm" id="{{ filter_id }}-year" name="year" type="number" min="2000"
+                               max="{{ 'now'|date('Y') + 1 }}" value="{{ selected_year|default('') }}" placeholder="Alle">
+                    </div>
+                    <div class="col-8 d-flex justify-content-end gap-2">
+                        <a class="btn btn-sm btn-outline-secondary" href="{{ path(filter_route) }}">Zurücksetzen</a>
+                        <button class="btn btn-sm btn-primary" type="submit"><i class="fa-solid fa-magnifying-glass fa-fw"></i> Suchen</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </template>
+
+    <div {{ stimulus_target('production/list-datatable', 'dt') }}>
+        <div class="card-body">
+            <div class="card">
+                <div class="card-body">
+                    <h4>{% trans %}part_list.loading.caption{% endtrans %}</h4>
+                    <h6>{% trans %}part_list.loading.message{% endtrans %}</h6>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

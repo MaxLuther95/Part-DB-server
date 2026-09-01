@@ -25,17 +25,20 @@ production:
   flash:
     saved: The changes were saved.
   navigation:
-    customers_projects: Customers & projects
+    customers_projects: Orders & projects
+    orders_projects: Orders & projects
+    management: Management
     build: Build
     templates: System templates
     required_parts: Required parts
+    import_mappings: Import mappings
   build:
     intro: Choose whether to manufacture a new device or assembly or register an existing one without changing inventory.
     empty: There are currently no devices or assemblies in progress.
     active: Active manufacturing
     new: Build new device / assembly
     new_short: Select a system template or Part-DB build project and start the regular manufacturing workflow.
-    new_intro: Select the system template or Part-DB build project for the new device or assembly.
+    new_intro: Select the system template or Part-DB build project for the new device or assembly. For system templates only the top-level device is built; child devices are assigned separately later.
     new_content: System or build project
     new_content_placeholder: Select a system template or build project
     prepare: Prepare build
@@ -53,30 +56,34 @@ production:
     active: Active
     new: Create customer
     edit: Edit customer
-    delete_confirm: 'Really delete customer “%name%”? The %projects% assigned customer projects will remain without a customer.'
-    deleted: 'The customer was deleted. %projects% customer projects remain without a customer.'
+    delete_confirm: 'Really delete customer “%name%”? This is only possible when no orders are assigned.'
+    delete_has_orders: 'The customer cannot be deleted because %orders% order(s) are still assigned.'
+    deleted: The customer was deleted.
   customer_project:
-    label: Customer project
-    plural: Customer projects
-    all_projects: All customer projects
-    my_projects: My customer projects
-    number: Project number
+    label: Order
+    plural: Orders
+    all_projects: All orders
+    my_projects: My orders
+    number: Order number
+    order_date: Order confirmation date
+    project_placeholder: Select a project
+    customer_placeholder: Select a customer
     assigned_users: Assigned users
-    assigned_users_help: The customer project appears under “My customer projects” for these users. Multiple users can be selected.
+    assigned_users_help: The order appears under “My orders” for these users. Multiple users can be selected.
     status_filter:
-      label: Filter customer projects by status
+      label: Filter orders by status
       all: All statuses
     scope:
-      label: Customer project filter
-      active: Active customer projects
-      all: All customer projects
-      empty_active: No customer projects with the status “In production” are currently assigned to you.
-      empty_all: No customer projects are currently assigned to you.
-    new: Create customer project
-    edit: Edit customer project
-    delete_confirm: 'Really delete customer project %number% completely? Positions, reservations, accessories and history will be deleted. %builds% devices or assemblies will be retained and released.'
-    deleted: 'The customer project was deleted. %builds% devices or assemblies were released and retained.'
-    delete_has_material: The customer project cannot be deleted while withdrawn project stock is still assigned to it.
+      label: Order filter
+      active: Active orders
+      all: All orders
+      empty_active: No orders with the status “In production” are currently assigned to you.
+      empty_all: No orders are currently assigned to you.
+    new: Create order
+    edit: Edit order
+    delete_confirm: 'Really delete order %number% completely? Positions, reservations, accessories and history will be deleted. %builds% devices or assemblies will be retained and released.'
+    deleted: '%builds% devices or assemblies were released and retained when the order was deleted.'
+    delete_has_material: The order cannot be deleted while withdrawn order stock is still assigned to it.
     status:
       planning: Planning
       commissioned: Commissioned
@@ -85,27 +92,42 @@ production:
       delivered: Delivered
       cancelled: Cancelled
   project:
+    label: Project
+    plural: Projects
+    number: Project number
+    new: Create project
+    edit: Edit project
+    no_orders: No orders are assigned to this project yet.
+    delete_confirm: 'Really delete project %number%?'
+    delete_has_orders: The project cannot be deleted while orders are assigned to it.
+    deleted: The project was deleted.
+    status:
+      planning: Planning
+      active: Active
+      paused: Paused
+      completed: Completed
+      cancelled: Cancelled
     no_customer: No customer assigned
-    cancelled_hint: This customer project has been cancelled.
-    build_instances: Devices and assemblies in customer project
+    cancelled_hint: This order has been cancelled.
+    build_instances: Devices and assemblies in order
   project_position:
-    label: Project position
-    plural: Project positions
+    label: Order position
+    plural: Order positions
     position: Position
     quantity: Quantity
     new: Add position
     add_system: Add system / build project
-    edit: Edit project position
-    delete: Delete project position
-    delete_confirm: 'Really delete project position “%name%” including its child configuration?'
-    deleted: The project position was deleted.
-    delete_has_builds: The project position cannot be deleted because devices or assemblies are already assigned to it or a child position.
-    delete_has_material: The project position cannot be deleted while material has already been allocated to the project.
+    edit: Edit order position
+    delete: Delete order position
+    delete_confirm: 'Really delete order position “%name%” including its child configuration?'
+    deleted: The order position was deleted.
+    delete_has_builds: The order position cannot be deleted because devices or assemblies are already assigned to it or a child position.
+    delete_has_material: The order position cannot be deleted while material has already been allocated to the order.
     configure: Configure system
     toggle_children: Expand or collapse child positions
     has_notes: Notes available
     build: Build
-    build_requires_production: Building and assigning devices or assemblies are only available while the project is in production.
+    build_requires_production: Building and assigning devices or assemblies are only available while the order is in production.
     build_title: Prepare build
     build_intro: The location-aware build workflow for this project position will be prepared here.
     build_notice: This preparation page does not withdraw material or create a device or assembly yet.
@@ -128,11 +150,14 @@ production:
     template_required: Select a system template or standalone Part-DB project.
     slot:
       empty: Empty
+      choice_required: Selection required
+      choice_count: '(%count% choices)'
+      choose: Select
       range: 'Allowed quantity: %min% to %max%. Systems and build projects are created as separate, independently configurable positions.'
       required: This required slot must be filled.
       in_use: Devices, assemblies or child positions are already assigned to the existing content, so it cannot be replaced.
       quantity_invalid: The quantity is outside the allowed range for this slot.
-    empty: No positions have been added to this project yet.
+    empty: No positions have been added to this order yet.
   system_template:
     label: System template
     plural: System templates
@@ -140,12 +165,18 @@ production:
     edit: Edit system template
     delete_confirm: 'Really delete system template “%name%”? Existing project positions and devices will be kept.'
     deleted: The system template was deleted. Existing project positions and devices were kept.
-    intro: System templates define fixed slots and allowed content. Their own fixed BOM is optional.
+    intro: System templates define fixed slots and allowed content. Nested templates are displayed according to where they are used.
     empty: No system templates yet.
     name: Name
-    base_project: Part-DB base project
+    base_project: Part-DB base projects
     base_project_none: No separate fixed BOM
-    base_project_help: Optional. This project's BOM contains only the enclosure and components that are always required regardless of configuration.
+    base_project_help: Optional. The BOMs of all selected projects are added together to form this system template's fixed material demand.
+    order_unit: Order unit
+    order_unit_help: Defines whether this system template is listed as an individual piece or as a set in order confirmations.
+    used_in: Used as a nested template in
+    used_in_none: Top hierarchy level
+    used_multiple: used multiple times
+    toggle_children: Expand or collapse nested templates
     active: Active
     slot:
       plural: Predefined slots
@@ -177,6 +208,7 @@ production:
     part: Part-DB inventory part
     quantity: Quantity
     available: available
+    unavailable: unavailable
     note: Note
     inventory_part: Inventory part
   material_plan:
@@ -238,6 +270,7 @@ production:
       build_updated: Device / assembly updated
       build_unassigned: Device / assembly removed from project
       build_deleted: Device / assembly deleted
+      pdf_imported: PDF order confirmation imported
   build_instance:
     label: Device / assembly
     plural: Devices and assemblies

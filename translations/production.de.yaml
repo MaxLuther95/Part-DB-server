@@ -1,7 +1,7 @@
 production:
   dashboard:
     title: Fertigung
-    intro: Kunden, Kundenprojekte sowie gefertigte Geräte und Baugruppen werden hier getrennt von den normalen Lagerteilen verwaltet.
+    intro: Projekte, Aufträge, Kunden sowie gefertigte Geräte und Baugruppen werden hier getrennt von den normalen Lagerteilen verwaltet.
   common:
     name: Bezeichnung
     description: Beschreibung
@@ -25,17 +25,20 @@ production:
   flash:
     saved: Die Änderungen wurden gespeichert.
   navigation:
-    customers_projects: Kunden & Projekte
+    customers_projects: Aufträge und Projekte
+    orders_projects: Aufträge und Projekte
+    management: Verwaltung
     build: Bauen
     templates: Systemvorlagen
     required_parts: Benötigte Teile
+    import_mappings: Importzuordnungen
   build:
     intro: Wählen Sie, ob ein neues Gerät bzw. eine neue Baugruppe gefertigt oder ein bereits vorhandenes Exemplar ohne Bestandsänderung eingepflegt werden soll.
     empty: Im Moment befindet sich kein Gerät und keine Baugruppe in Bearbeitung.
     active: Laufende Fertigung
     new: Neues Gerät / neue Baugruppe bauen
     new_short: Eine Systemvorlage oder ein Part-DB-Bauprojekt auswählen und den regulären Fertigungsablauf starten.
-    new_intro: Wählen Sie die Systemvorlage oder das Part-DB-Bauprojekt für das neue Gerät bzw. die neue Baugruppe aus.
+    new_intro: Wählen Sie die Systemvorlage oder das Part-DB-Bauprojekt für das neue Gerät bzw. die neue Baugruppe aus. Bei Systemvorlagen wird nur das oberste Gerät gebaut; Unterbaugruppen werden später separat zugewiesen.
     new_content: System oder Bauprojekt
     new_content_placeholder: Bitte Systemvorlage oder Bauprojekt auswählen
     prepare: Bau vorbereiten
@@ -53,30 +56,34 @@ production:
     active: Aktiv
     new: Kunde anlegen
     edit: Kunde bearbeiten
-    delete_confirm: 'Kunde „%name%“ wirklich löschen? Die %projects% zugeordneten Kundenprojekte bleiben ohne Kundenzuordnung erhalten.'
-    deleted: 'Der Kunde wurde gelöscht. %projects% Kundenprojekte bleiben ohne Kundenzuordnung erhalten.'
+    delete_confirm: 'Kunde „%name%“ wirklich löschen? Dies ist nur möglich, wenn ihm keine Aufträge mehr zugeordnet sind.'
+    delete_has_orders: 'Der Kunde kann nicht gelöscht werden, weil ihm noch %orders% Auftrag bzw. Aufträge zugeordnet sind.'
+    deleted: Der Kunde wurde gelöscht.
   customer_project:
-    label: Kundenprojekt
-    plural: Kundenprojekte
-    all_projects: Alle Kundenprojekte
-    my_projects: Meine Kundenprojekte
-    number: Projektnummer
+    label: Auftrag
+    plural: Aufträge
+    all_projects: Alle Aufträge
+    my_projects: Meine Aufträge
+    number: Auftragsnummer
+    order_date: Datum der Auftragsbestätigung
+    project_placeholder: Bitte ein Projekt auswählen
+    customer_placeholder: Bitte einen Kunden auswählen
     assigned_users: Zugeordnete Nutzer
-    assigned_users_help: Das Kundenprojekt erscheint für diese Personen unter „Meine Kundenprojekte“. Mehrere Nutzer können ausgewählt werden.
+    assigned_users_help: Der Auftrag erscheint für diese Personen unter „Meine Aufträge“. Mehrere Nutzer können ausgewählt werden.
     status_filter:
-      label: Kundenprojekte nach Status filtern
+      label: Aufträge nach Status filtern
       all: Alle Status
     scope:
-      label: Kundenprojektfilter
-      active: Aktive Kundenprojekte
-      all: Alle Kundenprojekte
-      empty_active: Ihnen sind momentan keine Kundenprojekte mit dem Status „In Produktion“ zugeordnet.
-      empty_all: Ihnen sind momentan keine Kundenprojekte zugeordnet.
-    new: Kundenprojekt anlegen
-    edit: Kundenprojekt bearbeiten
-    delete_confirm: 'Kundenprojekt %number% wirklich vollständig löschen? Positionen, Reservierungen, Zubehör und Historie werden gelöscht. %builds% Geräte bzw. Baugruppen bleiben erhalten und werden freigegeben.'
-    deleted: 'Das Kundenprojekt wurde gelöscht. %builds% Geräte bzw. Baugruppen wurden freigegeben und bleiben erhalten.'
-    delete_has_material: Das Kundenprojekt kann nicht gelöscht werden, solange ihm bereits ausgebuchter Projektbestand zugeordnet ist.
+      label: Auftragsfilter
+      active: Aktive Aufträge
+      all: Alle Aufträge
+      empty_active: Ihnen sind momentan keine Aufträge mit dem Status „In Produktion“ zugeordnet.
+      empty_all: Ihnen sind momentan keine Aufträge zugeordnet.
+    new: Auftrag anlegen
+    edit: Auftrag bearbeiten
+    delete_confirm: 'Auftrag %number% wirklich vollständig löschen? Positionen, Reservierungen, Zubehör und Historie werden gelöscht. %builds% Geräte bzw. Baugruppen bleiben erhalten und werden freigegeben.'
+    deleted: 'Der Auftrag wurde gelöscht. %builds% Geräte bzw. Baugruppen wurden freigegeben und bleiben erhalten.'
+    delete_has_material: Der Auftrag kann nicht gelöscht werden, solange ihm bereits ausgebuchter Auftragsbestand zugeordnet ist.
     status:
       planning: In Planung
       commissioned: Beauftragt
@@ -85,29 +92,44 @@ production:
       delivered: Ausgeliefert
       cancelled: Storniert
   project:
+    label: Projekt
+    plural: Projekte
+    number: Projektnummer
+    new: Projekt anlegen
+    edit: Projekt bearbeiten
+    no_orders: Diesem Projekt sind noch keine Aufträge zugeordnet.
+    delete_confirm: 'Projekt %number% wirklich löschen?'
+    delete_has_orders: Das Projekt kann nicht gelöscht werden, solange ihm Aufträge zugeordnet sind.
+    deleted: Das Projekt wurde gelöscht.
+    status:
+      planning: In Planung
+      active: Aktiv
+      paused: Pausiert
+      completed: Abgeschlossen
+      cancelled: Storniert
     no_customer: Ohne Kundenzuordnung
-    cancelled_hint: Dieses Kundenprojekt wurde storniert.
-    build_instances: Geräte und Baugruppen im Kundenprojekt
+    cancelled_hint: Dieser Auftrag wurde storniert.
+    build_instances: Geräte und Baugruppen im Auftrag
   project_position:
-    label: Projektposition
-    plural: Projektpositionen
+    label: Auftragsposition
+    plural: Auftragspositionen
     position: Position
     quantity: Anzahl
     new: Position hinzufügen
     add_system: System / Bauprojekt hinzufügen
-    edit: Projektposition bearbeiten
-    delete: Projektposition löschen
-    delete_confirm: 'Projektposition „%name%“ einschließlich ihrer untergeordneten Konfiguration wirklich löschen?'
-    deleted: Die Projektposition wurde gelöscht.
-    delete_has_builds: Die Projektposition kann nicht gelöscht werden, weil ihr oder einer Unterposition bereits Geräte oder Baugruppen zugewiesen sind.
-    delete_has_material: Die Projektposition kann nicht gelöscht werden, solange dem Projekt bereits Material bereitgestellt wurde.
+    edit: Auftragsposition bearbeiten
+    delete: Auftragsposition löschen
+    delete_confirm: 'Auftragsposition „%name%“ einschließlich ihrer untergeordneten Konfiguration wirklich löschen?'
+    deleted: Die Auftragsposition wurde gelöscht.
+    delete_has_builds: Die Auftragsposition kann nicht gelöscht werden, weil ihr oder einer Unterposition bereits Geräte oder Baugruppen zugewiesen sind.
+    delete_has_material: Die Auftragsposition kann nicht gelöscht werden, solange dem Auftrag bereits Material bereitgestellt wurde.
     configure: System konfigurieren
     toggle_children: Untergeordnete Positionen ein- oder ausklappen
     has_notes: Notiz vorhanden
     build: Bauen
-    build_requires_production: Bauen und das Zuweisen von Geräten oder Baugruppen sind erst möglich, wenn sich das Projekt in Produktion befindet.
+    build_requires_production: Bauen und das Zuweisen von Geräten oder Baugruppen sind erst möglich, wenn sich der Auftrag in Produktion befindet.
     build_title: Bau vorbereiten
-    build_intro: Der standortbezogene Bauablauf für diese Projektposition wird hier vorbereitet.
+    build_intro: Der standortbezogene Bauablauf für diese Auftragsposition wird hier vorbereitet.
     build_notice: Auf dieser vorbereiteten Seite wird noch kein Material ausgebucht und kein Gerät bzw. keine Baugruppe erzeugt.
     build_steps:
       serial: Seriennummer festlegen
@@ -128,24 +150,33 @@ production:
     template_required: Bitte eine Systemvorlage oder ein einzelnes Part-DB-Projekt auswählen.
     slot:
       empty: Nicht belegt
+      choice_required: Auswahl erforderlich
+      choice_count: '(%count% Möglichkeiten)'
+      choose: Auswählen
       range: 'Erlaubte Menge: %min% bis %max%. Systeme und Bauprojekte werden dabei als einzelne, unabhängig konfigurierbare Positionen angelegt.'
       required: Dieser Pflichtplatz muss belegt werden.
       in_use: Der vorhandenen Belegung sind bereits Geräte, Baugruppen oder Unterpositionen zugeordnet und sie kann nicht ausgetauscht werden.
       quantity_invalid: Die Menge liegt außerhalb des für diesen Platz erlaubten Bereichs.
-    empty: Für dieses Projekt wurden noch keine Positionen angelegt.
+    empty: Für diesen Auftrag wurden noch keine Positionen angelegt.
   system_template:
     label: Systemvorlage
     plural: Systemvorlagen
     new: Systemvorlage anlegen
     edit: Systemvorlage bearbeiten
-    delete_confirm: 'Systemvorlage „%name%“ wirklich löschen? Bereits angelegte Projektpositionen und Geräte bleiben erhalten.'
-    deleted: Die Systemvorlage wurde gelöscht. Vorhandene Projektpositionen und Geräte wurden beibehalten.
-    intro: Systemvorlagen definieren feste Plätze und erlaubte Inhalte. Eine eigene feste BOM ist optional.
+    delete_confirm: 'Systemvorlage „%name%“ wirklich löschen? Bereits angelegte Auftragspositionen und Geräte bleiben erhalten.'
+    deleted: Die Systemvorlage wurde gelöscht. Vorhandene Auftragspositionen und Geräte wurden beibehalten.
+    intro: Systemvorlagen definieren feste Plätze und erlaubte Inhalte. Untervorlagen werden anhand ihrer Verwendung hierarchisch dargestellt.
     empty: Noch keine Systemvorlagen vorhanden.
     name: Bezeichnung
-    base_project: Part-DB-Basisprojekt
+    base_project: Part-DB-Basisprojekte
     base_project_none: Keine eigene feste BOM
-    base_project_help: Optional. Die BOM dieses Projekts enthält nur Gehäuse und Teile, die unabhängig von der Konfiguration immer benötigt werden.
+    base_project_help: Optional. Die BOMs aller ausgewählten Projekte werden addiert und bilden gemeinsam den festen Materialbedarf dieser Systemvorlage.
+    order_unit: Auftragseinheit
+    order_unit_help: Legt fest, ob diese Systemvorlage in Auftragsbestätigungen als einzelnes Stück oder als Set geführt wird.
+    used_in: Verwendet als Untervorlage in
+    used_in_none: Oberste Hierarchieebene
+    used_multiple: mehrfach verwendet
+    toggle_children: Untervorlagen ein- oder ausklappen
     active: Aktiv
     slot:
       plural: Vorgegebene Plätze
@@ -177,6 +208,7 @@ production:
     part: Part-DB-Lagerteil
     quantity: Menge
     available: verfügbar
+    unavailable: nicht verfügbar
     note: Notiz
     inventory_part: Lagerteil
   material_plan:
@@ -189,18 +221,18 @@ production:
     empty: Aus den gewählten Systemen und Bauprojekten ergeben sich noch keine Lagerteile.
     part: Bauteil
     required: Benötigt
-    secured: Für Projekt gesichert
+    secured: Für Auftrag gesichert
     installed: Verbaut
     secured_breakdown: '%reserved% reserviert, %allocated% bereitgestellt'
     reconcile_reservation: Reservierung abgleichen
-    allocated: Im Projektbestand
+    allocated: Im Auftragsbestand
     remaining: Noch bereitzustellen
     available: Frei verfügbar
     missing: Fehlt
     overstock: Überschuss
     allocate: Material bereitstellen
     provide: Bereitstellen
-    project_stock: Projektbestand
+    project_stock: Auftragsbestand
     source_lot: Quell-Lagerlos
     choose_lot: Lagerlos auswählen
     allocate_quantity: Menge
@@ -208,36 +240,37 @@ production:
     serial_number_help: Optional; vorhandene Seriennummer des Lagerloses wird automatisch übernommen.
     serial_number_required_help: Pflicht, sofern das gewählte Lagerlos noch keine Seriennummer als Barcode besitzt.
     serial_required_notice: Dieses Bauteil ist in der Systemvorlage seriennummernpflichtig.
-    production_only: Material kann erst im Projektstatus „In Produktion“ bereitgestellt werden.
+    production_only: Material kann erst im Auftragsstatus „In Produktion“ bereitgestellt werden.
     invalid_lot: Das gewählte Lagerlos gehört nicht zu diesem Bauteil.
-    invalid_quantity: Die Menge überschreitet den Lagerbestand oder den noch offenen Projektbedarf.
+    invalid_quantity: Die Menge überschreitet den Lagerbestand oder den noch offenen Auftragsbedarf.
     serial_number_required: Bitte die Hersteller-Seriennummer angeben oder ein Lagerlos mit hinterlegter Seriennummer wählen.
-    allocation_success: Material wurde in den Projektbestand umgebucht.
+    allocation_success: Material wurde in den Auftragsbestand umgebucht.
   history:
     label: Historie
     timestamp: Zeitpunkt
     event_label: Ereignis
     actor: Nutzer
-    empty: Für dieses Projekt sind noch keine Ereignisse vorhanden.
+    empty: Für diesen Auftrag sind noch keine Ereignisse vorhanden.
     system: System
     event:
-      project_created: Projekt angelegt
-      project_updated: Projektdaten geändert
-      position_created: Projektposition angelegt
-      position_updated: Projektposition bearbeitet
-      position_deleted: Projektposition gelöscht
+      project_created: Auftrag angelegt
+      project_updated: Auftragsdaten geändert
+      position_created: Auftragsposition angelegt
+      position_updated: Auftragsposition bearbeitet
+      position_deleted: Auftragsposition gelöscht
       position_configured: Systemkonfiguration geändert
       accessory_created: Zubehör hinzugefügt
       accessory_updated: Zubehör bearbeitet
-      material_allocated: Material in den Projektbestand umgebucht
+      material_allocated: Material in den Auftragsbestand umgebucht
       material_reservation_updated: Materialreservierung aktualisiert
       material_reservation_released: Materialreservierung freigegeben
       material_reservation_consumed: Reservierung beim Ausbuchen aufgelöst
       build_created: Gerät / Baugruppe angelegt
-      build_assigned: Gerät / Baugruppe dem Projekt zugewiesen
+      build_assigned: Gerät / Baugruppe dem Auftrag zugewiesen
       build_updated: Gerät / Baugruppe bearbeitet
-      build_unassigned: Gerät / Baugruppe aus Projekt entfernt
+      build_unassigned: Gerät / Baugruppe aus Auftrag entfernt
       build_deleted: Gerät / Baugruppe gelöscht
+      pdf_imported: PDF-Auftragsbestätigung importiert
   build_instance:
     label: Gerät / Baugruppe
     plural: Geräte und Baugruppen
@@ -251,23 +284,23 @@ production:
     completed_at: Abgeschlossen am
     unassigned: Nicht zugeordnet
     position_unassigned: Noch nicht zugewiesen
-    project_position_help: Die Projektzuordnung wird ausschließlich über diese Projektposition festgelegt. „Nicht zugeordnet“ gibt das Gerät bzw. die Baugruppe vollständig für ein anderes Projekt frei.
+    project_position_help: Die Auftragszuordnung wird ausschließlich über diese Auftragsposition festgelegt. „Nicht zugeordnet“ gibt das Gerät bzw. die Baugruppe vollständig für einen anderen Auftrag frei.
     assign: Gerät / Baugruppe zuweisen
     assign_choice: Vorhandenes Gerät / vorhandene Baugruppe
     assign_placeholder: Gerät oder Baugruppe auswählen
     assign_intro: 'Der Position „%position%“ (%content%) kann ein vorhandenes, ungebundenes und passendes Gerät bzw. eine entsprechende Baugruppe zugewiesen werden.'
     assign_empty: Es ist momentan kein passendes, ungebundenes Gerät und keine entsprechende Baugruppe vorhanden.
     assign_invalid: Dieses Gerät bzw. diese Baugruppe ist nicht mehr verfügbar. Bitte die Auswahl aktualisieren.
-    assign_success: Das Gerät bzw. die Baugruppe wurde der Projektposition zugewiesen.
-    position_already_assigned: Dieser Projektposition ist bereits ein Gerät bzw. eine Baugruppe zugewiesen.
+    assign_success: Das Gerät bzw. die Baugruppe wurde der Auftragsposition zugewiesen.
+    position_already_assigned: Dieser Auftragsposition ist bereits ein Gerät bzw. eine Baugruppe zugewiesen.
     unassign: Gerät / Baugruppe lösen
-    unassign_confirm: 'Gerät bzw. Baugruppe %serial% wirklich aus diesem Projekt lösen? Der Datensatz bleibt erhalten.'
-    unassign_success: Das Gerät bzw. die Baugruppe wurde aus dem Projekt gelöst und bleibt für eine neue Zuordnung erhalten.
-    already_unassigned: Das Gerät bzw. die Baugruppe ist bereits keinem Projekt zugeordnet.
+    unassign_confirm: 'Gerät bzw. Baugruppe %serial% wirklich aus diesem Auftrag lösen? Der Datensatz bleibt erhalten.'
+    unassign_success: Das Gerät bzw. die Baugruppe wurde aus dem Auftrag gelöst und bleibt für eine neue Zuordnung erhalten.
+    already_unassigned: Das Gerät bzw. die Baugruppe ist bereits keinem Auftrag zugeordnet.
     new: Gerät / Baugruppe anlegen
     register_existing: Vorhandenes Gerät / vorhandene Baugruppe einpflegen
     register_existing_short: Ein bereits gefertigtes Gerät bzw. eine Baugruppe mit Seriennummer erfassen, ohne Material oder Lagerbestände zu verändern.
-    register_existing_intro: Erfassen Sie ein bereits vorhandenes Gerät bzw. eine Baugruppe. Der Status ist standardmäßig auf „Fertig“ gesetzt, kann aber geändert werden. Es werden keine Lagerbestände verändert und keine Projektposition zugewiesen.
+    register_existing_intro: Erfassen Sie ein bereits vorhandenes Gerät bzw. eine Baugruppe. Der Status ist standardmäßig auf „Fertig“ gesetzt, kann aber geändert werden. Es werden keine Lagerbestände verändert und keine Auftragsposition zugewiesen.
     edit: Gerät / Baugruppe bearbeiten
     delete_confirm: 'Gerät bzw. Baugruppe %serial% wirklich löschen? Material wird nicht wieder eingebucht. Untergeordnete Geräte und Baugruppen bleiben erhalten.'
     deleted: 'Gerät bzw. Baugruppe %serial% wurde gelöscht. Materialbestände wurden nicht verändert.'

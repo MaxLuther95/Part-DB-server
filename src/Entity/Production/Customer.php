@@ -101,4 +101,10 @@ class Customer extends AbstractProductionEntity
     {
         return $this->projects;
     }
+
+    /** @return Collection<int, CustomerProject> */
+    public function getOrders(): Collection
+    {
+        return $this->projects;
+    }
 }

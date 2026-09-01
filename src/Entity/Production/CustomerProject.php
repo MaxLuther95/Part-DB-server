@@ -11,6 +11,7 @@ use Doctrine\Common\Collections\Collection;
 use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
 use App\Entity\Parts\Part;
+use App\Entity\Parts\StorageLocation;
 use Symfony\Bridge\Doctrine\Validator\Constraints\UniqueEntity;
 use Symfony\Component\Validator\Constraints as Assert;
 use Symfony\Component\Validator\Context\ExecutionContextInterface;
@@ -18,6 +19,8 @@ use Doctrine\ORM\Event\PreUpdateEventArgs;
 
 #[ORM\Entity(repositoryClass: CustomerProjectRepository::class)]
 #[ORM\Table(name: 'production_customer_projects')]
+#[ORM\Index(name: 'IDX_PROD_ORDER_STATUS_DATE', columns: ['status', 'order_date'])]
+#[ORM\Index(name: 'IDX_PROD_ORDER_CUSTOMER_DATE', columns: ['customer_id', 'order_date'])]
 #[UniqueEntity(fields: ['projectNumber'], message: 'production.customer_project.number.unique')]
 class CustomerProject extends AbstractProductionEntity
 {
@@ -31,9 +34,19 @@ class CustomerProject extends AbstractProductionEntity
     #[Assert\Length(max: 255)]
     private string $name = '';
 
+    #[ORM\ManyToOne(targetEntity: ProductionProject::class, inversedBy: 'orders')]
+    #[ORM\JoinColumn(name: 'production_project_id', nullable: false)]
+    #[Assert\NotNull]
+    private ?ProductionProject $productionProject = null;
+
     #[ORM\ManyToOne(targetEntity: Customer::class, inversedBy: 'projects')]
-    #[ORM\JoinColumn(nullable: true, onDelete: 'SET NULL')]
+    #[ORM\JoinColumn(nullable: false)]
+    #[Assert\NotNull]
     private ?Customer $customer = null;
+
+    #[ORM\ManyToOne(targetEntity: StorageLocation::class)]
+    #[ORM\JoinColumn(name: 'production_site_id', nullable: true, onDelete: 'SET NULL')]
+    private ?StorageLocation $productionSite = null;
 
     #[ORM\Column(type: Types::STRING, length: 32, enumType: CustomerProjectStatus::class)]
     private CustomerProjectStatus $status = CustomerProjectStatus::Planning;
@@ -44,6 +57,9 @@ class CustomerProject extends AbstractProductionEntity
     #[ORM\Column(type: Types::TEXT, nullable: true)]
     private ?string $notes = null;
 
+    #[ORM\Column(name: 'order_date', type: Types::DATE_IMMUTABLE, nullable: true)]
+    private ?\DateTimeImmutable $orderDate = null;
+
     /** @var Collection<int, User> */
     #[ORM\ManyToMany(targetEntity: User::class)]
     #[ORM\JoinTable(name: 'production_customer_project_users')]
@@ -53,7 +69,7 @@ class CustomerProject extends AbstractProductionEntity
     private Collection $assignedUsers;
 
     /** @var Collection<int, BuildInstance> */
-    #[ORM\OneToMany(mappedBy: 'customerProject', targetEntity: BuildInstance::class)]
+    #[ORM\OneToMany(mappedBy: 'customerProject', targetEntity: BuildInstance::class, fetch: 'EXTRA_LAZY')]
     #[ORM\OrderBy(['serialNumber' => 'ASC'])]
     private Collection $buildInstances;
 
@@ -82,6 +98,16 @@ class CustomerProject extends AbstractProductionEntity
     #[ORM\OrderBy(['addedDate' => 'ASC'])]
     private Collection $materialReservations;
 
+    /** @var Collection<int, OrderAttachment> */
+    #[ORM\OneToMany(mappedBy: 'order', targetEntity: OrderAttachment::class, cascade: ['remove'], orphanRemoval: true)]
+    #[ORM\OrderBy(['addedDate' => 'DESC'])]
+    private Collection $attachments;
+
+    /** @var Collection<int, OrderImportLine> */
+    #[ORM\OneToMany(mappedBy: 'order', targetEntity: OrderImportLine::class, cascade: ['remove'], orphanRemoval: true)]
+    #[ORM\OrderBy(['lineNumber' => 'ASC'])]
+    private Collection $importLines;
+
     public function __construct()
     {
         $this->assignedUsers = new ArrayCollection();
@@ -91,6 +117,8 @@ class CustomerProject extends AbstractProductionEntity
         $this->accessories = new ArrayCollection();
         $this->materialAllocations = new ArrayCollection();
         $this->materialReservations = new ArrayCollection();
+        $this->attachments = new ArrayCollection();
+        $this->importLines = new ArrayCollection();
     }
 
     public function __toString(): string
@@ -127,9 +155,48 @@ class CustomerProject extends AbstractProductionEntity
         return $this->customer;
     }
 
+    public function getProductionProject(): ?ProductionProject
+    {
+        return $this->productionProject;
+    }
+
+    public function setProductionProject(?ProductionProject $productionProject): self
+    {
+        if ($this->productionProject === $productionProject) {
+            return $this;
+        }
+        $this->productionProject?->removeOrder($this);
+        $this->productionProject = $productionProject;
+        $productionProject?->addOrder($this);
+
+        return $this;
+    }
+
+    public function getOrderNumber(): string
+    {
+        return $this->getProjectNumber();
+    }
+
+    public function setOrderNumber(string $orderNumber): self
+    {
+        return $this->setProjectNumber($orderNumber);
+    }
+
     public function setCustomer(?Customer $customer): self
     {
         $this->customer = $customer;
+
+        return $this;
+    }
+
+    public function getProductionSite(): ?StorageLocation
+    {
+        return $this->productionSite;
+    }
+
+    public function setProductionSite(?StorageLocation $productionSite): self
+    {
+        $this->productionSite = $productionSite;
 
         return $this;
     }
@@ -167,6 +234,62 @@ class CustomerProject extends AbstractProductionEntity
     {
         $notes = null === $notes ? null : trim($notes);
         $this->notes = '' === $notes ? null : $notes;
+
+        return $this;
+    }
+
+    public function getOrderDate(): ?\DateTimeImmutable
+    {
+        return $this->orderDate;
+    }
+
+    public function setOrderDate(?\DateTimeImmutable $orderDate): self
+    {
+        $this->orderDate = $orderDate;
+
+        return $this;
+    }
+
+    /** @return Collection<int, OrderAttachment> */
+    public function getAttachments(): Collection
+    {
+        return $this->attachments;
+    }
+
+    public function addAttachment(OrderAttachment $attachment): self
+    {
+        if (!$this->attachments->contains($attachment)) {
+            $this->attachments->add($attachment);
+            $attachment->setOrder($this);
+        }
+        return $this;
+    }
+
+    public function removeAttachment(OrderAttachment $attachment): self
+    {
+        $this->attachments->removeElement($attachment);
+
+        return $this;
+    }
+
+    /** @return Collection<int, OrderImportLine> */
+    public function getImportLines(): Collection
+    {
+        return $this->importLines;
+    }
+
+    public function addImportLine(OrderImportLine $line): self
+    {
+        if (!$this->importLines->contains($line)) {
+            $this->importLines->add($line);
+            $line->setOrder($this);
+        }
+        return $this;
+    }
+
+    public function removeImportLine(OrderImportLine $line): self
+    {
+        $this->importLines->removeElement($line);
 
         return $this;
     }

@@ -19,13 +19,18 @@ final class BuildInstanceRepository extends ServiceEntityRepository
     }
 
     /** @return list<BuildInstance> */
-    public function findAssignableTo(ProjectPosition $position): array
+    public function findAssignmentCandidates(ProjectPosition $position): array
     {
         $queryBuilder = $this->createQueryBuilder('buildInstance')
             ->where('buildInstance.projectPosition IS NULL')
             ->andWhere('buildInstance.customerProject IS NULL')
-            ->andWhere('buildInstance.status != :scrapped')
-            ->setParameter('scrapped', BuildStatus::Scrapped->value)
+            ->andWhere('buildInstance.parent IS NULL')
+            ->andWhere('buildInstance.status IN (:assignableStatuses)')
+            ->setParameter('assignableStatuses', [
+                BuildStatus::InProgress->value,
+                BuildStatus::Paused->value,
+                BuildStatus::Completed->value,
+            ])
             ->orderBy('buildInstance.serialNumber', 'ASC');
 
         if (null !== $position->getSystemTemplate()) {
@@ -42,4 +47,5 @@ final class BuildInstanceRepository extends ServiceEntityRepository
 
         return $queryBuilder->getQuery()->getResult();
     }
+
 }

@@ -6,10 +6,11 @@ ARG NODE_VERSION=22
 # Use native platform for build stage as it's platform-independent
 FROM --platform=$BUILDPLATFORM node:${NODE_VERSION}-bookworm-slim AS node-builder
 ARG TARGETARCH
+ARG COMPOSER_IPRESOLVE=4
 WORKDIR /app
 
 # Install composer and minimal PHP for running Symfony commands
-COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
+COPY --from=composer:2.10.2 /usr/bin/composer /usr/bin/composer
 
 # Use BuildKit cache mounts for apt in builder stage
 RUN --mount=type=cache,id=apt-cache-node-$TARGETARCH,target=/var/cache/apt \
@@ -18,6 +19,7 @@ RUN --mount=type=cache,id=apt-cache-node-$TARGETARCH,target=/var/cache/apt \
         php-cli \
         php-xml \
         php-mbstring \
+        php-curl \
         unzip \
         git \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
@@ -104,7 +106,7 @@ RUN --mount=type=cache,id=apt-cache-$TARGETARCH,target=/var/cache/apt \
     && rm -rvf /var/www/html/*
 
 # Install composer
-COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
+COPY --from=composer:2.10.2 /usr/bin/composer /usr/bin/composer
 
 ENV APACHE_CONFDIR=/etc/apache2
 ENV APACHE_ENVVARS=$APACHE_CONFDIR/envvars
@@ -181,6 +183,7 @@ COPY ./.docker/symfony.conf /etc/apache2/sites-available/symfony.conf
 
 FROM base
 ARG PHP_VERSION
+ARG COMPOSER_IPRESOLVE=4
 
 # Set working dir
 WORKDIR /var/www/html

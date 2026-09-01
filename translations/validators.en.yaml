@@ -4,7 +4,7 @@ production:
       unique: This customer number is already in use.
   customer_project:
     number:
-      unique: This project number is already in use.
+      unique: This order number is already in use. Use a different order number or open the existing order.
     completion_requires_serials: A project can only be completed or delivered when every position has exactly one device or assembly with a valid serial number.
   build_instance:
     template_required: Select a system template or a Part-DB build project.

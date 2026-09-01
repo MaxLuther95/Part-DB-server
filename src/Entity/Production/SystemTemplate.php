@@ -14,7 +14,6 @@ use Symfony\Component\Validator\Constraints as Assert;
 
 #[ORM\Entity(repositoryClass: SystemTemplateRepository::class)]
 #[ORM\Table(name: 'production_system_templates')]
-#[ORM\Index(name: 'IDX_PROD_SYSTEM_TEMPLATE_BASE', columns: ['base_project_id'])]
 class SystemTemplate extends AbstractProductionEntity
 {
     #[ORM\Column(type: Types::STRING, length: 255)]
@@ -22,19 +21,19 @@ class SystemTemplate extends AbstractProductionEntity
     #[Assert\Length(max: 255)]
     private string $name = '';
 
-    #[ORM\ManyToOne(targetEntity: Project::class)]
-    #[ORM\JoinColumn(name: 'base_project_id', nullable: true, onDelete: 'SET NULL')]
-    private ?Project $baseProject = null;
-
-    #[ORM\Column(name: 'base_project_name', type: Types::STRING, length: 255, nullable: true)]
-    #[Assert\Length(max: 255)]
-    private ?string $baseProjectName = null;
-
-    #[ORM\Column(name: 'base_project_reference_id', type: Types::INTEGER, nullable: true)]
-    private ?int $baseProjectReferenceId = null;
+    /** @var Collection<int, Project> */
+    #[ORM\ManyToMany(targetEntity: Project::class)]
+    #[ORM\JoinTable(name: 'production_system_template_base_projects')]
+    #[ORM\JoinColumn(name: 'system_template_id', referencedColumnName: 'id', onDelete: 'CASCADE')]
+    #[ORM\InverseJoinColumn(name: 'project_id', referencedColumnName: 'id', onDelete: 'CASCADE')]
+    #[ORM\OrderBy(['name' => 'ASC'])]
+    private Collection $baseProjects;
 
     #[ORM\Column(type: Types::TEXT)]
     private string $description = '';
+
+    #[ORM\Column(name: 'order_unit', type: Types::STRING, length: 16, enumType: OrderPositionUnit::class, options: ['default' => 'pcs.'])]
+    private OrderPositionUnit $orderUnit = OrderPositionUnit::Piece;
 
     #[ORM\Column(type: Types::BOOLEAN, options: ['default' => true])]
     private bool $active = true;
@@ -44,9 +43,15 @@ class SystemTemplate extends AbstractProductionEntity
     #[ORM\OrderBy(['position' => 'ASC', 'name' => 'ASC'])]
     private Collection $slots;
 
+    /** @var Collection<int, SystemTemplateSlot> */
+    #[ORM\ManyToMany(targetEntity: SystemTemplateSlot::class, mappedBy: 'allowedSystemTemplates')]
+    private Collection $usedInSlots;
+
     public function __construct()
     {
+        $this->baseProjects = new ArrayCollection();
         $this->slots = new ArrayCollection();
+        $this->usedInSlots = new ArrayCollection();
     }
 
     public function __toString(): string
@@ -68,28 +73,41 @@ class SystemTemplate extends AbstractProductionEntity
 
     public function getBaseProject(): ?Project
     {
-        return $this->baseProject;
+        $first = $this->baseProjects->first();
+
+        return false === $first ? null : $first;
     }
 
     public function setBaseProject(?Project $baseProject): self
     {
-        $this->baseProject = $baseProject;
+        $this->baseProjects->clear();
         if (null !== $baseProject) {
-            $this->baseProjectName = $baseProject->getName();
-            $this->baseProjectReferenceId = $baseProject->getId();
+            $this->baseProjects->add($baseProject);
         }
 
         return $this;
     }
 
-    public function getBaseProjectName(): ?string
+    /** @return Collection<int, Project> */
+    public function getBaseProjects(): Collection
     {
-        return $this->baseProject?->getName() ?? $this->baseProjectName;
+        return $this->baseProjects;
     }
 
-    public function getBaseProjectReferenceId(): ?int
+    public function addBaseProject(Project $project): self
     {
-        return $this->baseProject?->getId() ?? $this->baseProjectReferenceId;
+        if (!$this->baseProjects->contains($project)) {
+            $this->baseProjects->add($project);
+        }
+
+        return $this;
+    }
+
+    public function removeBaseProject(Project $project): self
+    {
+        $this->baseProjects->removeElement($project);
+
+        return $this;
     }
 
     public function getDescription(): string
@@ -100,6 +118,18 @@ class SystemTemplate extends AbstractProductionEntity
     public function setDescription(string $description): self
     {
         $this->description = $description;
+
+        return $this;
+    }
+
+    public function getOrderUnit(): OrderPositionUnit
+    {
+        return $this->orderUnit;
+    }
+
+    public function setOrderUnit(OrderPositionUnit $orderUnit): self
+    {
+        $this->orderUnit = $orderUnit;
 
         return $this;
     }
@@ -139,5 +169,42 @@ class SystemTemplate extends AbstractProductionEntity
         }
 
         return $this;
+    }
+
+    /** @return Collection<int, SystemTemplateSlot> */
+    public function getUsedInSlots(): Collection
+    {
+        return $this->usedInSlots;
+    }
+
+    public function addUsedInSlot(SystemTemplateSlot $slot): self
+    {
+        if (!$this->usedInSlots->contains($slot)) {
+            $this->usedInSlots->add($slot);
+        }
+
+        return $this;
+    }
+
+    public function removeUsedInSlot(SystemTemplateSlot $slot): self
+    {
+        $this->usedInSlots->removeElement($slot);
+
+        return $this;
+    }
+
+    /** @return list<SystemTemplate> */
+    public function getParentTemplates(): array
+    {
+        $parents = [];
+        foreach ($this->usedInSlots as $slot) {
+            $parent = $slot->getSystemTemplate();
+            if (null !== $parent && $parent !== $this) {
+                $parents[$parent->getId() ?? spl_object_id($parent)] = $parent;
+            }
+        }
+        uasort($parents, static fn(self $left, self $right): int => strcasecmp($left->getName(), $right->getName()));
+
+        return array_values($parents);
     }
 }

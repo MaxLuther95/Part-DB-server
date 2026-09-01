@@ -1,27 +1,123 @@
 {% extends 'main_card.html.twig' %}
 {% trans_default_domain 'production' %}
 {% block title %}Material reservieren – {{ project.projectNumber }}{% endblock %}
+{% block javascripts %}
+    {{ parent() }}
+    <script src="{{ asset('js/production/material_reservation_preview.js') }}" defer></script>
+{% endblock %}
 {% block card_title %}<i class="fa-solid fa-bookmark fa-fw"></i> Material für {{ project.projectNumber }} reservieren{% endblock %}
 {% block card_content %}
+    <style>
+        .production-material-state-missing > * { background-color: rgba(220, 53, 69, .32) !important; }
+        .production-material-state-available > * { background-color: rgba(253, 126, 20, .13) !important; }
+        .production-material-state-reserved > * { background-color: rgba(255, 193, 7, .20) !important; }
+        .production-material-state-allocated > * { background-color: rgba(13, 110, 253, .18) !important; }
+        .production-material-state-consumed > * { background-color: rgba(25, 135, 84, .18) !important; }
+        .production-material-legend-swatch { display: inline-block; width: .8rem; height: .8rem; border: 1px solid rgba(0, 0, 0, .12); border-radius: .15rem; }
+        .production-material-legend-missing { background-color: rgba(220, 53, 69, .60); }
+        .production-material-legend-available { background-color: rgba(253, 126, 20, .28); }
+        .production-material-legend-reserved { background-color: rgba(255, 193, 7, .35); }
+        .production-material-legend-allocated { background-color: rgba(13, 110, 253, .30); }
+        .production-material-legend-consumed { background-color: rgba(25, 135, 84, .30); }
+    </style>
     <div class="alert alert-info"><i class="fa-solid fa-circle-info fa-fw"></i> Die Reservierung verändert den Part-DB-Bestand noch nicht. Sie verhindert jedoch, dass dasselbe Material in der Fertigungsplanung erneut als frei verfügbar gilt. Erst beim Bereitstellen oder Bauen wird es tatsächlich ausgebucht.</div>
-    {% if material_plan.reservation_stale %}<div class="alert alert-warning"><i class="fa-solid fa-arrows-rotate fa-fw"></i> Bedarf und vorhandene Reservierung stimmen nicht überein. Mit dem Speichern wird die Reservierung vollständig an die aktuelle BOM und Projektkonfiguration angepasst.</div>{% endif %}
+    {% if material_plan.reservation_stale %}<div class="alert alert-warning"><i class="fa-solid fa-arrows-rotate fa-fw"></i> Bedarf und vorhandene Reservierung stimmen nicht überein. Mit dem Speichern wird die Reservierung vollständig an die aktuelle BOM und Auftragskonfiguration angepasst.</div>{% endif %}
+    <form method="get">
+        <div class="mb-3"><label class="form-label fw-bold" for="site">Fertigungsstandort</label><select class="form-select" id="site" name="site_id" required data-production-material-site><option value="">Bitte Standort auswählen</option>{% for location in locations %}<option value="{{ location.id }}" {{ selected_site and selected_site.id == location.id ? 'selected' : '' }}>{{ location.fullPath }}</option>{% endfor %}</select><div class="form-text">Berücksichtigt werden der Standort und alle darunterliegenden Lagerorte.</div></div>
+        <button class="visually-hidden" type="submit" tabindex="-1">Standort anzeigen</button>
+    </form>
     <form method="post">
         <input type="hidden" name="_token" value="{{ csrf_token('refresh_material_reservation_' ~ project.id) }}">
-        <div class="mb-3"><label class="form-label fw-bold" for="site">Fertigungsstandort</label><select class="form-select" id="site" name="site_id" required><option value="">Bitte Standort auswählen</option>{% for location in locations %}<option value="{{ location.id }}" {{ selected_site and selected_site.id == location.id ? 'selected' : '' }}>{{ location.fullPath }}</option>{% endfor %}</select><div class="form-text">Berücksichtigt werden der Standort und alle darunterliegenden Lagerorte.</div></div>
+        <input type="hidden" name="site_id" value="{{ selected_site ? selected_site.id : '' }}">
+        <div class="d-flex flex-wrap gap-3 small mb-2" aria-label="Bedeutung der Zeilenfarben">
+            <span class="d-inline-flex align-items-center gap-1"><span class="production-material-legend-swatch production-material-legend-missing"></span> Fehlt am Standort</span>
+            <span class="d-inline-flex align-items-center gap-1"><span class="production-material-legend-swatch production-material-legend-available"></span> Frei, noch nicht reserviert</span>
+            <span class="d-inline-flex align-items-center gap-1"><span class="production-material-legend-swatch production-material-legend-reserved"></span> Reserviert</span>
+            <span class="d-inline-flex align-items-center gap-1"><span class="production-material-legend-swatch production-material-legend-allocated"></span> Im Auftragsbestand</span>
+            <span class="d-inline-flex align-items-center gap-1"><span class="production-material-legend-swatch production-material-legend-consumed"></span> Verbaut</span>
+        </div>
         <div class="table-responsive">
             <table class="table table-sm align-middle">
-                <thead><tr><th>Bauteil</th><th>Benötigt</th><th>Verbaut</th><th>Projektbestand</th><th>Reserviert</th><th>Frei verfügbar</th><th>Fehlt</th><th>Überschuss</th><th>Noch zu sichern</th></tr></thead>
+                <thead><tr><th>Bauteil</th><th class="text-center">Benötigt</th><th class="text-center" title="Freier Bestand am Fertigungsstandort und seinen Unterlagerorten nach Abzug aller Reservierungen">Am Standort frei</th><th class="text-center">Reserviert</th><th class="text-center">Auftragsbestand</th><th class="text-center">Verbaut</th><th class="text-center">Fehlt am Standort</th></tr></thead>
                 <tbody>
                 {% for item in material_plan.items %}
-                    <tr><td>{{ item.part.name }}</td><td>{{ item.required }}</td><td>{{ item.consumed }}</td><td>{{ item.allocated }}</td><td>{{ item.reserved }}</td><td>{{ item.available }}</td><td>{{ item.missing }}</td><td>{{ item.overstock }}</td><td>{{ item.unreserved_remaining }}</td></tr>
+                    {% set state = '' %}
+                    {% if selected_site %}
+                        {% if item.missing > 0 %}
+                            {% set state = 'missing' %}
+                        {% elseif item.unreserved_remaining > 0 %}
+                            {% set state = 'available' %}
+                        {% elseif item.remaining > 0 %}
+                            {% set state = 'reserved' %}
+                        {% elseif item.consumed >= item.required %}
+                            {% set state = 'consumed' %}
+                        {% elseif item.allocated > 0 %}
+                            {% set state = 'allocated' %}
+                        {% endif %}
+                    {% endif %}
+                    <tr{% if state %} class="production-material-state-{{ state }}"{% endif %}>
+                        <td>
+                            {{ item.part.name }}
+                            {% if selected_site and item.missing > 0 %}
+                                {% if item.remote_lots is not empty %}
+                                    {% set selected_remote_lots = item.remote_lots|filter(source => source.selected > 0) %}
+                                    <details class="mt-1" {{ selected_remote_lots is not empty ? 'open' : '' }}>
+                                        <summary class="btn btn-sm btn-outline-secondary py-0"><i class="fa-solid fa-truck fa-fw"></i> Anderen Standort prüfen</summary>
+                                        <div class="border rounded bg-body p-2 mt-1">
+                                            <div class="small text-muted mb-2">Nur ausdrücklich eingetragene Mengen werden außerhalb von {{ selected_site.fullPath }} reserviert.</div>
+                                            {% for source in item.remote_lots %}
+                                                <div class="row g-2 align-items-center mb-1">
+                                                    <div class="col">
+                                                        <strong>{{ source.lot.storageLocation ? source.lot.storageLocation.fullPath : 'Ohne Lagerort' }}</strong>
+                                                        <small class="text-muted"> · {{ source.lot.name ?: '#' ~ source.lot.id }} · {{ source.available }} für dieses Projekt verfügbar</small>
+                                                    </div>
+                                                    <div class="col-auto">
+                                                        <label class="visually-hidden" for="remote_lot_{{ source.lot.id }}">Menge</label>
+                                                        <input class="form-control form-control-sm text-center" style="width: 5rem" id="remote_lot_{{ source.lot.id }}" name="remote_lots[{{ source.lot.id }}]" type="number" min="0" max="{{ source.available }}" step="1" value="{{ source.selected }}">
+                                                    </div>
+                                                </div>
+                                            {% endfor %}
+                                        </div>
+                                    </details>
+                                {% else %}
+                                    <div class="small text-muted mt-1"><i class="fa-solid fa-truck fa-fw"></i> Auch an anderen Standorten nicht frei verfügbar</div>
+                                {% endif %}
+                            {% endif %}
+                        </td>
+                        <td class="text-center">{{ item.required }}</td>
+                        <td class="text-center">{{ selected_site ? item.available : '–' }}</td>
+                        <td class="text-center">
+                            {{ item.reserved }}
+                            {% for remote in item.remote_reservations %}
+                                <div><span class="badge bg-warning text-dark fw-normal"><i class="fa-solid fa-truck fa-fw"></i> {{ remote.quantity }} · {{ remote.location ? remote.location.fullPath : 'anderer Standort' }}</span></div>
+                            {% endfor %}
+                        </td>
+                        <td class="text-center">{{ item.allocated }}</td>
+                        <td class="text-center">{{ item.consumed }}</td>
+                        <td class="text-center">{{ selected_site ? item.missing : '–' }}</td>
+                    </tr>
                 {% else %}
-                    <tr><td colspan="9" class="text-muted text-center">Aus der aktuellen Konfiguration ergibt sich kein Materialbedarf.</td></tr>
+                    <tr><td colspan="7" class="text-muted text-center">Aus der aktuellen Konfiguration ergibt sich kein Materialbedarf.</td></tr>
                 {% endfor %}
                 </tbody>
             </table>
         </div>
-        {% if project.materialReservations|length > 0 %}<h5>Aktuell reservierte Lagerlose</h5><div class="table-responsive mb-3"><table class="table table-sm"><thead><tr><th>Bauteil</th><th>Menge</th><th>Konkretes Lagerlos</th><th>Standort</th></tr></thead><tbody>{% for reservation in project.materialReservations %}<tr><td>{{ reservation.partName }}</td><td>{{ reservation.quantity }}</td><td>{{ reservation.sourcePartLot ? (reservation.sourcePartLot.name ?: '#' ~ reservation.sourcePartLot.id) : reservation.sourceLotName|default('Verknüpfung gelöscht') }}</td><td>{{ reservation.sourcePartLot and reservation.sourcePartLot.storageLocation ? reservation.sourcePartLot.storageLocation.fullPath : reservation.siteName }}</td></tr>{% endfor %}</tbody></table></div>{% endif %}
-        <button class="btn btn-success" type="submit"><i class="fa-solid fa-bookmark fa-fw"></i> Reservierung bestätigen und aktualisieren</button>
+        {% if project.materialReservations|length > 0 %}
+            <h5>Aktuell reservierte Lagerlose</h5>
+            <div class="table-responsive mb-3"><table class="table table-sm align-middle"><thead><tr><th>Bauteil</th><th class="text-center">Menge</th><th>Konkretes Lagerlos</th><th>Quellstandort</th><th>Status</th><th></th></tr></thead><tbody>
+            {% for reservation in project.materialReservations %}
+                <tr>
+                    <td>{{ reservation.partName }}</td>
+                    <td class="text-center">{{ reservation.quantity }}</td>
+                    <td>{{ reservation.sourcePartLot ? (reservation.sourcePartLot.name ?: '#' ~ reservation.sourcePartLot.id) : reservation.sourceLotName|default('Verknüpfung gelöscht') }}</td>
+                    <td>{{ reservation.sourcePartLot and reservation.sourcePartLot.storageLocation ? reservation.sourcePartLot.storageLocation.fullPath : reservation.siteName }}</td>
+                    <td>{% if reservation.transferPending %}<span class="badge bg-warning text-dark"><i class="fa-solid fa-truck fa-fw"></i> Transfer ausstehend</span>{% else %}<span class="badge bg-primary"><i class="fa-solid fa-bookmark fa-fw"></i> Am Fertigungsstandort</span>{% endif %}</td>
+                    <td class="text-end">{% if reservation.transferPending and is_granted('@production_material.provide') and is_granted('@parts_stock.move') %}<a class="btn btn-sm btn-success" href="{{ path('production_material_reservation_receive', {id: reservation.id}) }}"><i class="fa-solid fa-truck-ramp-box fa-fw"></i> Transfer eingetroffen</a>{% endif %}</td>
+                </tr>
+            {% endfor %}
+            </tbody></table></div>
+        {% endif %}
+        <button class="btn btn-success" type="submit" {{ selected_site ? '' : 'disabled' }}><i class="fa-solid fa-bookmark fa-fw"></i> Reservierung bestätigen und aktualisieren</button>
         <a class="btn btn-secondary" href="{{ path('production_customer_project_show', {id: project.id}) }}">Abbrechen</a>
     </form>
     {% if project.materialReservations|length > 0 %}

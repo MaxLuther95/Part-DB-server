@@ -1,7 +1,44 @@
 {% extends 'base.html.twig' %}
 {% trans_default_domain 'production' %}
 
+{% macro template_row(template, depth, node_key, parent_key, children_by_parent) %}
+    {% set children = children_by_parent[template.id]|default([]) %}
+    <tr data-system-template-row data-template-node="{{ node_key }}"{% if parent_key %} data-template-parent="{{ parent_key }}" hidden{% endif %}>
+        <td style="padding-left: {{ depth * 1.5 + 0.75 }}rem">
+            {% if depth > 0 %}<i class="fa-solid fa-turn-up fa-rotate-90 text-muted fa-fw"></i>{% endif %}
+            {% if children is not empty %}
+                <button type="button" class="btn btn-sm btn-link text-body p-0 me-1 system-template-toggle" data-system-template-toggle="{{ node_key }}" aria-expanded="false" title="{{ 'production.system_template.toggle_children'|trans }}">
+                    <i class="fa-solid fa-chevron-down fa-fw"></i>
+                </button>
+            {% endif %}
+            <a href="{{ path('production_template_show', {id: template.id}) }}"><strong>{{ template.name }}</strong></a>
+            {% if template.parentTemplates|length > 1 %}<span class="badge text-bg-light border ms-1">{{ 'production.system_template.used_multiple'|trans }}</span>{% endif %}
+        </td>
+        <td>
+            {% for project in template.baseProjects %}
+                <a class="badge text-bg-light border text-decoration-none" href="{{ path('project_info', {id: project.id}) }}">{{ project.name }}</a>
+            {% else %}
+                <span class="text-muted">–</span>
+            {% endfor %}
+        </td>
+        <td>{{ template.slots|length }}</td>
+        <td><span class="badge {{ template.active ? 'bg-success' : 'bg-secondary' }}">{{ (template.active ? 'production.common.yes' : 'production.common.no')|trans }}</span></td>
+        <td class="text-end">{% if is_granted('@production_system_templates.edit') %}<a class="btn btn-sm btn-outline-primary" href="{{ path('production_template_edit', {id: template.id}) }}"><i class="fa-solid fa-pen fa-fw"></i></a>{% endif %}</td>
+    </tr>
+    {% for child in children %}
+        {{ _self.template_row(child, depth + 1, node_key ~ '-' ~ loop.index0, node_key, children_by_parent) }}
+    {% endfor %}
+{% endmacro %}
+
 {% block title %}{{ 'production.system_template.plural'|trans }}{% endblock %}
+
+{% block stylesheets %}
+    {{ parent() }}
+    <style>
+        .system-template-toggle .fa-chevron-down { transition: transform .15s ease-in-out; }
+        .system-template-toggle[aria-expanded="false"] .fa-chevron-down { transform: rotate(-90deg); }
+    </style>
+{% endblock %}
 
 {% block content %}
     <div class="d-flex justify-content-between align-items-center mb-3">
@@ -9,25 +46,21 @@
             <h1 class="h2 mb-1"><i class="fa-solid fa-diagram-project fa-fw"></i> {{ 'production.system_template.plural'|trans }}</h1>
             <p class="text-muted mb-0">{{ 'production.system_template.intro'|trans }}</p>
         </div>
-        {% if is_granted('@projects.edit') %}
+        {% if is_granted('@production_system_templates.create') %}
             <a class="btn btn-success" href="{{ path('production_template_new') }}"><i class="fa-solid fa-plus fa-fw"></i> {{ 'production.system_template.new'|trans }}</a>
         {% endif %}
     </div>
 
-    <div class="card"><div class="table-responsive"><table class="table table-hover align-middle mb-0">
+    <div class="card" data-system-template-tree><div class="table-responsive"><table class="table table-hover align-middle mb-0">
         <thead><tr><th>{{ 'production.system_template.name'|trans }}</th><th>{{ 'production.system_template.base_project'|trans }}</th><th>{{ 'production.system_template.slot.plural'|trans }}</th><th>{{ 'production.system_template.active'|trans }}</th><th></th></tr></thead>
         <tbody>
-        {% for template in templates %}
-            <tr>
-                <td><a href="{{ path('production_template_show', {id: template.id}) }}"><strong>{{ template.name }}</strong></a></td>
-                <td>{% if template.baseProject %}<a href="{{ path('project_info', {id: template.baseProject.id}) }}">{{ template.baseProject.name }}</a>{% elseif template.baseProjectName %}<span class="text-muted">{{ template.baseProjectName }} ({{ 'production.common.deleted_reference'|trans }})</span>{% else %}<span class="text-muted">–</span>{% endif %}</td>
-                <td>{{ template.slots|length }}</td>
-                <td><span class="badge {{ template.active ? 'bg-success' : 'bg-secondary' }}">{{ (template.active ? 'production.common.yes' : 'production.common.no')|trans }}</span></td>
-                <td class="text-end">{% if is_granted('@projects.edit') %}<a class="btn btn-sm btn-outline-primary" href="{{ path('production_template_edit', {id: template.id}) }}"><i class="fa-solid fa-pen fa-fw"></i></a>{% endif %}</td>
-            </tr>
+        {% for template in root_templates %}
+            {{ _self.template_row(template, 0, 'root-' ~ loop.index0, null, children_by_parent) }}
         {% else %}
             <tr><td colspan="5" class="text-center text-muted py-4">{{ 'production.system_template.empty'|trans }}</td></tr>
         {% endfor %}
         </tbody>
     </table></div></div>
+
+    <script src="{{ asset('js/production/tree_toggle.js') }}"></script>
 {% endblock %}

@@ -123,4 +123,35 @@ final class PermissionSchemaUpdaterTest extends WebTestCase
         self::assertTrue($this->service->upgradeSchema($user, 3));
         self::assertSame(PermissionData::ALLOW, $user->getPermissions()->getPermissionValue('system', 'show_updates'));
     }
+
+    public function testUpgradeSchemaToVersion5GrantsProductionPermissionsToExistingAdministrator(): void
+    {
+        $perm_data = new PermissionData();
+        $perm_data->setSchemaVersion(4);
+        $perm_data->setPermissionValue('groups', 'edit_permissions', PermissionData::ALLOW);
+        $holder = new TestPermissionHolder($perm_data);
+
+        self::assertTrue($this->service->upgradeSchema($holder, 5));
+        self::assertSame(5, $perm_data->getSchemaVersion());
+        self::assertSame(PermissionData::ALLOW, $perm_data->getPermissionValue('production_orders', 'import'));
+        self::assertSame(PermissionData::ALLOW, $perm_data->getPermissionValue('production_build_instances', 'build'));
+        self::assertSame(PermissionData::ALLOW, $perm_data->getPermissionValue('production_material', 'withdraw'));
+        self::assertSame(PermissionData::ALLOW, $perm_data->getPermissionValue('production_import_mappings', 'delete'));
+    }
+
+    public function testUpgradeSchemaToVersion5LeavesRegularEditorsRestricted(): void
+    {
+        $perm_data = new PermissionData();
+        $perm_data->setSchemaVersion(4);
+        $perm_data->setPermissionValue('projects', 'edit', PermissionData::ALLOW);
+        // Some existing editor groups can change selected system settings but
+        // must not be treated as permission administrators because of that.
+        $perm_data->setPermissionValue('config', 'change_system_settings', PermissionData::ALLOW);
+        $holder = new TestPermissionHolder($perm_data);
+
+        self::assertTrue($this->service->upgradeSchema($holder, 5));
+        self::assertSame(5, $perm_data->getSchemaVersion());
+        self::assertNull($perm_data->getPermissionValue('production_orders', 'create'));
+        self::assertNull($perm_data->getPermissionValue('production_material', 'withdraw'));
+    }
 }

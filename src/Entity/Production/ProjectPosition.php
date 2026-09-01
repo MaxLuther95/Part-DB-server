@@ -134,6 +134,16 @@ class ProjectPosition extends AbstractProductionEntity
         return $this->templateProject ?? $this->systemTemplate?->getBaseProject();
     }
 
+    /** @return list<Project> */
+    public function getBuildProjects(): array
+    {
+        if (null !== $this->templateProject) {
+            return [$this->templateProject];
+        }
+
+        return null === $this->systemTemplate ? [] : array_values($this->systemTemplate->getBaseProjects()->toArray());
+    }
+
     public function getSystemTemplate(): ?SystemTemplate
     {
         return $this->systemTemplate;
