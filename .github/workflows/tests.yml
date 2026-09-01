@@ -31,6 +31,7 @@ jobs:
       PHP_VERSION: ${{ matrix.php-versions }}
       DB_TYPE: ${{ matrix.db-type }}
       CHECK_FOR_UPDATES: false  # Disable update checks for tests
+      CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
     steps:
       - name: Set Database env for MySQL
@@ -134,10 +135,11 @@ jobs:
         run: ./bin/phpunit --coverage-clover=coverage.xml
 
       - name: Upload coverage
+        if: env.CODECOV_TOKEN != ''
         uses: codecov/codecov-action@v7
         with:
           env_vars: PHP_VERSION,DB_TYPE
-          token: ${{ secrets.CODECOV_TOKEN }}
+          token: ${{ env.CODECOV_TOKEN }}
           fail_ci_if_error: true
 
       - name: Test app:clean-attachments
