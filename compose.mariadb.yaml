@@ -24,10 +24,7 @@ services:
       - database
 
   partdb:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    image: ${PARTDB_IMAGE:-localhost/partdb-local:mariadb}
+    image: ${PARTDB_IMAGE:-ghcr.io/maxluther95/part-db-server:current}
     restart: unless-stopped
     depends_on:
       database:

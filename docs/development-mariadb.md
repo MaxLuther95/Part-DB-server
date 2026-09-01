@@ -30,8 +30,9 @@ mounts without changing this base file.
 ## One-time setup
 
 Install Git and the recommended Podman Desktop `.dmg` on macOS. Let Podman
-Desktop create its Linux machine and install the Compose provider. On an M1,
-build the Part-DB image locally so all application layers use ARM64.
+Desktop create its Linux machine and install the Compose provider. The
+published `current` image contains both AMD64 and ARM64 variants, so Podman
+selects the native Apple Silicon variant on an M1 automatically.
 
 Create the untracked settings file:
 
@@ -56,16 +57,16 @@ podman compose --env-file .env.mariadb.local -f compose.mariadb.yaml config
 
 ## Create a fresh database
 
-Start MariaDB first:
+Pull the current application and database images, then start MariaDB first:
 
 ```shell
+podman compose --env-file .env.mariadb.local -f compose.mariadb.yaml pull
 podman compose --env-file .env.mariadb.local -f compose.mariadb.yaml up -d database
 ```
 
-Build Part-DB for the current CPU architecture and run all migrations once:
+Run all migrations once with the pulled Part-DB image:
 
 ```shell
-podman compose --env-file .env.mariadb.local -f compose.mariadb.yaml build partdb
 podman compose --env-file .env.mariadb.local -f compose.mariadb.yaml run --rm --user www-data --entrypoint php partdb bin/console doctrine:migrations:migrate --no-interaction
 ```
 
@@ -87,6 +88,14 @@ Stop the services while retaining all data:
 
 ```shell
 podman compose --env-file .env.mariadb.local -f compose.mariadb.yaml down
+```
+
+For deliberate local image development, add the build override to the
+commands and build before starting the services:
+
+```shell
+podman compose --env-file .env.mariadb.local -f compose.mariadb.yaml -f compose.mariadb.build.yaml build partdb
+podman compose --env-file .env.mariadb.local -f compose.mariadb.yaml -f compose.mariadb.build.yaml up -d
 ```
 
 ## Rehearse the real MariaDB migration
