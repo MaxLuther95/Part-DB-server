@@ -212,15 +212,15 @@ perms: # Here comes a list with all Permission names (they have a perm_[name] co
       edit:
         label: "perm.edit"
         alsoSet: ['read']
-        apiTokenRole: ROLE_API_EDIT
+        apiTokenRole: ROLE_API_ADMIN
       create:
         label: "perm.create"
         alsoSet: ['read', 'edit']
-        apiTokenRole: ROLE_API_EDIT
+        apiTokenRole: ROLE_API_ADMIN
       delete:
         label: "perm.delete"
         alsoSet: ['read', 'edit']
-        apiTokenRole: ROLE_API_EDIT
+        apiTokenRole: ROLE_API_ADMIN
 
   production_build_instances:
     <<: *PRODUCTION_CRUD
@@ -253,6 +253,93 @@ perms: # Here comes a list with all Permission names (they have a perm_[name] co
         # production withdrawal is an explicit prerequisite.
         alsoSet: ['read', 'create', 'production_system_templates.read',
                   'production_material.withdraw']
+        apiTokenRole: ROLE_API_EDIT
+
+  production_protocol_templates:
+    group: "production"
+    label: "perm.production.protocol_templates"
+    operations:
+      read:
+        label: "perm.read"
+        apiTokenRole: ROLE_API_READ_ONLY
+      edit:
+        label: "perm.edit"
+        alsoSet: ['read']
+        apiTokenRole: ROLE_API_ADMIN
+      create:
+        label: "perm.create"
+        alsoSet: ['read', 'edit']
+        apiTokenRole: ROLE_API_ADMIN
+      delete:
+        label: "perm.delete"
+        alsoSet: ['read', 'edit']
+        apiTokenRole: ROLE_API_ADMIN
+      publish:
+        label: "perm.production.operation.publish"
+        alsoSet: ['read', 'edit']
+        apiTokenRole: ROLE_API_ADMIN
+
+  production_protocols:
+    group: "production"
+    label: "perm.production.protocols"
+    operations:
+      read:
+        label: "perm.read"
+        alsoSet: ['production_build_instances.read', 'production_protocol_templates.read']
+        apiTokenRole: ROLE_API_READ_ONLY
+      edit:
+        label: "perm.edit"
+        alsoSet: ['read']
+        apiTokenRole: ROLE_API_EDIT
+      create:
+        label: "perm.create"
+        alsoSet: ['read', 'edit']
+        apiTokenRole: ROLE_API_EDIT
+      complete:
+        label: "perm.production.operation.complete"
+        alsoSet: ['read', 'edit']
+        apiTokenRole: ROLE_API_EDIT
+      invalidate:
+        label: "perm.production.operation.invalidate"
+        alsoSet: ['read']
+        apiTokenRole: ROLE_API_ADMIN
+
+  production_datasheet_templates:
+    group: "production"
+    label: "perm.production.datasheet_templates"
+    operations:
+      read:
+        label: "perm.read"
+        alsoSet: ['production_protocol_templates.read']
+        apiTokenRole: ROLE_API_READ_ONLY
+      edit:
+        label: "perm.edit"
+        alsoSet: ['read']
+        apiTokenRole: ROLE_API_ADMIN
+      create:
+        label: "perm.create"
+        alsoSet: ['read', 'edit']
+        apiTokenRole: ROLE_API_ADMIN
+      delete:
+        label: "perm.delete"
+        alsoSet: ['read', 'edit']
+        apiTokenRole: ROLE_API_ADMIN
+      publish:
+        label: "perm.production.operation.publish"
+        alsoSet: ['read', 'edit']
+        apiTokenRole: ROLE_API_ADMIN
+
+  production_datasheets:
+    group: "production"
+    label: "perm.production.datasheets"
+    operations:
+      read:
+        label: "perm.read"
+        alsoSet: ['production_build_instances.read', 'production_protocols.read', 'production_datasheet_templates.read']
+        apiTokenRole: ROLE_API_READ_ONLY
+      create:
+        label: "perm.create"
+        alsoSet: ['read']
         apiTokenRole: ROLE_API_EDIT
 
   production_material:
@@ -565,4 +652,3 @@ perms: # Here comes a list with all Permission names (they have a perm_[name] co
         label: "perm.api.manage_tokens"
         alsoSet: ['access_api']
         apiTokenRole: ROLE_API_FULL
-

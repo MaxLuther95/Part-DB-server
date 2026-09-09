@@ -167,7 +167,7 @@ final readonly class OrderAttachmentStorage
         return rtrim($this->pathResolver->getSecurePath(), '/\\').DIRECTORY_SEPARATOR.'production-orders'.DIRECTORY_SEPARATOR.$order->getId();
     }
 
-    private function sanitizeOriginalFilename(string $filename): string
+    public function sanitizeOriginalFilename(string $filename): string
     {
         $filename = basename(str_replace('\\', '/', $filename));
         $filename = preg_replace('/[\x00-\x1F\x7F]/u', '', $filename) ?? '';

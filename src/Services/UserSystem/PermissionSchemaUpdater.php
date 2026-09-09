@@ -209,4 +209,52 @@ class PermissionSchemaUpdater
             }
         }
     }
+
+    private function upgradeSchemaToVersion6(HasPermissionsInterface $holder): void //@phpstan-ignore-line This is called via reflection
+    {
+        $permissions = $holder->getPermissions();
+        $is_admin = TrinaryLogicHelper::or(
+            $permissions->getPermissionValue('users', 'edit_permissions'),
+            $permissions->getPermissionValue('groups', 'edit_permissions')
+        );
+
+        if (true !== $is_admin) {
+            return;
+        }
+
+        foreach ([
+            'production_protocol_templates' => ['read', 'edit', 'create', 'delete', 'publish'],
+            'production_protocols' => ['read', 'edit', 'create', 'complete', 'invalidate'],
+        ] as $permission => $operations) {
+            foreach ($operations as $operation) {
+                if (!$permissions->isPermissionSet($permission, $operation)) {
+                    $permissions->setPermissionValue($permission, $operation, PermissionData::ALLOW);
+                }
+            }
+        }
+    }
+
+    private function upgradeSchemaToVersion7(HasPermissionsInterface $holder): void //@phpstan-ignore-line This is called via reflection
+    {
+        $permissions = $holder->getPermissions();
+        $is_admin = TrinaryLogicHelper::or(
+            $permissions->getPermissionValue('users', 'edit_permissions'),
+            $permissions->getPermissionValue('groups', 'edit_permissions')
+        );
+
+        if (true !== $is_admin) {
+            return;
+        }
+
+        foreach ([
+            'production_datasheet_templates' => ['read', 'edit', 'create', 'delete', 'publish'],
+            'production_datasheets' => ['read', 'create'],
+        ] as $permission => $operations) {
+            foreach ($operations as $operation) {
+                if (!$permissions->isPermissionSet($permission, $operation)) {
+                    $permissions->setPermissionValue($permission, $operation, PermissionData::ALLOW);
+                }
+            }
+        }
+    }
 }

@@ -154,4 +154,54 @@ final class PermissionSchemaUpdaterTest extends WebTestCase
         self::assertNull($perm_data->getPermissionValue('production_orders', 'create'));
         self::assertNull($perm_data->getPermissionValue('production_material', 'withdraw'));
     }
+
+    public function testUpgradeSchemaToVersion6GrantsProtocolPermissionsToExistingAdministrator(): void
+    {
+        $perm_data = new PermissionData();
+        $perm_data->setSchemaVersion(5);
+        $perm_data->setPermissionValue('groups', 'edit_permissions', PermissionData::ALLOW);
+        $holder = new TestPermissionHolder($perm_data);
+
+        self::assertTrue($this->service->upgradeSchema($holder, 6));
+        self::assertSame(6, $perm_data->getSchemaVersion());
+        self::assertSame(PermissionData::ALLOW, $perm_data->getPermissionValue('production_protocol_templates', 'publish'));
+        self::assertSame(PermissionData::ALLOW, $perm_data->getPermissionValue('production_protocols', 'invalidate'));
+    }
+
+    public function testUpgradeSchemaToVersion6LeavesRegularEditorsRestricted(): void
+    {
+        $perm_data = new PermissionData();
+        $perm_data->setSchemaVersion(5);
+        $perm_data->setPermissionValue('projects', 'edit', PermissionData::ALLOW);
+        $holder = new TestPermissionHolder($perm_data);
+
+        self::assertTrue($this->service->upgradeSchema($holder, 6));
+        self::assertNull($perm_data->getPermissionValue('production_protocol_templates', 'read'));
+        self::assertNull($perm_data->getPermissionValue('production_protocols', 'create'));
+    }
+
+    public function testUpgradeSchemaToVersion7GrantsDatasheetPermissionsToExistingAdministrator(): void
+    {
+        $permData = new PermissionData();
+        $permData->setSchemaVersion(6);
+        $permData->setPermissionValue('users', 'edit_permissions', PermissionData::ALLOW);
+        $holder = new TestPermissionHolder($permData);
+
+        self::assertTrue($this->service->upgradeSchema($holder, 7));
+        self::assertSame(7, $permData->getSchemaVersion());
+        self::assertSame(PermissionData::ALLOW, $permData->getPermissionValue('production_datasheet_templates', 'publish'));
+        self::assertSame(PermissionData::ALLOW, $permData->getPermissionValue('production_datasheets', 'create'));
+    }
+
+    public function testUpgradeSchemaToVersion7LeavesRegularEditorsRestricted(): void
+    {
+        $permData = new PermissionData();
+        $permData->setSchemaVersion(6);
+        $permData->setPermissionValue('projects', 'edit', PermissionData::ALLOW);
+        $holder = new TestPermissionHolder($permData);
+
+        self::assertTrue($this->service->upgradeSchema($holder, 7));
+        self::assertNull($permData->getPermissionValue('production_datasheet_templates', 'read'));
+        self::assertNull($permData->getPermissionValue('production_datasheets', 'create'));
+    }
 }

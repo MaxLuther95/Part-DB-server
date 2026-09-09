@@ -20,59 +20,105 @@ declare(strict_types=1);
  *  You should have received a copy of the GNU Affero General Public License
  *  along with this program.  If not, see <https://www.gnu.org/licenses/>.
  */
+
 namespace App\EventSubscriber\UserSystem;
 
-use Symfony\Bundle\SecurityBundle\Security;
-use Symfony\Component\Security\Core\User\UserInterface;
+use App\Entity\UserSystem\Group;
 use App\Entity\UserSystem\User;
-use App\Services\LogSystem\EventCommentHelper;
 use App\Services\UserSystem\PermissionSchemaUpdater;
+use Doctrine\DBAL\Connection;
+use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Bundle\SecurityBundle\Security;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 use Symfony\Component\HttpFoundation\Session\Session;
 use Symfony\Component\HttpKernel\Event\RequestEvent;
 use Symfony\Component\HttpKernel\KernelEvents;
+use Symfony\Component\Security\Core\User\UserInterface;
 
 /**
  * The purpose of this event subscriber is to check if the permission schema of the current user is up-to-date and upgrade it automatically if needed.
  */
 class UpgradePermissionsSchemaSubscriber implements EventSubscriberInterface
 {
-    public function __construct(private readonly Security $security, private readonly PermissionSchemaUpdater $permissionSchemaUpdater, private readonly EntityManagerInterface $entityManager, private readonly EventCommentHelper $eventCommentHelper)
-    {
+    public function __construct(
+        private readonly Security $security,
+        private readonly PermissionSchemaUpdater $permissionSchemaUpdater,
+        private readonly EntityManagerInterface $entityManager,
+    ) {
     }
 
     public function onRequest(RequestEvent $event): void
     {
-        if (!$event->isMainRequest()) {
+        if (! $event->isMainRequest()) {
             return;
         }
-
         $user = $this->security->getUser();
-        if (!$user instanceof UserInterface) {
-            //Retrieve anonymous user
+        if (! $user instanceof UserInterface) {
+            // Retrieve anonymous user
             $user = $this->entityManager->getRepository(User::class)->getAnonymousUser();
         }
 
         /** @var Session $session */
-        $session = $event->getRequest()->getSession();
+        $session = $event->getRequest()
+            ->getSession();
         $flashBag = $session->getFlashBag();
 
-        //Check if the user is an instance of User, otherwise we can't upgrade the schema
-        if (!$user instanceof User) {
+        // Check if the user is an instance of User, otherwise we can't upgrade the schema
+        if (! $user instanceof User) {
             return;
         }
 
         if ($this->permissionSchemaUpdater->isSchemaUpdateNeeded($user)) {
-            $this->eventCommentHelper->setMessage('Automatic permission schema update');
             $this->permissionSchemaUpdater->userUpgradeSchemaRecursively($user);
-            $this->entityManager->flush();
+            $this->persistUpgradedPermissions($user);
             $flashBag->add('notice', 'user.permissions_schema_updated');
         }
     }
 
+    private function persistUpgradedPermissions(User $user): void
+    {
+        if (null === $user->getId()) {
+            return;
+        }
+
+        // A global EntityManager::flush() is unsafe during kernel.request:
+        // API Platform may already have deserialized new related entities but
+        // has not handed them to its persistence processor yet. Persist only
+        // the upgraded JSON columns on the already existing user/group rows.
+        $this->entityManager->getConnection()
+            ->transactional(function (Connection $connection) use ($user): void {
+                $connection->update('users', [
+                    'permissions_data' => $user->getPermissions()
+                        ->toPersistenceArray(),
+                ], [
+                    'id' => $user->getId(),
+                ], [
+                    'permissions_data' => Types::JSON,
+                    'id' => Types::INTEGER,
+                ]);
+
+                $group = $user->getGroup();
+                while ($group instanceof Group && null !== $group->getId()) {
+                    $connection->update('groups', [
+                        'permissions_data' => $group->getPermissions()
+                            ->toPersistenceArray(),
+                    ], [
+                        'id' => $group->getId(),
+                    ], [
+                        'permissions_data' => Types::JSON,
+                        'id' => Types::INTEGER,
+                    ]);
+                    $parent = $group->getParent();
+                    $group = $parent instanceof Group ? $parent : null;
+                }
+            });
+    }
+
     public static function getSubscribedEvents(): array
     {
-        return [KernelEvents::REQUEST => 'onRequest'];
+        return [
+            KernelEvents::REQUEST => 'onRequest',
+        ];
     }
 }

@@ -60,6 +60,9 @@ class CustomerProject extends AbstractProductionEntity
     #[ORM\Column(name: 'order_date', type: Types::DATE_IMMUTABLE, nullable: true)]
     private ?\DateTimeImmutable $orderDate = null;
 
+    #[ORM\Column(name: 'planned_delivery_date', type: Types::DATE_IMMUTABLE, nullable: true)]
+    private ?\DateTimeImmutable $plannedDeliveryDate = null;
+
     /** @var Collection<int, User> */
     #[ORM\ManyToMany(targetEntity: User::class)]
     #[ORM\JoinTable(name: 'production_customer_project_users')]
@@ -246,6 +249,18 @@ class CustomerProject extends AbstractProductionEntity
     public function setOrderDate(?\DateTimeImmutable $orderDate): self
     {
         $this->orderDate = $orderDate;
+
+        return $this;
+    }
+
+    public function getPlannedDeliveryDate(): ?\DateTimeImmutable
+    {
+        return $this->plannedDeliveryDate;
+    }
+
+    public function setPlannedDeliveryDate(?\DateTimeImmutable $plannedDeliveryDate): self
+    {
+        $this->plannedDeliveryDate = $plannedDeliveryDate;
 
         return $this;
     }

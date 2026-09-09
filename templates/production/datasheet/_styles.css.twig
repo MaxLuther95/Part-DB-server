@@ -1,0 +1,53 @@
+* { box-sizing: border-box; }
+.datasheet-page { color: #20252a; font-family: DejaVu Sans, Arial, sans-serif; font-size: 9.5pt; line-height: 1.35; position: relative; }
+.datasheet-header { border-bottom: 2px solid #24536f; margin-bottom: 7mm; padding-bottom: 3mm; position: relative; }
+.datasheet-header h1 { color: #173b50; font-size: 19pt; margin: 0; padding-right: 30mm; }
+.datasheet-kicker { color: #637783; font-size: 8pt; font-weight: bold; letter-spacing: 1.4pt; }
+.datasheet-revision { bottom: 4mm; color: #637783; font-size: 8pt; position: absolute; right: 0; }
+.datasheet-fixed-fields { border: 1px solid #aebbc3; display: table; margin-bottom: 6mm; table-layout: fixed; width: 100%; }
+.datasheet-fixed-field { border-right: 1px solid #aebbc3; display: table-cell; padding: 2mm 2.5mm; width: 33.333%; }
+.datasheet-fixed-field:last-child { border-right: 0; }
+.datasheet-fixed-value { font-size: 9pt; min-height: 4mm; overflow-wrap: anywhere; padding-top: .5mm; }
+.datasheet-watermark { color: rgba(190, 70, 40, .16); font-size: 56pt; font-weight: bold; left: 25mm; position: absolute; top: 105mm; transform: rotate(-32deg); z-index: 0; }
+.datasheet-body { font-size: 0; margin: 0 -2mm; position: relative; z-index: 1; }
+.datasheet-block { display: inline-block; font-size: 9.5pt; padding: 0 2mm 4mm; vertical-align: top; }
+.datasheet-block-inner { overflow-wrap: anywhere; }
+.datasheet-clear { clear: both; display: block; height: 0; width: 100%; }
+.datasheet-block h2 { border-bottom: 1px solid #8aa1af; color: #24536f; font-size: 13pt; font-weight: normal; margin: 2mm 0 3mm; padding-bottom: 1mm; }
+.datasheet-block h3 { color: #24536f; font-size: 10pt; margin: 0 0 1.5mm; }
+.datasheet-text { font-size: 9.5pt; }
+.datasheet-block-heading.datasheet-text-size-small h2 { font-size: 10pt; }
+.datasheet-block-heading.datasheet-text-size-normal h2 { font-size: 13pt; }
+.datasheet-block-heading.datasheet-text-size-large h2 { font-size: 16pt; }
+.datasheet-block-heading.datasheet-text-size-extra_large h2 { font-size: 20pt; }
+.datasheet-block-static_text.datasheet-text-size-small .datasheet-text { font-size: 8pt; }
+.datasheet-block-static_text.datasheet-text-size-normal .datasheet-text { font-size: 9.5pt; }
+.datasheet-block-static_text.datasheet-text-size-large .datasheet-text { font-size: 12pt; }
+.datasheet-block-static_text.datasheet-text-size-extra_large .datasheet-text { font-size: 15pt; }
+.datasheet-block-editable_note.datasheet-text-size-small .datasheet-note, .datasheet-block-value.datasheet-text-size-small .datasheet-value, .datasheet-block-child_table.datasheet-text-size-small { font-size: 8pt; }
+.datasheet-block-editable_note.datasheet-text-size-normal .datasheet-note, .datasheet-block-value.datasheet-text-size-normal .datasheet-value, .datasheet-block-child_table.datasheet-text-size-normal { font-size: 9.5pt; }
+.datasheet-block-editable_note.datasheet-text-size-large .datasheet-note, .datasheet-block-value.datasheet-text-size-large .datasheet-value, .datasheet-block-child_table.datasheet-text-size-large { font-size: 12pt; }
+.datasheet-block-editable_note.datasheet-text-size-extra_large .datasheet-note, .datasheet-block-value.datasheet-text-size-extra_large .datasheet-value, .datasheet-block-child_table.datasheet-text-size-extra_large { font-size: 15pt; }
+.datasheet-font-sans_serif { font-family: DejaVu Sans, Arial, sans-serif; }
+.datasheet-font-serif { font-family: DejaVu Serif, Georgia, serif; }
+.datasheet-font-monospace { font-family: DejaVu Sans Mono, monospace; }
+.datasheet-align-left { text-align: left; }
+.datasheet-align-center { text-align: center; }
+.datasheet-align-right { text-align: right; }
+.datasheet-text-bold, .datasheet-text-bold h2, .datasheet-text-bold h3 { font-weight: bold; }
+.datasheet-text-italic, .datasheet-text-italic h2, .datasheet-text-italic h3 { font-style: italic; }
+.datasheet-text-underlined, .datasheet-text-underlined h2, .datasheet-text-underlined h3 { text-decoration: underline; }
+.datasheet-align-center .datasheet-table th, .datasheet-align-center .datasheet-table td { text-align: center; }
+.datasheet-align-right .datasheet-table th, .datasheet-align-right .datasheet-table td { text-align: right; }
+.datasheet-value-label { color: #637783; font-size: 7.5pt; font-weight: bold; text-transform: uppercase; }
+.datasheet-value { border-bottom: 1px solid #aebbc3; min-height: 6mm; padding: 1mm 0; }
+.datasheet-note { background: #f4f7f8; border-left: 2px solid #8aa1af; min-height: 12mm; padding: 2mm; white-space: pre-wrap; }
+.datasheet-table { border-collapse: collapse; width: 100%; }
+.datasheet-table th { background: #24536f; color: white; font-size: 8pt; padding: 1.5mm; text-align: left; }
+.datasheet-table tbody th { background: transparent; border-bottom: 1px solid #aebbc3; color: #20252a; font-weight: normal; }
+.datasheet-table td { border: 1px solid #aebbc3; padding: 1.5mm; }
+.datasheet-block-separator { padding-bottom: 2mm; }
+.datasheet-block-separator hr { border: 0; border-top: 1px solid #8aa1af; }
+.datasheet-page-break { page-break-after: always; }
+.datasheet-footer { color: #637783; font-size: 7pt; }
+.datasheet-logo { color: #24536f; font-size: 10pt; font-weight: bold; letter-spacing: 1pt; }

@@ -24,6 +24,7 @@ final class SystemTemplateSlotType extends AbstractType
             ->add('position', IntegerType::class, [
                 'label' => 'production.system_template.slot.position',
                 'attr' => ['min' => 0],
+                'help' => 'production.common.position_help',
             ])
             ->add('name', TextType::class, ['label' => 'production.system_template.slot.name'])
             ->add('minQuantity', IntegerType::class, [

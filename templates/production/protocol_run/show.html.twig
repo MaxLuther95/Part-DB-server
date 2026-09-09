@@ -1,0 +1,78 @@
+{% extends 'main_card.html.twig' %}
+{% trans_default_domain 'production' %}
+
+{% block title %}{{ run.revision.template.name }} #{{ run.runNumber }}{% endblock %}
+{% block card_title %}<i class="fa-solid fa-list-check fa-fw"></i> {{ run.revision.template.name }} #{{ run.runNumber }}{% endblock %}
+
+{% block card_content %}
+    <div class="d-flex flex-wrap gap-2 mb-3">
+        <a class="btn btn-outline-secondary" href="{{ path('production_build_instance_show', {id: run.buildInstance.id}) }}"><i class="fa-solid fa-arrow-left fa-fw"></i> {{ run.buildInstance.displayIdentifier }}</a>
+        {% if run.status.value == 'draft' and form is null and is_granted('@production_protocols.edit') %}<a class="btn btn-primary" href="{{ path('production_protocol_run_edit', {id: run.id}) }}"><i class="fa-solid fa-pen fa-fw"></i> {{ 'production.action.edit'|trans }}</a>{% endif %}
+        <span class="badge align-self-center {{ run.status.value == 'completed' ? 'text-bg-success' : (run.status.value == 'invalid' ? 'text-bg-danger' : 'text-bg-warning') }}">{{ ('production.protocol.run_status.' ~ run.status.value)|trans }}</span>
+    </div>
+
+    {% if run.status.value == 'invalid' %}<div class="alert alert-danger"><strong>{{ 'production.protocol.run.invalid_reason'|trans }}:</strong> {{ run.invalidReason }}</div>{% endif %}
+    {% if form %}{{ form_start(form) }}{% endif %}
+    {% for section in run.revision.sections %}
+        <section class="card mb-2">
+            <div class="card-header py-2">
+                <strong>{{ section.name }}</strong>
+                {% if section.description %}<span class="text-muted ms-2 small">{{ section.description }}</span>{% endif %}
+            </div>
+            <div class="card-body py-2">
+                {% set row = run.rowForSection(section) %}
+                {% if row %}
+                    <div class="row g-2">
+                        {% for field in section.fields %}
+                            {% if field.startNewRow and not loop.first %}<div class="w-100"></div>{% endif %}
+                            <div class="col-12 col-md-{{ field.layoutColumns }}">
+                                {% if field.type.value == 'static_note' %}
+                                    <div class="border-start border-3 border-secondary-subtle ps-2 py-1 h-100">
+                                        <div class="fw-semibold">{{ field.label }}</div>
+                                        {% if field.helpText %}<div class="small text-muted">{{ field.helpText|nl2br }}</div>{% endif %}
+                                    </div>
+                                {% else %}
+                                    {% set answer = row.answerForField(field) %}
+                                    {% if answer %}
+                                        <label class="form-label small fw-semibold mb-1" for="protocol_run_answer_{{ answer.id }}">{{ field.label }}{% if field.required %} <span class="text-danger">*</span>{% endif %}{% if field.unit %} <span class="text-muted">[{{ field.unit }}]</span>{% endif %}</label>
+                                        {% if form %}
+                                            {{ form_widget(form['answer_' ~ answer.id]) }}
+                                            {{ form_errors(form['answer_' ~ answer.id]) }}
+                                        {% else %}
+                                            <div class="form-control-plaintext py-1">
+                                                {% if answer.empty %}–
+                                                {% elseif field.type.value == 'boolean' %}{{ (answer.value ? 'production.choice.yes' : 'production.choice.no')|trans }}
+                                                {% elseif field.type.value == 'test_result' %}
+                                                    {% if answer.value == 'pass' %}<span class="text-success"><i class="fa-solid fa-check fa-fw"></i> {{ 'production.protocol.test_result.pass'|trans }}</span>
+                                                    {% elseif answer.value == 'not_applicable' %}<span class="text-warning-emphasis"><i class="fa-solid fa-minus fa-fw"></i> {{ 'production.protocol.test_result.not_applicable'|trans }}</span>
+                                                    {% else %}<span class="text-danger"><i class="fa-solid fa-xmark fa-fw"></i> {{ 'production.protocol.test_result.fail'|trans }}</span>{% endif %}
+                                                {% elseif field.type.value == 'date' %}{{ answer.value|format_date('short') }}
+                                                {% elseif field.type.value == 'datetime' %}{{ answer.value|format_datetime('short', 'short') }}
+                                                {% else %}{{ answer.value }}{% endif %}
+                                            </div>
+                                        {% endif %}
+                                        {% if field.helpText %}<div class="form-text mt-1">{{ field.helpText }}</div>{% endif %}
+                                    {% endif %}
+                                {% endif %}
+                            </div>
+                        {% endfor %}
+                    </div>
+                {% else %}<p class="text-muted mb-0">{{ 'production.protocol.run.no_rows'|trans }}</p>{% endif %}
+            </div>
+        </section>
+    {% endfor %}
+    {% if form %}
+        {{ form_errors(form) }}
+        <div class="d-flex gap-2"><button class="btn btn-primary" type="submit"><i class="fa-solid fa-floppy-disk fa-fw"></i> {{ 'production.protocol.run.save'|trans }}</button></div>
+        {{ form_end(form) }}
+        {% if is_granted('@production_protocols.complete') %}
+            <form class="mt-3" method="post" action="{{ path('production_protocol_run_complete', {id: run.id}) }}" {{ stimulus_controller('elements/delete_btn') }} {{ stimulus_action('elements/delete_btn', 'submit', 'submit') }} data-delete-title="{{ 'production.protocol.run.complete'|trans }}" data-delete-message="{{ 'production.protocol.run.complete_confirm'|trans }}" data-delete-message-text>
+                <input type="hidden" name="_token" value="{{ csrf_token('protocol_run_complete_' ~ run.id) }}"><button class="btn btn-success" type="submit"><i class="fa-solid fa-check fa-fw"></i> {{ 'production.protocol.run.complete'|trans }}</button>
+            </form>
+        {% endif %}
+    {% elseif run.status.value == 'completed' and is_granted('@production_protocols.invalidate') %}
+        <form class="mt-4" method="post" action="{{ path('production_protocol_run_invalidate', {id: run.id}) }}" {{ stimulus_controller('elements/delete_btn') }} {{ stimulus_action('elements/delete_btn', 'submit', 'submit') }} data-delete-title="{{ 'production.protocol.run.invalidate'|trans }}" data-delete-message="{{ 'production.protocol.run.invalidate_confirm'|trans }}" data-delete-message-text>
+            <input type="hidden" name="_token" value="{{ csrf_token('protocol_run_invalidate_' ~ run.id) }}"><div class="input-group"><input class="form-control" name="reason" required maxlength="2000" placeholder="{{ 'production.protocol.run.invalid_reason'|trans }}"><button class="btn btn-outline-danger" type="submit">{{ 'production.protocol.run.invalidate'|trans }}</button></div>
+        </form>
+    {% endif %}
+{% endblock %}

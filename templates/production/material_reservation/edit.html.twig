@@ -121,7 +121,11 @@
         <a class="btn btn-secondary" href="{{ path('production_customer_project_show', {id: project.id}) }}">Abbrechen</a>
     </form>
     {% if project.materialReservations|length > 0 %}
-        <form class="mt-3" method="post" action="{{ path('production_material_reservation_release', {id: project.id}) }}" data-turbo-confirm="Alle offenen Materialreservierungen dieses Projekts freigeben?">
+        <form class="mt-3" method="post" action="{{ path('production_material_reservation_release', {id: project.id}) }}"
+              {{ stimulus_controller('elements/delete_btn') }} {{ stimulus_action('elements/delete_btn', 'submit', 'submit') }}
+              data-delete-title="{{ 'production.action.confirm_title'|trans }}"
+              data-delete-message="{{ 'production.material_plan.release_confirm'|trans }}"
+              data-delete-message-text>
             <input type="hidden" name="_token" value="{{ csrf_token('release_material_reservation_' ~ project.id) }}">
             <button class="btn btn-outline-danger"><i class="fa-solid fa-xmark fa-fw"></i> Alle Reservierungen freigeben</button>
         </form>

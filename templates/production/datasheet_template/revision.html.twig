@@ -1,0 +1,378 @@
+{% extends 'base.html.twig' %}
+{% trans_default_domain 'production' %}
+
+{% block title %}{{ revision.template.name }} · Entwurf v{{ revision.revisionNumber }}{% endblock %}
+
+{% block stylesheets %}
+    {{ parent() }}
+    <style>
+        {% include 'production/datasheet/_styles.css.twig' %}
+
+        .datasheet-designer-shell { min-width: 0; }
+        .datasheet-designer-topbar { background: var(--bs-body-bg); border: 1px solid var(--bs-border-color); border-radius: .5rem; }
+        .datasheet-designer-workspace {
+            background: var(--bs-border-color-translucent);
+            border: 1px solid var(--bs-border-color);
+            border-radius: .5rem;
+            display: grid;
+            grid-template-columns: 15rem minmax(39rem, 1fr) 23rem;
+            height: calc(100vh - 12.5rem);
+            min-height: 45rem;
+            overflow: hidden;
+        }
+        .datasheet-designer-sidebar { background: var(--bs-body-bg); min-width: 0; overflow-y: auto; }
+        .datasheet-designer-sidebar-left { border-right: 1px solid var(--bs-border-color); }
+        .datasheet-designer-sidebar-right { border-left: 1px solid var(--bs-border-color); }
+        .datasheet-designer-panel-heading {
+            background: var(--bs-tertiary-bg);
+            border-bottom: 1px solid var(--bs-border-color);
+            font-size: .78rem;
+            font-weight: 700;
+            letter-spacing: .04em;
+            padding: .7rem .8rem;
+            text-transform: uppercase;
+        }
+        .datasheet-designer-palette { display: grid; gap: .45rem; grid-template-columns: repeat(2, minmax(0, 1fr)); padding: .75rem; }
+        .datasheet-designer-palette .btn {
+            align-items: center;
+            display: flex;
+            flex-direction: column;
+            font-size: .78rem;
+            gap: .25rem;
+            justify-content: center;
+            min-height: 4.1rem;
+            padding: .5rem .25rem;
+            white-space: normal;
+        }
+        .datasheet-designer-palette .fa-solid { font-size: 1.1rem; }
+        .datasheet-designer-document-button { border-radius: 0; text-align: left; width: 100%; }
+        .datasheet-designer-layer-list { list-style: none; margin: 0; padding: .5rem; }
+        .datasheet-designer-layer {
+            align-items: center;
+            background: var(--bs-body-bg);
+            border: 1px solid var(--bs-border-color);
+            border-radius: .35rem;
+            cursor: pointer;
+            display: flex;
+            font-size: .8rem;
+            gap: .45rem;
+            margin-bottom: .35rem;
+            min-width: 0;
+            padding: .5rem;
+        }
+        .datasheet-designer-layer.active { background: var(--bs-primary-bg-subtle); border-color: var(--bs-primary); color: var(--bs-primary-text-emphasis); }
+        .datasheet-designer-layer-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .datasheet-designer-drag-handle { color: var(--bs-secondary-color); cursor: grab; }
+        .datasheet-designer-stage { background: #cfd5d9; min-width: 0; overflow: auto; padding: 1.25rem; }
+        .datasheet-designer-page {
+            background: white;
+            box-shadow: 0 .3rem 1.4rem rgba(0, 0, 0, .2);
+            margin: 0 auto;
+            min-height: 297mm;
+            padding: 24mm 14mm 20mm;
+            width: 210mm;
+        }
+        .datasheet-designer-page .datasheet-footer { bottom: 7mm; display: flex; justify-content: space-between; left: 14mm; position: absolute; right: 14mm; }
+        .datasheet-designer-page .datasheet-body { min-height: 170mm; }
+        .datasheet-designer-page .datasheet-text { white-space: pre-line; }
+        .datasheet-designer-canvas-block { cursor: pointer; min-height: 8mm; position: relative; }
+        .datasheet-designer-canvas-block::after {
+            border: 2px solid transparent;
+            border-radius: .2rem;
+            bottom: 1.5mm;
+            content: '';
+            left: 0;
+            pointer-events: none;
+            position: absolute;
+            right: 0;
+            top: 0;
+        }
+        .datasheet-designer-canvas-block:hover::after { border-color: rgba(var(--bs-primary-rgb), .4); }
+        .datasheet-designer-canvas-block.is-selected::after { border-color: var(--bs-primary); box-shadow: 0 0 0 .15rem rgba(var(--bs-primary-rgb), .18); }
+        .datasheet-designer-canvas-handle {
+            background: var(--bs-primary);
+            border-radius: .2rem;
+            color: white;
+            cursor: grab;
+            display: none;
+            font-size: 7pt;
+            left: 1mm;
+            line-height: 1;
+            padding: 1mm 1.4mm;
+            position: absolute;
+            top: 1mm;
+            z-index: 3;
+        }
+        .datasheet-designer-canvas-block.is-selected .datasheet-designer-canvas-handle { display: block; }
+        .datasheet-designer-empty {
+            border: 2px dashed #aebbc3;
+            color: #637783;
+            font-size: 10pt;
+            margin: 4mm 2mm;
+            padding: 14mm 5mm;
+            text-align: center;
+        }
+        .datasheet-designer-page-break-preview { border-top: 2px dashed #bd6b50; color: #9a4a31; font-size: 8pt; margin: 4mm 2mm; padding-top: 1mm; text-align: center; width: calc(100% - 4mm); }
+        .datasheet-designer-inspector { padding: .85rem; }
+        .datasheet-designer-inspector label,
+        .datasheet-designer-inspector legend { overflow-wrap: normal; word-break: normal; }
+        .datasheet-designer-field { margin-bottom: .8rem; }
+        .datasheet-designer-field > .form-label,
+        .datasheet-designer-field > legend { display: block; font-size: .82rem; font-weight: 600; margin-bottom: .3rem; width: 100%; }
+        .datasheet-designer-field .form-text { font-size: .72rem; }
+        .datasheet-designer-section { border-top: 1px solid var(--bs-border-color); margin-top: 1rem; padding-top: 1rem; }
+        .datasheet-designer-section-title { font-size: .78rem; font-weight: 700; margin-bottom: .65rem; text-transform: uppercase; }
+        .datasheet-designer-segmented { display: grid; gap: .25rem; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+        .datasheet-designer-segmented .btn { padding-left: .25rem; padding-right: .25rem; }
+        .datasheet-designer-table-row { background: var(--bs-tertiary-bg); border: 1px solid var(--bs-border-color); border-radius: .4rem; margin-bottom: .6rem; padding: .6rem; }
+        .datasheet-designer-table-row-header { align-items: center; display: flex; gap: .4rem; margin-bottom: .5rem; }
+        .datasheet-designer-sortable-ghost { opacity: .35; }
+        .datasheet-designer-status { font-size: .8rem; }
+        .datasheet-designer-status.is-dirty { color: var(--bs-warning-text-emphasis); }
+        .datasheet-designer-status.is-clean { color: var(--bs-success-text-emphasis); }
+        @media (max-width: 1399.98px) {
+            .datasheet-designer-workspace { grid-template-columns: 13rem minmax(39rem, 1fr) 20rem; }
+        }
+        @media (max-width: 1099.98px) {
+            .datasheet-designer-workspace { display: block; height: auto; min-height: 0; overflow: visible; }
+            .datasheet-designer-sidebar { border: 0; max-height: none; overflow: visible; }
+            .datasheet-designer-stage { max-height: 80vh; }
+            .datasheet-designer-palette { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+        }
+    </style>
+{% endblock %}
+
+{% block content %}
+    <form method="post"
+          class="datasheet-designer-shell"
+          data-controller="production--datasheet-designer"
+          data-action="submit->production--datasheet-designer#prepareSubmit">
+        <input type="hidden" name="_token" value="{{ csrf_token('datasheet_revision_edit_' ~ revision.id) }}">
+        <textarea name="editor_payload" hidden data-production--datasheet-designer-target="payload">{{ editor_state|json_encode }}</textarea>
+        <textarea hidden data-production--datasheet-designer-target="catalog">{{ source_catalog|json_encode }}</textarea>
+
+        <div class="datasheet-designer-topbar d-flex flex-wrap align-items-center gap-2 p-2 mb-3">
+            <a class="btn btn-outline-secondary" href="{{ path('production_datasheet_template_show', {id: revision.template.id}) }}">
+                <i class="fa-solid fa-arrow-left fa-fw"></i> Zurück
+            </a>
+            <div class="ms-1 me-auto">
+                <strong>{{ revision.template.name }}</strong>
+                <span class="text-muted">· Entwurf v{{ revision.revisionNumber }}</span>
+                <div class="datasheet-designer-status is-clean" data-production--datasheet-designer-target="status">Alle Änderungen gespeichert</div>
+            </div>
+            <button class="btn btn-outline-secondary" type="button" data-action="production--datasheet-designer#selectDocument">
+                <i class="fa-solid fa-file-lines fa-fw"></i> Dokument
+            </button>
+            <a class="btn btn-outline-secondary" target="_blank" rel="noopener" href="{{ path('production_datasheet_revision_pdf', {id: revision.id}) }}">
+                <i class="fa-solid fa-file-pdf fa-fw"></i> Gespeicherte PDF-Vorschau
+            </a>
+            <button class="btn btn-primary" type="submit">
+                <i class="fa-solid fa-floppy-disk fa-fw"></i> Entwurf speichern
+            </button>
+        </div>
+
+        <div class="datasheet-designer-workspace">
+            <aside class="datasheet-designer-sidebar datasheet-designer-sidebar-left" aria-label="Bausteine und Reihenfolge">
+                <div class="datasheet-designer-panel-heading">Bausteine</div>
+                <div class="datasheet-designer-palette">
+                    <button class="btn btn-outline-primary" type="button" data-action="production--datasheet-designer#addBlock" data-block-type="heading"><i class="fa-solid fa-heading"></i><span>Überschrift</span></button>
+                    <button class="btn btn-outline-primary" type="button" data-action="production--datasheet-designer#addBlock" data-block-type="static_text"><i class="fa-solid fa-align-left"></i><span>Fester Text</span></button>
+                    <button class="btn btn-outline-primary" type="button" data-action="production--datasheet-designer#addBlock" data-block-type="editable_note"><i class="fa-solid fa-note-sticky"></i><span>Freie Notiz</span></button>
+                    <button class="btn btn-outline-primary" type="button" data-action="production--datasheet-designer#addBlock" data-block-type="value"><i class="fa-solid fa-database"></i><span>Zugeordneter Wert</span></button>
+                    <button class="btn btn-outline-primary" type="button" data-action="production--datasheet-designer#addBlock" data-block-type="child_table"><i class="fa-solid fa-table"></i><span>Komponententabelle</span></button>
+                    <button class="btn btn-outline-primary" type="button" data-action="production--datasheet-designer#addBlock" data-block-type="separator"><i class="fa-solid fa-minus"></i><span>Trennlinie</span></button>
+                    <button class="btn btn-outline-primary" type="button" data-action="production--datasheet-designer#addBlock" data-block-type="page_break"><i class="fa-solid fa-file-arrow-down"></i><span>Seitenumbruch</span></button>
+                </div>
+
+                <div class="datasheet-designer-panel-heading border-top">Reihenfolge</div>
+                <button class="btn btn-light datasheet-designer-document-button px-3 py-2" type="button" data-action="production--datasheet-designer#selectDocument" data-production--datasheet-designer-target="documentLayer">
+                    <i class="fa-solid fa-file-lines fa-fw text-primary"></i> Dokumentrahmen
+                </button>
+                <ol class="datasheet-designer-layer-list" data-production--datasheet-designer-target="layers"></ol>
+            </aside>
+
+            <main class="datasheet-designer-stage" aria-label="A4-Datenblatt-Arbeitsfläche">
+                <article class="datasheet-page datasheet-designer-page" data-action="click->production--datasheet-designer#canvasBackgroundClicked">
+                    <header class="datasheet-header" data-action="click->production--datasheet-designer#selectDocument">
+                        <div class="datasheet-kicker">DATA SHEET</div>
+                        <h1 data-production--datasheet-designer-target="pageTitle"></h1>
+                        <div class="datasheet-revision">Revision {{ revision.revisionNumber }}</div>
+                    </header>
+                    <section class="datasheet-fixed-fields" aria-label="Document identification" data-action="click->production--datasheet-designer#selectDocument">
+                        <div class="datasheet-fixed-field"><div class="datasheet-value-label">Customer</div><div class="datasheet-fixed-value">—</div></div>
+                        <div class="datasheet-fixed-field"><div class="datasheet-value-label">Project</div><div class="datasheet-fixed-value">—</div></div>
+                        <div class="datasheet-fixed-field"><div class="datasheet-value-label">Order no.</div><div class="datasheet-fixed-value">—</div></div>
+                    </section>
+                    <div class="datasheet-watermark">DRAFT</div>
+                    <main class="datasheet-body" data-production--datasheet-designer-target="canvas"></main>
+                    <footer class="datasheet-footer" data-action="click->production--datasheet-designer#selectDocument">
+                        <div class="datasheet-logo" aria-label="Magnicon">MAGNICON</div>
+                        <div>Data sheet · <span data-production--datasheet-designer-target="footerTitle"></span> · Revision {{ revision.revisionNumber }}</div>
+                    </footer>
+                </article>
+            </main>
+
+            <aside class="datasheet-designer-sidebar datasheet-designer-sidebar-right" aria-label="Eigenschaften">
+                <div class="datasheet-designer-panel-heading">Eigenschaften</div>
+                <div class="datasheet-designer-inspector">
+                    <section data-production--datasheet-designer-target="documentInspector">
+                        <h2 class="h6 mb-3"><i class="fa-solid fa-file-lines fa-fw text-primary"></i> Dokumentrahmen</h2>
+                        <div class="datasheet-designer-field">
+                            <label class="form-label" for="datasheet-designer-product-title">Englische Produktüberschrift</label>
+                            <input class="form-control" id="datasheet-designer-product-title" maxlength="255" type="text" data-document-property="productTitle" data-action="input->production--datasheet-designer#documentChanged">
+                            <div class="form-text">Steht im Kopf und in der Fußzeile jeder Seite.</div>
+                        </div>
+                        <div class="datasheet-designer-field">
+                            <label class="form-label" for="datasheet-designer-change-note">Interne Änderungsnotiz</label>
+                            <textarea class="form-control" id="datasheet-designer-change-note" maxlength="255" rows="3" data-document-property="changeNote" data-action="input->production--datasheet-designer#documentChanged"></textarea>
+                            <div class="form-text">Nur intern; erscheint nicht auf dem Kundendatenblatt.</div>
+                        </div>
+                        <div class="alert alert-light border small mb-0">
+                            Customer, Project, Order no. und der Magnicon-Absender sind der feste Rahmen. Alle übrigen Inhalte werden als Bausteine eingefügt.
+                        </div>
+                    </section>
+
+                    <section hidden data-production--datasheet-designer-target="blockInspector">
+                        <div class="d-flex align-items-center gap-2 mb-3">
+                            <i class="fa-solid fa-shapes fa-fw text-primary"></i>
+                            <h2 class="h6 mb-0 me-auto" data-production--datasheet-designer-target="inspectorTitle">Baustein</h2>
+                            <button class="btn btn-sm btn-outline-danger" type="button" title="Baustein löschen" data-action="production--datasheet-designer#removeSelectedBlock"><i class="fa-solid fa-trash"></i></button>
+                        </div>
+
+                        <div class="datasheet-designer-field">
+                            <label class="form-label" for="datasheet-designer-type">Bausteintyp</label>
+                            <select class="form-select" id="datasheet-designer-type" data-block-property="type" data-action="change->production--datasheet-designer#blockChanged">
+                                <option value="heading">Überschrift</option>
+                                <option value="static_text">Fester Text</option>
+                                <option value="editable_note">Beim Export bearbeitbare Notiz</option>
+                                <option value="value">Zugeordneter Einzelwert</option>
+                                <option value="child_table">Komponententabelle</option>
+                                <option value="separator">Trennlinie</option>
+                                <option value="page_break">Seitenumbruch</option>
+                            </select>
+                        </div>
+
+                        <div data-designer-setting="label">
+                            <div class="datasheet-designer-field">
+                                <label class="form-label" for="datasheet-designer-label">Englische Bezeichnung / Überschrift</label>
+                                <input class="form-control" id="datasheet-designer-label" maxlength="255" type="text" data-block-property="label" data-action="input->production--datasheet-designer#blockChanged">
+                            </div>
+                        </div>
+
+                        <div data-designer-setting="text">
+                            <div class="datasheet-designer-field">
+                                <label class="form-label" for="datasheet-designer-text">Englischer Text</label>
+                                <textarea class="form-control" id="datasheet-designer-text" maxlength="10000" rows="6" data-block-property="text" data-action="input->production--datasheet-designer#blockChanged"></textarea>
+                                <div class="form-text">Reiner Text. HTML und Programmcode werden nicht gespeichert oder ausgeführt.</div>
+                            </div>
+                        </div>
+
+                        <div data-designer-setting="source">
+                            <div class="datasheet-designer-field">
+                                <label class="form-label" for="datasheet-designer-source">Datenquelle</label>
+                                <select class="form-select" id="datasheet-designer-source" data-production--datasheet-designer-target="rootSource" data-block-property="sourcePath" data-action="change->production--datasheet-designer#blockChanged"></select>
+                                <div class="form-text">Aktuelle Instanz, Auftrag, Kunde, Projekt, Laufzettel oder eine eingebaute Instanz nach physischer Position.</div>
+                            </div>
+                        </div>
+
+                        <section class="datasheet-designer-section" data-designer-setting="typography">
+                            <div class="datasheet-designer-section-title">Schrift</div>
+                            <div class="row g-2">
+                                <div class="col-6 datasheet-designer-field">
+                                    <label class="form-label" for="datasheet-designer-text-size">Größe</label>
+                                    <select class="form-select" id="datasheet-designer-text-size" data-block-property="textSize" data-action="change->production--datasheet-designer#blockChanged">
+                                        <option value="small">Klein</option><option value="normal">Normal</option><option value="large">Groß</option><option value="extra_large">Sehr groß</option>
+                                    </select>
+                                </div>
+                                <div class="col-6 datasheet-designer-field">
+                                    <label class="form-label" for="datasheet-designer-font-family">Schriftart</label>
+                                    <select class="form-select" id="datasheet-designer-font-family" data-block-property="fontFamily" data-action="change->production--datasheet-designer#blockChanged">
+                                        <option value="sans_serif">Sans Serif</option><option value="serif">Serif</option><option value="monospace">Monospace</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="datasheet-designer-field">
+                                <span class="form-label">Auszeichnung</span>
+                                <div class="btn-group" role="group" aria-label="Textauszeichnung">
+                                    <button class="btn btn-outline-secondary" type="button" title="Fett" data-toggle-property="textBold" data-action="production--datasheet-designer#toggleBlockProperty"><strong>B</strong></button>
+                                    <button class="btn btn-outline-secondary" type="button" title="Kursiv" data-toggle-property="textItalic" data-action="production--datasheet-designer#toggleBlockProperty"><em>I</em></button>
+                                    <button class="btn btn-outline-secondary" type="button" title="Unterstrichen" data-toggle-property="textUnderlined" data-action="production--datasheet-designer#toggleBlockProperty"><u>U</u></button>
+                                </div>
+                            </div>
+                            <div class="datasheet-designer-field">
+                                <span class="form-label">Ausrichtung</span>
+                                <div class="btn-group" role="group" aria-label="Textausrichtung">
+                                    <button class="btn btn-outline-secondary" type="button" title="Linksbündig" data-choice-property="textAlignment" data-choice-value="left" data-action="production--datasheet-designer#chooseBlockProperty"><i class="fa-solid fa-align-left"></i></button>
+                                    <button class="btn btn-outline-secondary" type="button" title="Zentriert" data-choice-property="textAlignment" data-choice-value="center" data-action="production--datasheet-designer#chooseBlockProperty"><i class="fa-solid fa-align-center"></i></button>
+                                    <button class="btn btn-outline-secondary" type="button" title="Rechtsbündig" data-choice-property="textAlignment" data-choice-value="right" data-action="production--datasheet-designer#chooseBlockProperty"><i class="fa-solid fa-align-right"></i></button>
+                                </div>
+                            </div>
+                        </section>
+
+                        <section class="datasheet-designer-section" data-designer-setting="layout">
+                            <div class="datasheet-designer-section-title">Anordnung</div>
+                            <div class="datasheet-designer-field">
+                                <span class="form-label">Breite im Datenblatt</span>
+                                <div class="datasheet-designer-segmented" role="group" aria-label="Bausteinbreite">
+                                    <button class="btn btn-sm btn-outline-primary" type="button" data-choice-property="layoutColumns" data-choice-value="3" data-action="production--datasheet-designer#chooseBlockProperty">25 %</button>
+                                    <button class="btn btn-sm btn-outline-primary" type="button" data-choice-property="layoutColumns" data-choice-value="6" data-action="production--datasheet-designer#chooseBlockProperty">50 %</button>
+                                    <button class="btn btn-sm btn-outline-primary" type="button" data-choice-property="layoutColumns" data-choice-value="9" data-action="production--datasheet-designer#chooseBlockProperty">75 %</button>
+                                    <button class="btn btn-sm btn-outline-primary" type="button" data-choice-property="layoutColumns" data-choice-value="12" data-action="production--datasheet-designer#chooseBlockProperty">100 %</button>
+                                </div>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" id="datasheet-designer-new-row" type="checkbox" data-block-property="startNewRow" data-action="change->production--datasheet-designer#blockChanged">
+                                <label class="form-check-label" for="datasheet-designer-new-row">In einer neuen Zeile beginnen</label>
+                            </div>
+                        </section>
+
+                        <section class="datasheet-designer-section" data-designer-setting="behavior">
+                            <div class="datasheet-designer-section-title">Ausgabe</div>
+                            <div class="form-check mb-2" data-designer-setting="required">
+                                <input class="form-check-input" id="datasheet-designer-required" type="checkbox" data-block-property="required" data-action="change->production--datasheet-designer#blockChanged">
+                                <label class="form-check-label" for="datasheet-designer-required">Wert für die Freigabe erforderlich</label>
+                            </div>
+                            <div class="form-check" data-designer-setting="hide">
+                                <input class="form-check-input" id="datasheet-designer-hide-empty" type="checkbox" data-block-property="hideIfEmpty" data-action="change->production--datasheet-designer#blockChanged">
+                                <label class="form-check-label" for="datasheet-designer-hide-empty">Leeren optionalen Wert ausblenden</label>
+                            </div>
+                        </section>
+
+                        <section class="datasheet-designer-section" data-designer-setting="table">
+                            <div class="d-flex align-items-center gap-2 mb-2">
+                                <div>
+                                    <div class="datasheet-designer-section-title mb-0">Tabellenzeilen (Y-Achse)</div>
+                                    <div class="small text-muted">Eingebaute Instanzen bilden die Spalten (X-Achse).</div>
+                                </div>
+                                <button class="btn btn-sm btn-primary ms-auto" type="button" data-action="production--datasheet-designer#addTableRow"><i class="fa-solid fa-plus fa-fw"></i> Zeile</button>
+                            </div>
+                            <div data-production--datasheet-designer-target="tableRows"></div>
+                            <div class="row g-2">
+                                <div class="col-6 datasheet-designer-field">
+                                    <label class="form-label" for="datasheet-designer-minimum-rows">Mindestens Spalten</label>
+                                    <input class="form-control" id="datasheet-designer-minimum-rows" min="0" max="100" type="number" data-block-property="minimumRows" data-action="change->production--datasheet-designer#blockChanged">
+                                </div>
+                                <div class="col-6 datasheet-designer-field">
+                                    <label class="form-label" for="datasheet-designer-maximum-rows">Höchstens Spalten</label>
+                                    <input class="form-control" id="datasheet-designer-maximum-rows" min="1" max="100" placeholder="offen" type="number" data-block-property="maximumRows" data-nullable-number data-action="change->production--datasheet-designer#blockChanged">
+                                </div>
+                            </div>
+                        </section>
+                    </section>
+                </div>
+            </aside>
+        </div>
+    </form>
+
+    {% if is_granted('@production_datasheet_templates.publish') %}
+        <div class="card border-success mt-3">
+            <div class="card-body d-flex flex-wrap align-items-center gap-3">
+                <div class="flex-grow-1"><strong>Revision veröffentlichen</strong><br><span class="text-muted">Speichere und prüfe den Entwurf zuerst. Eine veröffentlichte Revision bleibt anschließend unveränderlich.</span></div>
+                <form method="post" action="{{ path('production_datasheet_revision_publish', {id: revision.id}) }}" {{ stimulus_controller('elements/delete_btn') }} {{ stimulus_action('elements/delete_btn', 'submit', 'submit') }} data-delete-title="Datenblattrevision veröffentlichen" data-delete-message="Nach der Veröffentlichung kann diese Revision nicht mehr verändert werden." data-delete-message-text>
+                    <input type="hidden" name="_token" value="{{ csrf_token('datasheet_revision_publish_' ~ revision.id) }}">
+                    <button class="btn btn-success" type="submit"><i class="fa-solid fa-check fa-fw"></i> Revision veröffentlichen</button>
+                </form>
+            </div>
+        </div>
+    {% endif %}
+{% endblock %}

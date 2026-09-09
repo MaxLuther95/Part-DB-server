@@ -1,9 +1,13 @@
 production:
+  datasheet:
+    action:
+      save_draft: Save draft
   dashboard:
     title: Production
     intro: Manage customers, customer projects, manufactured devices and assemblies separately from regular inventory parts.
   common:
     name: Name
+    position_help: An occupied position is inserted automatically; subsequent positions are shifted accordingly.
     description: Description
     notes: Notes
     no_notes: No notes available.
@@ -21,7 +25,9 @@ production:
     back: Back
     edit: Edit
     show_all: Show all
+    show: Show
     delete: Delete
+    confirm_title: Please confirm
   flash:
     saved: The changes were saved.
   navigation:
@@ -30,6 +36,8 @@ production:
     management: Management
     build: Build
     templates: System templates
+    protocol_templates: Protocol templates
+    datasheet_templates: Datasheet templates
     required_parts: Required parts
     import_mappings: Import mappings
   build:
@@ -66,6 +74,8 @@ production:
     my_projects: My orders
     number: Order number
     order_date: Order confirmation date
+    planned_delivery_date: Planned delivery date
+    delivery_date_unset: Not scheduled yet
     project_placeholder: Select a project
     customer_placeholder: Select a customer
     assigned_users: Assigned users
@@ -82,6 +92,7 @@ production:
     new: Create order
     edit: Edit order
     delete_confirm: 'Really delete order %number% completely? Positions, reservations, accessories and history will be deleted. %builds% devices or assemblies will be retained and released.'
+    attachment_delete_confirm: Really delete this file attachment?
     deleted: '%builds% devices or assemblies were released and retained when the order was deleted.'
     delete_has_material: The order cannot be deleted while withdrawn order stock is still assigned to it.
     status:
@@ -111,6 +122,7 @@ production:
     cancelled_hint: This order has been cancelled.
     build_instances: Devices and assemblies in order
   project_position:
+    detached_from_template: Detached from template
     label: Order position
     plural: Order positions
     position: Position
@@ -182,6 +194,10 @@ production:
       plural: Predefined slots
       new: Add slot
       edit: Edit slot
+      delete: Delete slot
+      delete_confirm: 'Really delete this template slot? %count% order assignment(s) are currently affected. Existing selections will remain visible in their current order location and will be marked clearly as “Detached from template”.'
+      deleted: 'Template slot “%name%” was deleted.'
+      deleted_with_assignments: 'Template slot “%name%” was deleted. %count% existing order assignment(s) were retained in their current location and detached from the template.'
       empty: This template has no configurable slots yet.
       position: Position
       name: Slot name
@@ -204,6 +220,8 @@ production:
     plural: Additional accessories
     new: Add inventory part
     edit: Edit accessory
+    delete_confirm: 'Really delete additional part “%name%” from the order?'
+    deleted: The additional part was deleted from the order.
     empty: No additional accessories entered.
     part: Part-DB inventory part
     quantity: Quantity
@@ -212,6 +230,7 @@ production:
     note: Note
     inventory_part: Inventory part
   material_plan:
+    release_confirm: Release all open material reservations for this project?
     label: Material availability
     complete: All parts available
     available_status: Material available
@@ -261,6 +280,7 @@ production:
       position_configured: System configuration changed
       accessory_created: Accessory added
       accessory_updated: Accessory updated
+      accessory_deleted: Accessory deleted
       material_allocated: Material moved into project stock
       material_reservation_updated: Material reservation updated
       material_reservation_released: Material reservation released
@@ -311,3 +331,90 @@ production:
       completed: Completed
       installed: Installed
       scrapped: Scrapped
+  protocol:
+    revision_status:
+      draft: Draft
+      published: Published
+      retired: Retired
+    run_status:
+      draft: Draft
+      completed: Completed
+      invalid: Invalid
+    test_result:
+      pass: Passed
+      fail: Failed
+      not_applicable: Not used
+    field_type:
+      text: Text
+      long_text: Multi-line text
+      integer: Integer
+      decimal: Measurement / decimal
+      boolean: Yes / no
+      test_result: Test status (✓ / – / ✕)
+      choice: Choice
+      date: Date
+      datetime: Date and time
+      static_note: Note / subheading
+    template:
+      plural: Protocol templates
+      name: Template name
+      new: Create protocol template
+      edit: Edit protocol template
+      active: Active
+      inactive: Inactive
+      none: No protocol template exists yet.
+      revision: Revision
+      revisions: Revisions
+      published_revision: Current revision
+      published_at: Published at
+      structure: Structure
+      edit_draft: Edit draft
+      new_revision: Create new revision
+      save_draft: Save draft
+      draft_saved: The template draft was saved.
+      publish: Publish revision
+      publish_confirm: Once published, this revision is immutable. New protocol runs will use it as their fixed basis.
+      draft_explanation: Changes to sections and fields are saved immediately. “Save draft” finishes editing without publishing the revision. Publishing makes it immutable.
+    section:
+      plural: Sections
+      name: Section name
+      new: Create section
+      edit: Edit section
+      none: Create a section first.
+      delete_confirm: Remove this section and all of its fields from the draft?
+    field:
+      plural: Fields
+      label: Field label
+      type: Field type
+      unit: Unit
+      unit_help: For example µA, µV, mm, or V.
+      help_text: Help text / note text
+      help_text_help: For input fields, this is shown as help. For “Note / subheading”, it is the freely editable content.
+      layout: Width / placement
+      layout_width: Width in protocol
+      layout_width_help: On small screens, all elements are automatically stacked.
+      layout_width_quarter: 25%
+      layout_width_half: 50%
+      layout_width_three_quarters: 75%
+      layout_width_full: 100%
+      start_new_row: Start on a new row
+      start_new_row_help: Forces a line break before this element.
+      starts_new_row: Starts on a new row
+      required: Required on completion
+      options: Choices
+      options_help: Only for choice fields; enter one choice per line.
+      new: Create field
+      edit: Edit field
+      none: This section has no fields yet.
+      delete_confirm: Remove this field from the template draft?
+    run:
+      save: Save draft
+      complete: Complete
+      complete_confirm: Really complete this protocol run? Its structure and values will become immutable. A later test is recorded as a new run.
+      invalidate: Mark invalid
+      invalidate_confirm: The complete protocol run will be retained but clearly marked as invalid.
+      invalid_reason: Reason
+      no_rows: This section currently has no row.
+  choice:
+    yes: Yes
+    no: No

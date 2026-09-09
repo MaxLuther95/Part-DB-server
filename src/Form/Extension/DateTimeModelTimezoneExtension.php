@@ -33,9 +33,10 @@ use Symfony\Component\Form\FormEvents;
  * Catches timezone mismatches between a DateTimeInterface model value and the effective
  * model_timezone configured on the field.
  *
- * Doctrine's UTCDateTimeImmutableType always returns UTC DateTimeImmutable objects, so any
- * date/datetime field that omits `model_timezone: 'UTC'` will silently corrupt stored values
- * (the transformer treats the UTC instant as if it were in the user's local timezone).
+ * Doctrine's UTC datetime types always return UTC DateTime objects, so datetime fields that
+ * omit `model_timezone: 'UTC'` can silently corrupt stored values (the transformer treats the
+ * UTC instant as if it were in the user's local timezone). Date-only fields use Doctrine's
+ * standard date types and therefore retain the effective local model timezone.
  * This extension throws a \LogicException early so the mistake is caught at development time.
  */
 class DateTimeModelTimezoneExtension extends AbstractTypeExtension

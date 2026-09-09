@@ -11,6 +11,10 @@ perm:
     customers: Kunden
     system_templates: Systemvorlagen
     build_instances: Geräte und Baugruppen
+    protocol_templates: Laufzettelvorlagen
+    protocols: Laufzettel
+    datasheet_templates: Datenblattvorlagen
+    datasheets: Kundendatenblätter
     material: Materialvorgänge
     import_mappings: Import-Zuordnungen
     operation:
@@ -20,3 +24,6 @@ perm:
       reserve: Material reservieren oder freigeben
       provide: Material bereitstellen
       withdraw: Material abbuchen
+      publish: Vorlagenrevisionen veröffentlichen
+      complete: Laufzettel fertigstellen
+      invalidate: Fertige Laufzettel ungültig markieren

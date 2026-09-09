@@ -66,6 +66,18 @@ final class ProductionTreeBuilder
                 $this->urlGenerator->generate('production_template_index'),
             ))->setIcon('fa-fw fa-treeview fa-solid fa-box-archive');
         }
+        if ($this->security->isGranted('@production_protocol_templates.read')) {
+            $managementNodes[] = (new TreeViewNode(
+                $this->trans('production.navigation.protocol_templates'),
+                $this->urlGenerator->generate('production_protocol_template_index'),
+            ))->setIcon('fa-fw fa-treeview fa-solid fa-clipboard-list');
+        }
+        if ($this->security->isGranted('@production_datasheet_templates.read')) {
+            $managementNodes[] = (new TreeViewNode(
+                $this->trans('production.navigation.datasheet_templates'),
+                $this->urlGenerator->generate('production_datasheet_template_index'),
+            ))->setIcon('fa-fw fa-treeview fa-solid fa-file-pdf');
+        }
         if ($this->security->isGranted('@production_import_mappings.read')) {
             $managementNodes[] = (new TreeViewNode(
                 $this->trans('production.navigation.import_mappings'),

@@ -117,6 +117,10 @@ class PermissionPresetsHelper
             'production_customers',
             'production_system_templates',
             'production_build_instances',
+            'production_protocol_templates',
+            'production_protocols',
+            'production_datasheet_templates',
+            'production_datasheets',
             'production_material',
             'production_import_mappings',
         ] as $production_permission) {

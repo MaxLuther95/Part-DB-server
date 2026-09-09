@@ -1,6 +1,5 @@
 {% extends 'base.html.twig' %}
 {% trans_default_domain 'production' %}
-{% import 'helper.twig' as helper %}
 
 {% macro position_rows(position, depth, number, build_status_class) %}
     {% set indent = depth * 1.5 %}
@@ -8,7 +7,7 @@
         <td class="text-nowrap">{{ number }}</td>
         <td style="padding-left: {{ indent + 0.5 }}rem">
             {% if depth > 0 %}<i class="fa-solid fa-turn-up fa-rotate-90 text-muted fa-fw"></i>{% endif %}
-            {% if position.systemTemplate and position.systemTemplate.slots|length > 0 %}
+            {% if position.children|length > 0 or position.partAssignments|length > 0 or (position.systemTemplate and position.systemTemplate.slots|length > 0) %}
                 <button type="button" class="btn btn-sm btn-link text-body p-0 me-1 production-position-toggle" data-production-position-toggle="{{ position.id }}" aria-expanded="{{ depth == 0 ? 'true' : 'false' }}" title="{{ 'production.project_position.toggle_children'|trans }}">
                     <i class="fa-solid fa-chevron-down fa-fw"></i>
                 </button>
@@ -16,6 +15,7 @@
             <strong>{{ position.name }}</strong>
             {% if position.notes %}<i class="fa-solid fa-note-sticky text-warning ms-1" title="{{ position.notes }}" aria-label="{{ 'production.project_position.has_notes'|trans }}"></i>{% endif %}
             {% if position.systemTemplate %}<span class="badge text-bg-light border">{{ 'production.system_template.label'|trans }}</span>{% endif %}
+            {% if position.parent and not position.sourceSlot %}<span class="badge bg-warning text-dark">{{ 'production.project_position.detached_from_template'|trans }}</span>{% endif %}
         </td>
         <td>
             {% if position.systemTemplate and is_granted('@production_system_templates.read') %}
@@ -38,7 +38,7 @@
             {% endfor %}
             {% else %}<span class="text-muted">–</span>{% endif %}
         </td>
-        <td class="ps-4">
+        <td class="text-center">
             {% if is_granted('@production_build_instances.read') %}
             {% for instance in position.buildInstances %}
                 <a class="badge text-bg-light border text-decoration-none" href="{{ path('production_build_instance_show', {id: instance.id}) }}">{{ instance.displayIdentifier }}</a>
@@ -58,14 +58,22 @@
                     <a class="btn btn-sm btn-success" href="{{ path('production_project_position_build', {id: position.id}) }}"><i class="fa-solid fa-hammer fa-fw"></i> {{ 'production.project_position.build'|trans }}</a>
                 {% elseif is_granted('@production_build_instances.assign') and position.buildInstances is not empty %}
                     {% for instance in position.buildInstances %}
-                        <form method="post" action="{{ path('production_build_instance_unassign', {id: instance.id}) }}" class="d-inline" data-turbo-confirm="{{ 'production.build_instance.unassign_confirm'|trans({'%serial%': instance.displayIdentifier}) }}">
+                        <form method="post" action="{{ path('production_build_instance_unassign', {id: instance.id}) }}" class="d-inline"
+                              {{ stimulus_controller('elements/delete_btn') }} {{ stimulus_action('elements/delete_btn', 'submit', 'submit') }}
+                              data-delete-title="{{ 'production.action.confirm_title'|trans }}"
+                              data-delete-message="{{ 'production.build_instance.unassign_confirm'|trans({'%serial%': instance.displayIdentifier}) }}"
+                              data-delete-message-text>
                             <input type="hidden" name="_token" value="{{ csrf_token('unassign_build_instance_' ~ instance.id) }}">
                             <button class="btn btn-sm btn-outline-danger" title="{{ 'production.build_instance.unassign'|trans }}"><i class="fa-solid fa-link-slash fa-fw"></i> {{ 'production.build_instance.unassign'|trans }}</button>
                         </form>
                     {% endfor %}
                 {% endif %}
                 <a class="btn btn-sm btn-outline-primary" href="{{ path('production_project_position_edit', {id: position.id}) }}"><i class="fa-solid fa-pen fa-fw"></i></a>
-                <form method="post" action="{{ path('production_project_position_delete', {id: position.id}) }}" class="d-inline" data-turbo-confirm="{{ 'production.project_position.delete_confirm'|trans({'%name%': position.name}) }}">
+                <form method="post" action="{{ path('production_project_position_delete', {id: position.id}) }}" class="d-inline"
+                      {{ stimulus_controller('elements/delete_btn') }} {{ stimulus_action('elements/delete_btn', 'submit', 'submit') }}
+                      data-delete-title="{{ 'production.action.confirm_title'|trans }}"
+                      data-delete-message="{{ 'production.project_position.delete_confirm'|trans({'%name%': position.name}) }}"
+                      data-delete-message-text>
                     <input type="hidden" name="_token" value="{{ csrf_token('delete_project_position_' ~ position.id) }}">
                     <button class="btn btn-sm btn-outline-danger" title="{{ 'production.project_position.delete'|trans }}"><i class="fa-solid fa-trash fa-fw"></i></button>
                 </form>
@@ -89,7 +97,7 @@
                     <td style="padding-left: {{ indent + 2 }}rem"><i class="fa-solid fa-turn-up fa-rotate-90 text-muted fa-fw me-1"></i><strong>{{ slot.name }}</strong></td>
                     <td>{% if part_assignment.part %}<a href="{{ path('part_info', {id: part_assignment.part.id}) }}">{{ part_assignment.part.name }}</a>{% else %}<span class="text-muted">{{ part_assignment.partName }} ({{ 'production.common.deleted_reference'|trans }})</span>{% endif %} × {{ part_assignment.quantity }}{% if part_assignment.serialTracking %} <span class="badge bg-info text-dark"><i class="fa-solid fa-barcode fa-fw"></i></span>{% endif %}</td>
                     <td class="text-center">{% if part_assignment.part %}{% set part_is_available = part_assignment.part.amountSum >= part_assignment.quantity %}<span class="badge {{ part_is_available ? 'bg-success' : 'bg-danger' }}" title="{{ part_assignment.part.amountSum|number_format }} / {{ part_assignment.quantity }}">{{ (part_is_available ? 'production.accessory.available' : 'production.accessory.unavailable')|trans }}</span>{% else %}<span class="text-muted">–</span>{% endif %}</td>
-                    <td class="ps-4">–</td><td></td>
+                    <td class="text-center">–</td><td></td>
                 </tr>
             {% else %}
                 <tr class="table-light" data-production-position-row data-parent-id="{{ position.id }}"{% if depth > 0 %} hidden{% endif %}>
@@ -104,9 +112,24 @@
                         {% endif %}
                     </td>
                     <td class="text-center">{% if slot.required and slot_choice_count > 1 %}<span class="badge bg-warning text-dark">{{ 'production.project_position.slot.choose'|trans }}</span>{% elseif slot.required %}<span class="badge bg-danger">{{ 'production.system_template.slot.required'|trans }}</span>{% else %}<span class="badge bg-secondary">{{ 'production.system_template.slot.optional'|trans }}</span>{% endif %}</td>
-                    <td class="ps-4">–</td><td></td>
+                    <td class="text-center">–</td><td></td>
                 </tr>
             {% endif %}
+        {% endfor %}
+
+        {% set detached_offset = position.nextDisplayOffset %}
+        {% for child in position.children|filter(child => child.sourceSlot is null) %}
+            {{ _self.position_rows(child, depth + 1, number ~ '.' ~ (detached_offset + loop.index0), build_status_class) }}
+        {% endfor %}
+        {% set detached_position_count = position.children|filter(child => child.sourceSlot is null)|length %}
+        {% for part_assignment in position.partAssignments|filter(assignment => assignment.sourceSlot is null) %}
+            <tr class="table-warning" data-production-position-row data-parent-id="{{ position.id }}"{% if depth > 0 %} hidden{% endif %}>
+                <td class="text-nowrap">{{ number }}.{{ detached_offset + detached_position_count + loop.index0 }}</td>
+                <td style="padding-left: {{ indent + 2 }}rem"><i class="fa-solid fa-turn-up fa-rotate-90 text-muted fa-fw me-1"></i><span class="badge bg-warning text-dark">{{ 'production.project_position.detached_from_template'|trans }}</span></td>
+                <td>{% if part_assignment.part %}<a href="{{ path('part_info', {id: part_assignment.part.id}) }}">{{ part_assignment.part.name }}</a>{% else %}<span class="text-muted">{{ part_assignment.partName }} ({{ 'production.common.deleted_reference'|trans }})</span>{% endif %} × {{ part_assignment.quantity }}{% if part_assignment.serialTracking %} <span class="badge bg-info text-dark"><i class="fa-solid fa-barcode fa-fw"></i></span>{% endif %}</td>
+                <td class="text-center">{% if part_assignment.part %}{% set part_is_available = part_assignment.part.amountSum >= part_assignment.quantity %}<span class="badge {{ part_is_available ? 'bg-success' : 'bg-danger' }}" title="{{ part_assignment.part.amountSum|number_format }} / {{ part_assignment.quantity }}">{{ (part_is_available ? 'production.accessory.available' : 'production.accessory.unavailable')|trans }}</span>{% else %}<span class="text-muted">–</span>{% endif %}</td>
+                <td class="text-center">–</td><td class="text-end">{% if is_granted('@production_orders.edit') %}<a class="btn btn-sm btn-outline-primary" href="{{ path('production_accessory_edit', {id: part_assignment.id}) }}" title="{{ 'production.accessory.edit'|trans }}"><i class="fa-solid fa-pen fa-fw"></i></a>{% endif %}</td>
+            </tr>
         {% endfor %}
     {% endif %}
 {% endmacro %}
@@ -157,20 +180,37 @@
     {% endif %}
 
     <div class="row g-3 mb-3">
-        <div class="col-md"><div class="card h-100"><div class="card-body d-flex gap-3 align-items-center"><i class="fa-solid fa-diagram-project fa-2x text-primary"></i><div><small class="text-muted">{{ 'production.project.label'|trans }}</small><div class="fw-bold">{% if is_granted('@production_projects.read') %}<a href="{{ path('production_project_show', {id: project.productionProject.id}) }}">{{ project.productionProject }}</a>{% else %}{{ project.productionProject }}{% endif %}</div></div></div></div></div>
-        <div class="col-md"><div class="card h-100"><div class="card-body d-flex gap-3 align-items-center"><i class="fa-solid fa-building fa-2x text-primary"></i><div><small class="text-muted">{{ 'production.customer.label'|trans }}</small><div class="fw-bold">{% if is_granted('@production_customers.read') %}<a href="{{ path('production_customer_show', {id: project.customer.id}) }}">{{ project.customer.name }}</a>{% else %}{{ project.customer.name }}{% endif %}</div></div></div></div></div>
-        <div class="col-md"><div class="card h-100"><div class="card-body d-flex gap-3 align-items-center"><i class="fa-solid fa-folder-open fa-2x text-primary"></i><div><small class="text-muted">{{ 'production.customer_project.number'|trans }}</small><div class="fw-bold">{{ project.projectNumber }}</div>{% if project.orderDate %}<small class="text-muted">{{ project.orderDate|format_date('medium') }}</small>{% endif %}</div></div></div></div>
-        <div class="col-md"><div class="card h-100"><div class="card-body d-flex gap-3 align-items-center"><i class="fa-solid fa-microchip fa-2x text-primary"></i><div><small class="text-muted">{{ 'production.project_position.systems'|trans }}</small><div class="fw-bold">{{ project.rootPositions|length }}</div></div></div></div></div>
-        <div class="col-md"><div class="card h-100"><div class="card-body d-flex gap-3 align-items-center"><i class="fa-solid fa-layer-group fa-2x text-primary"></i><div><small class="text-muted">{{ 'production.build_instance.plural'|trans }}</small><div class="fw-bold">{{ is_granted('@production_build_instances.read') ? project.buildInstances|length : '–' }}</div></div></div></div></div>
-        <div class="col-md"><div class="card h-100"><div class="card-body d-flex gap-3 align-items-center"><i class="fa-solid fa-location-dot fa-2x text-primary"></i><div><small class="text-muted">Fertigungsstandort</small><div class="fw-bold">{{ project.productionSite ? project.productionSite.fullPath : 'Noch nicht festgelegt' }}</div></div></div></div></div>
+        <div class="col-md" data-order-summary="project"><div class="card h-100"><div class="card-body d-flex gap-3 align-items-center"><i class="fa-solid fa-diagram-project fa-2x text-primary"></i><div><small class="text-muted">{{ 'production.project.label'|trans }}</small><div class="fw-bold">{% if is_granted('@production_projects.read') %}<a href="{{ path('production_project_show', {id: project.productionProject.id}) }}">{{ project.productionProject }}</a>{% else %}{{ project.productionProject }}{% endif %}</div></div></div></div></div>
+        <div class="col-md" data-order-summary="customer"><div class="card h-100"><div class="card-body d-flex gap-3 align-items-center"><i class="fa-solid fa-building fa-2x text-primary"></i><div><small class="text-muted">{{ 'production.customer.label'|trans }}</small><div class="fw-bold">{% if is_granted('@production_customers.read') %}<a href="{{ path('production_customer_show', {id: project.customer.id}) }}">{{ project.customer.name }}</a>{% else %}{{ project.customer.name }}{% endif %}</div></div></div></div></div>
+        <div class="col-md" data-order-summary="planned-delivery"><div class="card h-100"><div class="card-body d-flex gap-3 align-items-center"><i class="fa-solid fa-calendar-check fa-2x text-primary"></i><div><small class="text-muted">{{ 'production.customer_project.planned_delivery_date'|trans }}</small><div class="fw-bold">{{ project.plannedDeliveryDate ? project.plannedDeliveryDate|format_date('medium') : ('production.customer_project.delivery_date_unset'|trans) }}</div></div></div></div></div>
+        <div class="col-md" data-order-summary="systems"><div class="card h-100"><div class="card-body d-flex gap-3 align-items-center"><i class="fa-solid fa-microchip fa-2x text-primary"></i><div><small class="text-muted">{{ 'production.project_position.systems'|trans }}</small><div class="fw-bold">{{ project.rootPositions|length }}</div></div></div></div></div>
+        <div class="col-md" data-order-summary="build-instances"><div class="card h-100"><div class="card-body d-flex gap-3 align-items-center"><i class="fa-solid fa-layer-group fa-2x text-primary"></i><div><small class="text-muted">{{ 'production.build_instance.plural'|trans }}</small><div class="fw-bold">{{ is_granted('@production_build_instances.read') ? project.buildInstances|length : '–' }}</div></div></div></div></div>
     </div>
     {% if project.description %}<div class="alert alert-light border mb-3">{{ project.description|nl2br }}</div>{% endif %}
 
-    <div class="card mb-3">
+    <div class="card mb-3" data-order-section="positions">
         <div class="card-header d-flex justify-content-between align-items-center"><strong><i class="fa-solid fa-list-check fa-fw"></i> {{ 'production.project_position.plural'|trans }}</strong>{% if is_granted('@production_orders.edit') %}<a class="btn btn-sm btn-success" href="{{ path('production_project_position_new', {id: project.id}) }}"><i class="fa-solid fa-plus fa-fw"></i> {{ 'production.project_position.add_system'|trans }}</a>{% endif %}</div>
-        <div class="table-responsive"><table class="table table-sm table-hover mb-0 align-middle" data-production-position-tree><thead><tr><th>#</th><th>{{ 'production.common.name'|trans }}</th><th>{{ 'production.project_position.content'|trans }}</th><th class="text-center">{{ 'production.common.status'|trans }}</th><th class="ps-4">{{ 'production.build_instance.plural'|trans }}</th><th></th></tr></thead><tbody>
+        <div class="table-responsive"><table class="table table-sm table-hover mb-0 align-middle" data-production-position-tree><thead><tr><th>#</th><th>{{ 'production.common.name'|trans }}</th><th>{{ 'production.project_position.content'|trans }}</th><th class="text-center">{{ 'production.common.status'|trans }}</th><th class="text-center">{{ 'production.build_instance.plural'|trans }}</th><th></th></tr></thead><tbody>
         {% for position in project.rootPositions %}{{ _self.position_rows(position, 0, position.position, build_status_class) }}{% else %}<tr><td colspan="6" class="text-center text-muted py-4">{{ 'production.project_position.empty'|trans }}</td></tr>{% endfor %}
         </tbody></table></div>
+    </div>
+
+    <div class="row g-3 mb-3">
+        <div class="col-xl-6" data-order-section="accessories"><div class="card h-100"><div class="card-header d-flex justify-content-between align-items-center"><strong><i class="fa-solid fa-box-open fa-fw"></i> {{ 'production.accessory.plural'|trans }}</strong>{% if is_granted('@production_orders.edit') %}<a class="btn btn-sm btn-success" href="{{ path('production_accessory_new', {id: project.id}) }}"><i class="fa-solid fa-plus fa-fw"></i> {{ 'production.accessory.new'|trans }}</a>{% endif %}</div><div class="table-responsive"><table class="table table-sm table-hover mb-0 align-middle"><thead><tr><th>{{ 'production.accessory.part'|trans }}</th><th>{{ 'production.accessory.quantity'|trans }}</th><th>{{ 'production.accessory.available'|trans }}</th><th></th></tr></thead><tbody>
+            {% for accessory in project.accessories|filter(a => a.projectPosition is null) %}<tr><td>{% if accessory.part %}<a href="{{ path('part_info', {id: accessory.part.id}) }}">{{ accessory.part.name }}</a>{% else %}<span class="text-muted">{{ accessory.partName }} ({{ 'production.common.deleted_reference'|trans }})</span>{% endif %}{% if accessory.note %}<br><small class="text-muted">{{ accessory.note }}</small>{% endif %}</td><td>{{ accessory.quantity }}</td><td>{% if accessory.part %}<span class="badge {{ accessory.part.amountSum >= accessory.quantity ? 'bg-success' : 'bg-danger' }}">{{ accessory.part.amountSum|number_format }}</span>{% else %}<span class="text-muted">–</span>{% endif %}</td><td class="text-end">{% if is_granted('@production_orders.edit') %}<a class="btn btn-sm btn-outline-primary" href="{{ path('production_accessory_edit', {id: accessory.id}) }}"><i class="fa-solid fa-pen fa-fw"></i></a>{% endif %}</td></tr>{% else %}<tr><td colspan="4" class="text-center text-muted py-4">{{ 'production.accessory.empty'|trans }}</td></tr>{% endfor %}
+        </tbody></table></div></div></div>
+
+        <div class="col-xl-6" data-order-section="notes">
+            <div class="card h-100">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <strong><i class="fa-solid fa-note-sticky fa-fw"></i> {{ 'production.common.notes'|trans }}</strong>
+                    {% if is_granted('@production_orders.edit') %}<a class="btn btn-sm btn-outline-primary" href="{{ path('production_customer_project_edit', {id: project.id}) }}" title="{{ 'production.action.edit'|trans }}"><i class="fa-solid fa-pen fa-fw"></i></a>{% endif %}
+                </div>
+                <div class="card-body">
+                    {% if project.notes %}{{ project.notes|nl2br }}{% else %}<span class="text-muted">{{ 'production.common.no_notes'|trans }}</span>{% endif %}
+                </div>
+            </div>
+        </div>
     </div>
 
     {% if is_granted('@production_material.read') %}
@@ -178,7 +218,7 @@
         {% if not project.productionSite %}<div class="alert alert-secondary d-flex justify-content-between align-items-center py-2"><span><i class="fa-solid fa-location-dot fa-fw"></i> Ohne Fertigungsstandort ist keine standortbezogene Materialaussage möglich.</span>{% if is_granted('@production_orders.edit') %}<a class="btn btn-sm btn-outline-secondary" href="{{ path('production_customer_project_edit', {id: project.id}) }}">Standort festlegen</a>{% endif %}</div>{% elseif material_plan.reservation_conflict %}<div class="alert alert-danger py-2"><i class="fa-solid fa-triangle-exclamation fa-fw"></i> Mindestens eine Reservierung ist durch eine zwischenzeitliche Bestandsänderung nicht mehr vollständig gedeckt. Bitte die Reservierung prüfen und aktualisieren.</div>{% elseif material_plan.reservation_stale %}<div class="alert alert-warning py-2"><i class="fa-solid fa-arrows-rotate fa-fw"></i> Bedarf und Reservierung stimmen nicht überein. Die BOM oder Projektkonfiguration wurde geändert oder Material ist noch nicht reserviert.</div>{% elseif material_plan.remote_reserved_total > 0 %}<div class="alert alert-warning py-2"><i class="fa-solid fa-truck fa-fw"></i> {{ material_plan.remote_reserved_total }} Teile sind an einem anderen Standort reserviert und warten noch auf den Transfer nach {{ project.productionSite.fullPath }}.</div>{% else %}<div class="alert alert-success py-2"><i class="fa-solid fa-bookmark fa-fw"></i> Der noch offene Materialbedarf ist vollständig reserviert. Der Part-DB-Bestand wird erst beim Bereitstellen oder Bauen verändert.</div>{% endif %}
     {% endif %}
 
-    <div class="card mb-3">
+    <div class="card mb-3" data-order-section="material">
         <div class="card-header d-flex justify-content-between align-items-center">
             <strong><i class="fa-solid fa-boxes-stacked fa-fw"></i> {{ 'production.material_plan.label'|trans }}</strong>
             {% if not project.productionSite %}
@@ -200,69 +240,17 @@
     {% endif %}
 
     <div class="row g-3">
-        <div class="col-xl-6"><div class="card h-100"><div class="card-header d-flex justify-content-between align-items-center"><strong><i class="fa-solid fa-box-open fa-fw"></i> {{ 'production.accessory.plural'|trans }}</strong>{% if is_granted('@production_orders.edit') %}<a class="btn btn-sm btn-success" href="{{ path('production_accessory_new', {id: project.id}) }}"><i class="fa-solid fa-plus fa-fw"></i> {{ 'production.accessory.new'|trans }}</a>{% endif %}</div><div class="table-responsive"><table class="table table-sm table-hover mb-0 align-middle"><thead><tr><th>{{ 'production.accessory.part'|trans }}</th><th>{{ 'production.accessory.quantity'|trans }}</th><th>{{ 'production.accessory.available'|trans }}</th><th></th></tr></thead><tbody>
-            {% for accessory in project.accessories|filter(a => a.projectPosition is null) %}<tr><td>{% if accessory.part %}<a href="{{ path('part_info', {id: accessory.part.id}) }}">{{ accessory.part.name }}</a>{% else %}<span class="text-muted">{{ accessory.partName }} ({{ 'production.common.deleted_reference'|trans }})</span>{% endif %}{% if accessory.note %}<br><small class="text-muted">{{ accessory.note }}</small>{% endif %}</td><td>{{ accessory.quantity }}</td><td>{% if accessory.part %}<span class="badge {{ accessory.part.amountSum >= accessory.quantity ? 'bg-success' : 'bg-danger' }}">{{ accessory.part.amountSum|number_format }}</span>{% else %}<span class="text-muted">–</span>{% endif %}</td><td class="text-end">{% if is_granted('@production_orders.edit') %}<a class="btn btn-sm btn-outline-primary" href="{{ path('production_accessory_edit', {id: accessory.id}) }}"><i class="fa-solid fa-pen fa-fw"></i></a>{% endif %}</td></tr>{% else %}<tr><td colspan="4" class="text-center text-muted py-4">{{ 'production.accessory.empty'|trans }}</td></tr>{% endfor %}
-        </tbody></table></div></div></div>
-
-        {% if is_granted('@production_build_instances.read') %}<div class="col-xl-6"><div class="card h-100"><div class="card-header d-flex justify-content-between align-items-center"><strong><i class="fa-solid fa-layer-group fa-fw"></i> {{ 'production.project.build_instances'|trans }}</strong><a class="btn btn-sm btn-outline-primary" href="{{ path('production_build_instance_index') }}">{{ 'production.action.show_all'|trans }}</a></div><div class="table-responsive"><table class="table table-sm table-hover mb-0 align-middle"><thead><tr><th>{{ 'production.build_instance.serial_number'|trans }}</th><th>{{ 'production.build_instance.template'|trans }}</th><th>{{ 'production.common.status'|trans }}</th><th>{{ 'production.project_position.label'|trans }}</th></tr></thead><tbody>
-            {% for instance in project.buildInstances %}<tr><td><a href="{{ path('production_build_instance_show', {id: instance.id}) }}"><strong>{{ instance.displayIdentifier }}</strong></a></td><td>{{ instance.contentName }}{% if not instance.systemTemplate and not instance.templateProject %} <span class="text-muted">({{ 'production.common.deleted_reference'|trans }})</span>{% endif %}</td><td><span class="badge {{ build_status_class[instance.status.value]|default('bg-secondary') }}">{{ ('production.build_instance.status.' ~ instance.status.value)|trans }}</span></td><td>{{ instance.projectPosition ? instance.projectPosition.name : '–' }}</td></tr>{% else %}<tr><td colspan="4" class="text-center text-muted py-4">{{ 'production.common.empty'|trans }}</td></tr>{% endfor %}
+        {% if is_granted('@production_build_instances.read') %}<div class="col-xl-6" data-order-section="build-instances"><div class="card h-100"><div class="card-header d-flex justify-content-between align-items-center"><strong><i class="fa-solid fa-layer-group fa-fw"></i> {{ 'production.project.build_instances'|trans }}</strong><a class="btn btn-sm btn-outline-primary" href="{{ path('production_build_instance_index') }}">{{ 'production.action.show_all'|trans }}</a></div><div class="table-responsive"><table class="table table-sm table-hover mb-0 align-middle" data-order-build-instances-table><thead><tr><th>{{ 'production.build_instance.serial_number'|trans }}</th><th>{{ 'production.build_instance.template'|trans }}</th><th class="text-center">{{ 'production.common.status'|trans }}</th><th class="text-center">{{ 'production.project_position.label'|trans }}</th></tr></thead><tbody>
+            {% for instance in project.buildInstances %}<tr><td><a href="{{ path('production_build_instance_show', {id: instance.id}) }}"><strong>{{ instance.displayIdentifier }}</strong></a></td><td>{{ instance.contentName }}{% if not instance.systemTemplate and not instance.templateProject %} <span class="text-muted">({{ 'production.common.deleted_reference'|trans }})</span>{% endif %}</td><td class="text-center"><span class="badge {{ build_status_class[instance.status.value]|default('bg-secondary') }}">{{ ('production.build_instance.status.' ~ instance.status.value)|trans }}</span></td><td class="text-center">{{ instance.projectPosition ? instance.projectPosition.name : '–' }}</td></tr>{% else %}<tr><td colspan="4" class="text-center text-muted py-4">{{ 'production.common.empty'|trans }}</td></tr>{% endfor %}
         </tbody></table></div></div></div>{% endif %}
 
-        <div class="col-xl-6">
-            <div class="card h-100">
-                <div class="card-header d-flex justify-content-between align-items-center">
-                    <strong><i class="fa-solid fa-note-sticky fa-fw"></i> {{ 'production.common.notes'|trans }}</strong>
-                    {% if is_granted('@production_orders.edit') %}<a class="btn btn-sm btn-outline-primary" href="{{ path('production_customer_project_edit', {id: project.id}) }}" title="{{ 'production.action.edit'|trans }}"><i class="fa-solid fa-pen fa-fw"></i></a>{% endif %}
-                </div>
-                <div class="card-body">
-                    {% if project.notes %}{{ project.notes|nl2br }}{% else %}<span class="text-muted">{{ 'production.common.no_notes'|trans }}</span>{% endif %}
-                </div>
-            </div>
-        </div>
-
-        <div class="col-xl-6">
-            <div class="card h-100">
-                <div class="card-header"><strong><i class="fa-solid fa-clock-rotate-left fa-fw"></i> {{ 'production.history.label'|trans }}</strong></div>
-                <div class="table-responsive">
-                    <table class="table table-sm table-hover align-middle mb-0">
-                        <thead><tr><th class="text-nowrap" style="width: 10rem;">{{ 'production.history.timestamp'|trans }}</th><th style="width: 2rem;"></th><th>{{ 'production.history.event_label'|trans }}</th><th style="width: 14rem;">{{ 'production.history.actor'|trans }}</th></tr></thead>
-                        <tbody>
-                        {% for event in project.history %}
-                            <tr>
-                                <td class="text-nowrap text-muted">{{ event.occurredAt|format_datetime('short', 'short') }}</td>
-                                <td class="text-center"><i class="fa-solid fa-circle-dot text-primary" aria-hidden="true"></i></td>
-                                <td>
-                                    <div>{{ ('production.history.event.' ~ event.eventType)|trans }}</div>
-                                    {% if event.description %}<div class="fw-semibold">{{ event.description }}</div>{% endif %}
-                                </td>
-                                <td class="text-nowrap">{{ event.actor ? helper.user_icon_link(event.actor) : ('production.history.system'|trans) }}</td>
-                            </tr>
-                        {% else %}
-                            <tr><td colspan="4" class="text-center text-muted py-3">{{ 'production.history.empty'|trans }}</td></tr>
-                        {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div class="row g-3 mt-0">
-        <div class="col-xl-6">
+        <div class="col-xl-6" data-order-section="attachments">
             <div class="card h-100">
                 <div class="card-header"><strong><i class="fa-solid fa-paperclip fa-fw"></i> Dateianhänge</strong></div>
                 <div class="table-responsive"><table class="table table-sm table-hover align-middle mb-0"><thead><tr><th>Datei</th><th>Größe</th><th>Hinzugefügt</th><th></th></tr></thead><tbody>
-                {% for attachment in project.attachments %}<tr><td><a href="{{ path('production_order_attachment_download', {id: attachment.id}) }}"><i class="fa-solid fa-download fa-fw"></i> {{ attachment.originalFilename }}</a></td><td>{{ (attachment.fileSize / 1024)|number_format(1, ',', '.') }} KB</td><td>{{ attachment.addedDate|format_datetime('short', 'short') }}</td><td class="text-end">{% if is_granted('@production_orders.edit') %}<form method="post" action="{{ path('production_order_attachment_delete', {id: attachment.id}) }}" data-turbo-confirm="Diesen Dateianhang wirklich löschen?"><input type="hidden" name="_token" value="{{ csrf_token('delete_order_attachment_' ~ attachment.id) }}"><button class="btn btn-sm btn-outline-danger" type="submit"><i class="fa-solid fa-trash fa-fw"></i></button></form>{% endif %}</td></tr>{% else %}<tr><td colspan="4" class="text-center text-muted py-3">Noch keine Dateien angehängt.</td></tr>{% endfor %}
+                {% for attachment in project.attachments %}<tr><td><a href="{{ path('production_order_attachment_download', {id: attachment.id}) }}"><i class="fa-solid fa-download fa-fw"></i> {{ attachment.originalFilename }}</a></td><td>{{ (attachment.fileSize / 1024)|number_format(1, ',', '.') }} KB</td><td>{{ attachment.addedDate|format_datetime('short', 'short') }}</td><td class="text-end">{% if is_granted('@production_orders.edit') %}<form method="post" action="{{ path('production_order_attachment_delete', {id: attachment.id}) }}" {{ stimulus_controller('elements/delete_btn') }} {{ stimulus_action('elements/delete_btn', 'submit', 'submit') }} data-delete-title="{{ 'production.action.confirm_title'|trans }}" data-delete-message="{{ 'production.customer_project.attachment_delete_confirm'|trans }}" data-delete-message-text><input type="hidden" name="_token" value="{{ csrf_token('delete_order_attachment_' ~ attachment.id) }}"><button class="btn btn-sm btn-outline-danger" type="submit"><i class="fa-solid fa-trash fa-fw"></i></button></form>{% endif %}</td></tr>{% else %}<tr><td colspan="4" class="text-center text-muted py-3">Noch keine Dateien angehängt.</td></tr>{% endfor %}
                 </tbody></table></div>
                 {% if is_granted('@production_orders.edit') %}<div class="card-footer"><form class="d-flex gap-2" method="post" enctype="multipart/form-data" action="{{ path('production_order_attachment_upload', {id: project.id}) }}"><input type="hidden" name="_token" value="{{ csrf_token('production_order_attachment_' ~ project.id) }}"><input class="form-control form-control-sm" type="file" name="attachment" accept=".pdf,.png,.jpg,.jpeg,.webp,.txt,.csv,.docx,.xlsx,.odt,.ods,.eml" required><button class="btn btn-sm btn-success text-nowrap" type="submit"><i class="fa-solid fa-upload fa-fw"></i> Datei anhängen</button></form><div class="form-text">Erlaubt: PDF, Bilder, Text/CSV, DOCX/XLSX, ODT/ODS und EML. Maximal {{ max_attachment_size|format_bytes }} je Datei gemäß Part-DB-Einstellung und 250 MB je Auftrag. Downloads sind nur mit Auftragsberechtigung möglich.</div></div>{% endif %}
-            </div>
-        </div>
-        <div class="col-xl-6">
-            <div class="card h-100">
-                <div class="card-header"><strong><i class="fa-solid fa-file-import fa-fw"></i> Importierte Auftragspositionen</strong></div>
-                <div class="table-responsive"><table class="table table-sm table-hover align-middle mb-0"><thead><tr><th>#</th><th>Beschreibung</th><th class="text-center">Anzahl</th><th>Zuordnung</th></tr></thead><tbody>
-                {% for line in project.importLines %}<tr><td>{{ line.lineNumber }}</td><td>{{ line.description }}</td><td class="text-center">{{ line.quantity }} {{ line.unit }}</td><td>{% if line.mapping %}<span class="badge bg-light text-dark border">{{ line.mapping.targetType }}</span> {{ line.mapping.targetLabel }}{% else %}<span class="badge bg-warning text-dark">Nicht zugeordnet</span>{% endif %}</td></tr>{% else %}<tr><td colspan="4" class="text-center text-muted py-3">Dieser Auftrag wurde nicht aus einer PDF importiert.</td></tr>{% endfor %}
-                </tbody></table></div>
             </div>
         </div>
     </div>

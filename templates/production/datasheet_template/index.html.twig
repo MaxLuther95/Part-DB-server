@@ -1,0 +1,32 @@
+{% extends 'main_card.html.twig' %}
+{% trans_default_domain 'production' %}
+
+{% block title %}Datenblattvorlagen{% endblock %}
+{% block card_title %}<i class="fa-solid fa-file-pdf fa-fw"></i> Datenblattvorlagen{% endblock %}
+
+{% block card_content %}
+    <div class="d-flex flex-wrap gap-2 mb-3">
+        <a class="btn btn-outline-secondary" href="{{ path('production_build_instance_index') }}"><i class="fa-solid fa-arrow-left fa-fw"></i> Gebaute Instanzen</a>
+        {% if is_granted('@production_protocol_templates.read') %}<a class="btn btn-outline-secondary" href="{{ path('production_protocol_template_index') }}">Laufzettelvorlagen</a>{% endif %}
+        {% if is_granted('@production_datasheet_templates.create') and (is_granted('@users.edit_permissions') or is_granted('@groups.edit_permissions')) %}
+            <a class="btn btn-primary ms-auto" href="{{ path('production_datasheet_template_new') }}"><i class="fa-solid fa-plus fa-fw"></i> Datenblattvorlage anlegen</a>
+        {% endif %}
+    </div>
+    <p class="text-muted">Datenblattvorlagen sind englische, versionierte Ausgabevorlagen für Elektroniken, Kabel und vollständige Geräte. Inhalt erscheint nur, wenn er als Baustein hinzugefügt und einer sicheren Datenquelle zugeordnet wurde.</p>
+    <div class="table-responsive"><table class="table table-hover align-middle">
+        <thead><tr><th>Vorlage</th><th>Produktüberschrift</th><th>Status</th><th>Veröffentlicht</th><th></th></tr></thead>
+        <tbody>
+        {% for template in templates %}
+            <tr>
+                <td><a href="{{ path('production_datasheet_template_show', {id: template.id}) }}"><strong>{{ template.name }}</strong></a><br><small class="text-muted">{{ template.description|u.truncate(90, '…') }}</small></td>
+                <td>{{ template.productTitle }}</td>
+                <td><span class="badge {{ template.active ? 'text-bg-success' : 'text-bg-secondary' }}">{{ template.active ? 'Aktiv' : 'Inaktiv' }}</span></td>
+                <td>{{ template.publishedRevision ? ('v' ~ template.publishedRevision.revisionNumber) : '–' }}</td>
+                <td class="text-end"><a class="btn btn-sm btn-outline-primary" href="{{ path('production_datasheet_template_show', {id: template.id}) }}">Anzeigen</a></td>
+            </tr>
+        {% else %}
+            <tr><td colspan="5" class="text-muted">Noch keine Datenblattvorlage vorhanden.</td></tr>
+        {% endfor %}
+        </tbody>
+    </table></div>
+{% endblock %}

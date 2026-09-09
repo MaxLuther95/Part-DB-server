@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ revision.template.productTitle }}</title>
+    <style>
+        @page { size: A4 portrait; margin: 24mm 14mm 20mm; }
+        body { margin: 0; }
+        {% include 'production/datasheet/_styles.css.twig' %}
+        .datasheet-watermark { position: fixed; }
+        .datasheet-page-break span { display: none; }
+        .datasheet-footer { bottom: -14mm; color: #637783; font-size: 7pt; left: 0; position: fixed; right: 0; text-align: right; }
+        .datasheet-logo { float: left; }
+    </style>
+</head>
+<body>
+    {% include 'production/datasheet/_document.html.twig' %}
+</body>
+</html>

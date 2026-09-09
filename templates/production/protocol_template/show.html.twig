@@ -1,0 +1,38 @@
+{% extends 'main_card.html.twig' %}
+{% trans_default_domain 'production' %}
+
+{% block title %}{{ template.name }}{% endblock %}
+{% block card_title %}<i class="fa-solid fa-clipboard-list fa-fw"></i> {{ template.name }}{% endblock %}
+
+{% block card_content %}
+    <div class="d-flex flex-wrap gap-2 mb-3">
+        <a class="btn btn-outline-secondary" href="{{ path('production_protocol_template_index') }}"><i class="fa-solid fa-arrow-left fa-fw"></i> {{ 'production.protocol.template.plural'|trans }}</a>
+        {% if is_granted('@production_protocol_templates.edit') and (is_granted('@users.edit_permissions') or is_granted('@groups.edit_permissions')) %}
+            <a class="btn btn-outline-primary" href="{{ path('production_protocol_template_edit', {id: template.id}) }}"><i class="fa-solid fa-pen fa-fw"></i> {{ 'production.action.edit'|trans }}</a>
+            {% if template.draftRevision %}
+                <a class="btn btn-primary" href="{{ path('production_protocol_revision_edit', {id: template.draftRevision.id}) }}"><i class="fa-solid fa-list-check fa-fw"></i> {{ 'production.protocol.template.edit_draft'|trans }}</a>
+            {% else %}
+                <form method="post" action="{{ path('production_protocol_template_draft', {id: template.id}) }}">
+                    <input type="hidden" name="_token" value="{{ csrf_token('protocol_template_draft_' ~ template.id) }}">
+                    <button class="btn btn-primary" type="submit"><i class="fa-solid fa-code-branch fa-fw"></i> {{ 'production.protocol.template.new_revision'|trans }}</button>
+                </form>
+            {% endif %}
+        {% endif %}
+    </div>
+    <dl class="row">
+        <dt class="col-sm-3">{{ 'production.common.description'|trans }}</dt><dd class="col-sm-9">{{ template.description ? template.description|nl2br : '–' }}</dd>
+        <dt class="col-sm-3">{{ 'production.common.status'|trans }}</dt><dd class="col-sm-9">{{ (template.active ? 'production.protocol.template.active' : 'production.protocol.template.inactive')|trans }}</dd>
+    </dl>
+
+    <h5>{{ 'production.protocol.template.revisions'|trans }}</h5>
+    <div class="table-responsive"><table class="table table-sm align-middle"><thead><tr><th>{{ 'production.protocol.template.revision'|trans }}</th><th>{{ 'production.common.status'|trans }}</th><th>{{ 'production.protocol.template.published_at'|trans }}</th><th>{{ 'production.protocol.template.structure'|trans }}</th></tr></thead><tbody>
+        {% for revision in template.revisions %}
+            <tr>
+                <td>v{{ revision.revisionNumber }}</td>
+                <td><span class="badge {{ revision.status.value == 'published' ? 'text-bg-success' : (revision.status.value == 'draft' ? 'text-bg-warning' : 'text-bg-secondary') }}">{{ ('production.protocol.revision_status.' ~ revision.status.value)|trans }}</span></td>
+                <td>{{ revision.publishedAt ? revision.publishedAt|format_datetime('short', 'short') : '–' }}</td>
+                <td>{{ revision.sections|length }} {{ 'production.protocol.section.plural'|trans }}, {% set field_count = 0 %}{% for section in revision.sections %}{% set field_count = field_count + section.fields|length %}{% endfor %}{{ field_count }} {{ 'production.protocol.field.plural'|trans }}</td>
+            </tr>
+        {% endfor %}
+    </tbody></table></div>
+{% endblock %}

@@ -29,7 +29,9 @@ use App\Form\Production\SystemTemplateSlotType;
 use App\Form\Production\SystemTemplateType;
 use App\Repository\Production\BuildInstanceRepository;
 use App\Repository\Production\CustomerRepository;
+use App\Repository\Production\DatasheetTemplateRepository;
 use App\Repository\Production\ProductionProjectRepository;
+use App\Repository\Production\ProtocolTemplateRepository;
 use App\Repository\Production\SystemTemplateRepository;
 use App\Entity\Production\BuildStatus;
 use App\Entity\ProjectSystem\Project;
@@ -39,6 +41,7 @@ use App\Services\Production\BuildConfigurationCompatibility;
 use App\Services\Production\ProductionMaterialPlanner;
 use App\Services\Production\ProductionBuildWorkflow;
 use App\Services\Production\ProjectPositionInitializer;
+use App\Services\Production\ProjectPositionPositioner;
 use App\Services\Production\ProductionReservationManager;
 use App\Services\Production\OrderAttachmentStorage;
 use App\Services\Production\SystemTemplateSlotPositioner;
@@ -66,6 +69,7 @@ final class ProductionController extends AbstractController
         private readonly TranslatorInterface $translator,
         private readonly ProductionReservationManager $reservationManager,
         private readonly ProjectPositionInitializer $positionInitializer,
+        private readonly ProjectPositionPositioner $projectPositioner,
         private readonly SystemTemplateSlotPositioner $slotPositioner,
     )
     {
@@ -164,22 +168,36 @@ final class ProductionController extends AbstractController
     public function templateNew(Request $request, EntityManagerInterface $entityManager): Response
     {
         $this->denyAccessUnlessGranted('@production_system_templates.create');
+        $this->denySystemTemplateAdministration();
 
         return $this->handleSystemTemplateForm(new SystemTemplate(), $request, $entityManager);
     }
 
     #[Route(path: '/build-templates/{id}', name: 'production_template_show', requirements: ['id' => '\d+'], methods: ['GET'])]
-    public function templateShow(SystemTemplate $template): Response
+    public function templateShow(SystemTemplate $template, EntityManagerInterface $entityManager): Response
     {
         $this->denyAccessUnlessGranted('@production_system_templates.read');
 
-        return $this->render('production/template/show.html.twig', ['template' => $template]);
+        $slotUsageCounts = [];
+        foreach ($template->getSlots() as $slot) {
+            if (null === $slot->getId()) {
+                continue;
+            }
+            $slotUsageCounts[$slot->getId()] = $entityManager->getRepository(ProjectPosition::class)->count(['sourceSlot' => $slot])
+                + $entityManager->getRepository(ProjectAccessory::class)->count(['sourceSlot' => $slot]);
+        }
+
+        return $this->render('production/template/show.html.twig', [
+            'template' => $template,
+            'slot_usage_counts' => $slotUsageCounts,
+        ]);
     }
 
     #[Route(path: '/build-templates/{id}/edit', name: 'production_template_edit', requirements: ['id' => '\d+'], methods: ['GET', 'POST'])]
     public function templateEdit(SystemTemplate $template, Request $request, EntityManagerInterface $entityManager): Response
     {
         $this->denyAccessUnlessGranted('@production_system_templates.edit');
+        $this->denySystemTemplateAdministration();
 
         return $this->handleSystemTemplateForm($template, $request, $entityManager);
     }
@@ -188,6 +206,7 @@ final class ProductionController extends AbstractController
     public function templateDelete(SystemTemplate $template, Request $request, EntityManagerInterface $entityManager): Response
     {
         $this->denyAccessUnlessGranted('@production_system_templates.delete');
+        $this->denySystemTemplateAdministration();
         if (!$this->isCsrfTokenValid('delete_system_template_'.$template->getId(), $request->request->getString('_token'))) {
             throw $this->createAccessDeniedException('Invalid CSRF token.');
         }
@@ -203,8 +222,10 @@ final class ProductionController extends AbstractController
     public function templateSlotNew(SystemTemplate $template, Request $request): Response
     {
         $this->denyAccessUnlessGranted('@production_system_templates.edit');
+        $this->denySystemTemplateAdministration();
 
         $slot = new SystemTemplateSlot();
+        $slot->setPosition($this->slotPositioner->getNextPosition($template));
         $template->addSlot($slot);
 
         return $this->handleSystemTemplateSlotForm(
@@ -217,8 +238,42 @@ final class ProductionController extends AbstractController
     public function templateSlotEdit(SystemTemplateSlot $slot, Request $request): Response
     {
         $this->denyAccessUnlessGranted('@production_system_templates.edit');
+        $this->denySystemTemplateAdministration();
 
         return $this->handleSystemTemplateSlotForm($slot, $request);
+    }
+
+    #[Route(path: '/build-template-slots/{id}/delete', name: 'production_template_slot_delete', requirements: ['id' => '\d+'], methods: ['POST'])]
+    public function templateSlotDelete(SystemTemplateSlot $slot, Request $request): Response
+    {
+        $this->denyAccessUnlessGranted('@production_system_templates.edit');
+        $this->denySystemTemplateAdministration();
+        $template = $slot->getSystemTemplate();
+        if (!$template instanceof SystemTemplate) {
+            throw $this->createNotFoundException('This slot has no system template.');
+        }
+
+        if (!$this->isCsrfTokenValid('delete_system_template_slot_'.$slot->getId(), $request->request->getString('_token'))) {
+            throw $this->createAccessDeniedException('Invalid CSRF token.');
+        }
+
+        $slotName = $slot->getName();
+        $preservedCount = $this->slotPositioner->remove($slot);
+        if ($preservedCount > 0) {
+            $this->addFlash('warning', $this->translator->trans(
+                'production.system_template.slot.deleted_with_assignments',
+                ['%name%' => $slotName, '%count%' => $preservedCount],
+                'production',
+            ));
+        } else {
+            $this->addFlash('success', $this->translator->trans(
+                'production.system_template.slot.deleted',
+                ['%name%' => $slotName],
+                'production',
+            ));
+        }
+
+        return $this->redirectToRoute('production_template_show', ['id' => $template->getId()]);
     }
 
     #[Route(path: '/customers', name: 'production_customer_index', methods: ['GET'])]
@@ -442,8 +497,12 @@ final class ProductionController extends AbstractController
     {
         $this->denyAccessUnlessGranted('@production_orders.edit');
 
+        $position = (new ProjectPosition())
+            ->setCustomerProject($project)
+            ->setPosition($this->projectPositioner->getNextPosition($project));
+
         return $this->handleProjectPositionForm(
-            (new ProjectPosition())->setCustomerProject($project),
+            $position,
             $request,
             $entityManager,
         );
@@ -727,6 +786,28 @@ final class ProductionController extends AbstractController
         return $this->handleAccessoryForm($accessory, $request, $entityManager);
     }
 
+    #[Route(path: '/accessories/{id}/delete', name: 'production_accessory_delete', requirements: ['id' => '\d+'], methods: ['POST'])]
+    public function accessoryDelete(ProjectAccessory $accessory, Request $request, EntityManagerInterface $entityManager): Response
+    {
+        $this->denyAccessUnlessGranted('@production_orders.edit');
+        if (!$this->isCsrfTokenValid('delete_project_accessory_'.$accessory->getId(), $request->request->getString('_token'))) {
+            throw $this->createAccessDeniedException('Invalid CSRF token.');
+        }
+
+        $project = $accessory->getCustomerProject();
+        if (!$project instanceof CustomerProject) {
+            throw $this->createNotFoundException('This accessory has no customer project.');
+        }
+
+        $partName = $accessory->getPartName();
+        $entityManager->remove($accessory);
+        $this->historyRecorder->record($project, 'accessory_deleted', $partName);
+        $entityManager->flush();
+        $this->addFlash('success', $this->translator->trans('production.accessory.deleted', domain: 'production'));
+
+        return $this->redirectToRoute('production_customer_project_show', ['id' => $project->getId()]);
+    }
+
     #[Route(path: '/customer-projects/{project}/materials/{part}/allocate', name: 'production_material_allocate', requirements: ['project' => '\d+', 'part' => '\d+'], methods: ['GET', 'POST'])]
     public function materialAllocate(
         #[MapEntity(id: 'project')] CustomerProject $project,
@@ -906,14 +987,18 @@ final class ProductionController extends AbstractController
     }
 
     #[Route(path: '/build-instances/{id}', name: 'production_build_instance_show', requirements: ['id' => '\d+'], methods: ['GET'])]
-    public function buildInstanceShow(BuildInstance $buildInstance): Response
+    public function buildInstanceShow(BuildInstance $buildInstance, ProtocolTemplateRepository $protocolTemplateRepository, DatasheetTemplateRepository $datasheetTemplateRepository): Response
     {
         $this->denyAccessUnlessGranted('@production_build_instances.read');
         foreach ($buildInstance->getBuildProjects() as $buildProject) {
             $this->denyAccessUnlessGranted('read', $buildProject);
         }
 
-        return $this->render('production/build_instance/show.html.twig', ['build_instance' => $buildInstance]);
+        return $this->render('production/build_instance/show.html.twig', [
+            'build_instance' => $buildInstance,
+            'protocol_templates' => $this->isGranted('@production_protocols.create') ? $protocolTemplateRepository->findActiveWithPublishedRevision() : [],
+            'datasheet_templates' => $this->isGranted('@production_datasheets.create') ? $datasheetTemplateRepository->findActiveWithPublishedRevision() : [],
+        ]);
     }
 
     #[Route(path: '/build-instances/{id}/edit', name: 'production_build_instance_edit', requirements: ['id' => '\d+'], methods: ['GET', 'POST'])]
@@ -930,6 +1015,12 @@ final class ProductionController extends AbstractController
         $this->denyAccessUnlessGranted('@production_build_instances.delete');
         if (!$this->isCsrfTokenValid('delete_build_instance_'.$buildInstance->getId(), $request->request->getString('_token'))) {
             throw $this->createAccessDeniedException('Invalid CSRF token.');
+        }
+
+        if (!$buildInstance->getProtocolRuns()->isEmpty() || !$buildInstance->getDatasheets()->isEmpty()) {
+            $this->addFlash('error', 'Ein Gerät oder eine Baugruppe mit Laufzetteln oder freigegebenen Datenblättern darf aus Gründen der Rückverfolgbarkeit nicht gelöscht werden.');
+
+            return $this->redirectToRoute('production_build_instance_show', ['id' => $buildInstance->getId()]);
         }
 
         $identifier = $buildInstance->getDisplayIdentifier();
@@ -1146,6 +1237,7 @@ final class ProductionController extends AbstractController
     private function handleProjectPositionForm(ProjectPosition $position, Request $request, EntityManagerInterface $entityManager): Response
     {
         $isNew = null === $position->getId();
+        $previousPosition = $isNew ? null : $position->getPosition();
         $form = $this->createForm(ProjectPositionType::class, $position);
         $form->handleRequest($request);
         if ($form->isSubmitted() && null === $position->getParent()) {
@@ -1155,7 +1247,6 @@ final class ProductionController extends AbstractController
             foreach ($position->getBuildProjects() as $buildProject) {
                 $this->denyAccessUnlessGranted('read', $buildProject);
             }
-            $entityManager->persist($position);
             if ($isNew) {
                 $this->positionInitializer->initializeRequiredDefaults($position);
             }
@@ -1167,7 +1258,7 @@ final class ProductionController extends AbstractController
                     $position->getName(),
                 );
             }
-            $entityManager->flush();
+            $this->projectPositioner->save($position, $previousPosition);
             $this->addFlash('success', 'production.flash.saved');
 
             return $this->redirectToRoute('production_customer_project_show', ['id' => $project?->getId()]);
@@ -1204,6 +1295,13 @@ final class ProductionController extends AbstractController
             'title' => $isNew ? 'production.system_template.new' : 'production.system_template.edit',
             'cancel_route' => 'production_template_index',
         ]);
+    }
+
+    private function denySystemTemplateAdministration(): void
+    {
+        if (!$this->isGranted('@users.edit_permissions') && !$this->isGranted('@groups.edit_permissions')) {
+            throw $this->createAccessDeniedException('Only administrators may modify system templates.');
+        }
     }
 
     private function handleSystemTemplateSlotForm(SystemTemplateSlot $slot, Request $request): Response
@@ -1263,6 +1361,12 @@ final class ProductionController extends AbstractController
             'title' => $isNew ? 'production.accessory.new' : 'production.accessory.edit',
             'cancel_route' => 'production_customer_project_show',
             'cancel_route_params' => ['id' => $project?->getId()],
+            'delete_route' => $isNew ? null : 'production_accessory_delete',
+            'delete_route_params' => ['id' => $accessory->getId()],
+            'delete_token_id' => 'delete_project_accessory_'.$accessory->getId(),
+            'delete_confirm' => $this->translator->trans('production.accessory.delete_confirm', [
+                '%name%' => $accessory->getPartName(),
+            ], 'production'),
         ]);
     }
 

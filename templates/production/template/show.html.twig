@@ -4,6 +4,7 @@
 {% block title %}{{ template.name }}{% endblock %}
 
 {% block content %}
+    {% set can_administer_templates = (is_granted('@users.edit_permissions') or is_granted('@groups.edit_permissions')) %}
     <div class="d-flex justify-content-between align-items-start mb-3">
         <div>
             <h1 class="h2 mb-1">{{ template.name }}</h1>
@@ -11,11 +12,15 @@
         </div>
         <div class="d-flex gap-2">
             <a class="btn btn-outline-secondary" href="{{ path('production_template_index') }}"><i class="fa-solid fa-arrow-left fa-fw"></i> {{ 'production.system_template.plural'|trans }}</a>
-            {% if is_granted('@production_system_templates.edit') %}
+            {% if can_administer_templates and is_granted('@production_system_templates.edit') %}
                 <a class="btn btn-primary" href="{{ path('production_template_edit', {id: template.id}) }}"><i class="fa-solid fa-pen fa-fw"></i> {{ 'production.action.edit'|trans }}</a>
             {% endif %}
-            {% if is_granted('@production_system_templates.delete') %}
-                <form method="post" action="{{ path('production_template_delete', {id: template.id}) }}" data-turbo-confirm="{{ 'production.system_template.delete_confirm'|trans({'%name%': template.name}) }}">
+            {% if can_administer_templates and is_granted('@production_system_templates.delete') %}
+                <form method="post" action="{{ path('production_template_delete', {id: template.id}) }}"
+                      {{ stimulus_controller('elements/delete_btn') }} {{ stimulus_action('elements/delete_btn', 'submit', 'submit') }}
+                      data-delete-title="{{ 'production.action.confirm_title'|trans }}"
+                      data-delete-message="{{ 'production.system_template.delete_confirm'|trans({'%name%': template.name}) }}"
+                      data-delete-message-text>
                     <input type="hidden" name="_token" value="{{ csrf_token('delete_system_template_' ~ template.id) }}">
                     <button class="btn btn-outline-danger"><i class="fa-solid fa-trash fa-fw"></i> {{ 'production.action.delete'|trans }}</button>
                 </form>
@@ -39,7 +44,7 @@
     <div class="card">
         <div class="card-header d-flex justify-content-between align-items-center">
             <strong><i class="fa-solid fa-list-ol fa-fw"></i> {{ 'production.system_template.slot.plural'|trans }}</strong>
-            {% if is_granted('@production_system_templates.edit') %}<a class="btn btn-sm btn-success" href="{{ path('production_template_slot_new', {id: template.id}) }}"><i class="fa-solid fa-plus fa-fw"></i> {{ 'production.system_template.slot.new'|trans }}</a>{% endif %}
+            {% if can_administer_templates and is_granted('@production_system_templates.edit') %}<a class="btn btn-sm btn-success" href="{{ path('production_template_slot_new', {id: template.id}) }}"><i class="fa-solid fa-plus fa-fw"></i> {{ 'production.system_template.slot.new'|trans }}</a>{% endif %}
         </div>
         <div class="table-responsive"><table class="table table-hover align-middle mb-0">
             <thead><tr><th>#</th><th>{{ 'production.system_template.slot.name'|trans }}</th><th>{{ 'production.system_template.slot.quantity'|trans }}</th><th>{{ 'production.system_template.slot.allowed_content'|trans }}</th><th></th></tr></thead>
@@ -54,7 +59,19 @@
                         {% for project in slot.allowedProjects %}<a class="badge text-bg-light border text-decoration-none" href="{{ path('project_info', {id: project.id}) }}"><i class="fa-solid fa-screwdriver-wrench fa-fw"></i> {{ project.name }}</a> {% endfor %}
                         {% for part in slot.allowedParts %}<a class="badge text-bg-light border text-decoration-none" href="{{ path('part_info', {id: part.id}) }}"><i class="fa-solid fa-box fa-fw"></i> {{ part.name }}</a> {% endfor %}
                     </td>
-                    <td class="text-end">{% if is_granted('@production_system_templates.edit') %}<a class="btn btn-sm btn-outline-primary" href="{{ path('production_template_slot_edit', {id: slot.id}) }}"><i class="fa-solid fa-pen fa-fw"></i></a>{% endif %}</td>
+                    <td class="text-end text-nowrap">
+                        {% if can_administer_templates and is_granted('@production_system_templates.edit') %}
+                            <a class="btn btn-sm btn-outline-primary" href="{{ path('production_template_slot_edit', {id: slot.id}) }}" title="{{ 'production.system_template.slot.edit'|trans }}"><i class="fa-solid fa-pen fa-fw"></i></a>
+                            <form method="post" action="{{ path('production_template_slot_delete', {id: slot.id}) }}" class="d-inline"
+                                  {{ stimulus_controller('elements/delete_btn') }} {{ stimulus_action('elements/delete_btn', 'submit', 'submit') }}
+                                  data-delete-title="{{ 'production.action.confirm_title'|trans }}"
+                                  data-delete-message="{{ 'production.system_template.slot.delete_confirm'|trans({'%count%': slot_usage_counts[slot.id]|default(0)}) }}"
+                                  data-delete-message-text>
+                                <input type="hidden" name="_token" value="{{ csrf_token('delete_system_template_slot_' ~ slot.id) }}">
+                                <button class="btn btn-sm btn-outline-danger" title="{{ 'production.system_template.slot.delete'|trans }}"><i class="fa-solid fa-trash fa-fw"></i></button>
+                            </form>
+                        {% endif %}
+                    </td>
                 </tr>
             {% else %}<tr><td colspan="5" class="text-center text-muted py-4">{{ 'production.system_template.slot.empty'|trans }}</td></tr>{% endfor %}
             </tbody>

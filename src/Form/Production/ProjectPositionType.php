@@ -35,6 +35,7 @@ final class ProjectPositionType extends AbstractType
             ->add('position', IntegerType::class, [
                 'label' => 'production.project_position.position',
                 'attr' => ['min' => 0],
+                'help' => 'production.common.position_help',
             ])
             ->add('name', TextType::class, [
                 'label' => 'production.common.name',

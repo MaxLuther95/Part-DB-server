@@ -120,23 +120,12 @@ final class BuildWorkflowController extends AbstractController
         if (!$site instanceof StorageLocation) { return $this->redirectToRoute('production_build_workflow_details', ['token' => $token]); }
         $plan = $workflow->createMaterialPlan($draft, $site);
         $draft['materials_taken'] ??= [];
+        $draft['lots'] = $workflow->allocateAvailableLots($plan);
         $errors = [];
-        if ([] === $draft['lots']) {
-            foreach ($plan['items'] as $item) {
-                $remaining = $item['remaining'];
-                foreach ($item['lots'] as $row) {
-                    $take = min($remaining, $row['available']);
-                    $draft['lots'][(string) $item['part']->getId()][(string) $row['lot']->getId()] = $take;
-                    $remaining -= $take;
-                }
-            }
-        }
         if ($request->isMethod('POST')) {
             if (!$this->isCsrfTokenValid('build_materials_'.$token, $request->request->getString('_token'))) { throw $this->createAccessDeniedException('Invalid CSRF token.'); }
-            $submitted = $request->request->all('lots');
             $submittedTaken = $request->request->all('taken');
             $markAllTaken = $request->request->getBoolean('mark_all');
-            $draft['lots'] = [];
             $draft['materials_taken'] = [];
             foreach ($plan['items'] as $item) {
                 $partId = (string) $item['part']->getId();
@@ -144,22 +133,8 @@ final class BuildWorkflowController extends AbstractController
                     ? 0 === $item['missing']
                     : '1' === (string) ($submittedTaken[$partId] ?? '');
                 $draft['materials_taken'][$partId] = $isTaken;
-                if (!$isTaken) {
-                    $errors[] = sprintf('%s: Bitte die Materialentnahme bestätigen.', $item['part']->getName());
-                }
-                $sum = 0;
-                foreach ($item['lots'] as $row) {
-                    $raw = $submitted[$partId][(string) $row['lot']->getId()] ?? 0;
-                    $amount = filter_var($raw, FILTER_VALIDATE_INT);
-                    if (false === $amount || $amount < 0 || $amount > $row['available']) { $errors[] = sprintf('%s: Ungültige Entnahmemenge.', $item['part']->getName()); continue; }
-                    $draft['lots'][$partId][(string) $row['lot']->getId()] = $amount;
-                    $sum += $amount;
-                }
-                if ($sum !== $item['remaining']) { $errors[] = sprintf('%s: Es müssen genau %d Stück aus Lagerplätzen gewählt werden.', $item['part']->getName(), $item['remaining']); }
             }
-            if (!$plan['complete']) {
-                $errors[] = 'Am gewählten Standort ist nicht genügend Material verfügbar.';
-            }
+            $errors = $workflow->validateMaterialSelection($draft, $plan);
             if ($markAllTaken) {
                 $this->saveDraft($request, $token, $draft);
 

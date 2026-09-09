@@ -23,7 +23,7 @@
         </td>
         <td>{{ template.slots|length }}</td>
         <td><span class="badge {{ template.active ? 'bg-success' : 'bg-secondary' }}">{{ (template.active ? 'production.common.yes' : 'production.common.no')|trans }}</span></td>
-        <td class="text-end">{% if is_granted('@production_system_templates.edit') %}<a class="btn btn-sm btn-outline-primary" href="{{ path('production_template_edit', {id: template.id}) }}"><i class="fa-solid fa-pen fa-fw"></i></a>{% endif %}</td>
+        <td class="text-end">{% if (is_granted('@users.edit_permissions') or is_granted('@groups.edit_permissions')) and is_granted('@production_system_templates.edit') %}<a class="btn btn-sm btn-outline-primary" href="{{ path('production_template_edit', {id: template.id}) }}"><i class="fa-solid fa-pen fa-fw"></i></a>{% endif %}</td>
     </tr>
     {% for child in children %}
         {{ _self.template_row(child, depth + 1, node_key ~ '-' ~ loop.index0, node_key, children_by_parent) }}
@@ -46,7 +46,7 @@
             <h1 class="h2 mb-1"><i class="fa-solid fa-diagram-project fa-fw"></i> {{ 'production.system_template.plural'|trans }}</h1>
             <p class="text-muted mb-0">{{ 'production.system_template.intro'|trans }}</p>
         </div>
-        {% if is_granted('@production_system_templates.create') %}
+        {% if (is_granted('@users.edit_permissions') or is_granted('@groups.edit_permissions')) and is_granted('@production_system_templates.create') %}
             <a class="btn btn-success" href="{{ path('production_template_new') }}"><i class="fa-solid fa-plus fa-fw"></i> {{ 'production.system_template.new'|trans }}</a>
         {% endif %}
     </div>

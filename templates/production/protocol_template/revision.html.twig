@@ -1,0 +1,64 @@
+{% extends 'main_card.html.twig' %}
+{% trans_default_domain 'production' %}
+
+{% block title %}{{ revision.template.name }} v{{ revision.revisionNumber }}{% endblock %}
+{% block card_title %}<i class="fa-solid fa-clipboard-list fa-fw"></i> {{ revision.template.name }} · {{ 'production.protocol.template.revision'|trans }} {{ revision.revisionNumber }}{% endblock %}
+
+{% block card_content %}
+    <div class="alert alert-info"><i class="fa-solid fa-circle-info fa-fw"></i> {{ 'production.protocol.template.draft_explanation'|trans }}</div>
+    <div class="d-flex flex-wrap gap-2 mb-3">
+        <a class="btn btn-outline-secondary" href="{{ path('production_protocol_template_show', {id: revision.template.id}) }}"><i class="fa-solid fa-arrow-left fa-fw"></i> {{ 'production.action.back'|trans }}</a>
+        <a class="btn btn-primary" href="{{ path('production_protocol_section_new', {id: revision.id}) }}"><i class="fa-solid fa-plus fa-fw"></i> {{ 'production.protocol.section.new'|trans }}</a>
+        <form class="ms-auto" method="post" action="{{ path('production_protocol_revision_save', {id: revision.id}) }}">
+            <input type="hidden" name="_token" value="{{ csrf_token('protocol_revision_save_' ~ revision.id) }}">
+            <button class="btn btn-primary" type="submit"><i class="fa-solid fa-floppy-disk fa-fw"></i> {{ 'production.protocol.template.save_draft'|trans }}</button>
+        </form>
+        {% if is_granted('@production_protocol_templates.publish') %}
+            <form method="post" action="{{ path('production_protocol_revision_publish', {id: revision.id}) }}"
+                  {{ stimulus_controller('elements/delete_btn') }} {{ stimulus_action('elements/delete_btn', 'submit', 'submit') }}
+                  data-delete-title="{{ 'production.protocol.template.publish'|trans }}"
+                  data-delete-message="{{ 'production.protocol.template.publish_confirm'|trans }}" data-delete-message-text>
+                <input type="hidden" name="_token" value="{{ csrf_token('protocol_revision_publish_' ~ revision.id) }}">
+                <button class="btn btn-success" type="submit"><i class="fa-solid fa-check fa-fw"></i> {{ 'production.protocol.template.publish'|trans }}</button>
+            </form>
+        {% endif %}
+    </div>
+
+    {% for section in revision.sections %}
+        <section class="card mb-3">
+            <div class="card-header d-flex align-items-center gap-2">
+                <strong>{{ section.name }}</strong>
+                <div class="ms-auto d-flex gap-1">
+                    <form method="post" action="{{ path('production_protocol_section_move', {id: section.id, direction: 'up'}) }}"><input type="hidden" name="_token" value="{{ csrf_token('protocol_section_move_' ~ section.id) }}"><button class="btn btn-sm btn-outline-secondary" title="Nach oben"><i class="fa-solid fa-arrow-up fa-fw"></i></button></form>
+                    <form method="post" action="{{ path('production_protocol_section_move', {id: section.id, direction: 'down'}) }}"><input type="hidden" name="_token" value="{{ csrf_token('protocol_section_move_' ~ section.id) }}"><button class="btn btn-sm btn-outline-secondary" title="Nach unten"><i class="fa-solid fa-arrow-down fa-fw"></i></button></form>
+                    <a class="btn btn-sm btn-outline-primary" href="{{ path('production_protocol_field_new', {id: section.id}) }}"><i class="fa-solid fa-plus fa-fw"></i> {{ 'production.protocol.field.new'|trans }}</a>
+                    <a class="btn btn-sm btn-outline-secondary" href="{{ path('production_protocol_section_edit', {id: section.id}) }}"><i class="fa-solid fa-pen fa-fw"></i></a>
+                    <form method="post" action="{{ path('production_protocol_section_delete', {id: section.id}) }}" {{ stimulus_controller('elements/delete_btn') }} {{ stimulus_action('elements/delete_btn', 'submit', 'submit') }} data-delete-title="{{ 'production.action.confirm_title'|trans }}" data-delete-message="{{ 'production.protocol.section.delete_confirm'|trans }}" data-delete-message-text>
+                        <input type="hidden" name="_token" value="{{ csrf_token('protocol_section_delete_' ~ section.id) }}"><button class="btn btn-sm btn-outline-danger" type="submit"><i class="fa-solid fa-trash fa-fw"></i></button>
+                    </form>
+                </div>
+            </div>
+            <div class="card-body p-0">
+                {% if section.description %}<p class="text-muted m-3">{{ section.description|nl2br }}</p>{% endif %}
+                <div class="table-responsive"><table class="table table-sm mb-0 align-middle"><thead><tr><th>{{ 'production.protocol.field.label'|trans }}</th><th>{{ 'production.protocol.field.type'|trans }}</th><th>{{ 'production.protocol.field.unit'|trans }}</th><th>{{ 'production.protocol.field.layout'|trans }}</th><th>{{ 'production.protocol.field.required'|trans }}</th><th></th></tr></thead><tbody>
+                    {% for field in section.fields %}
+                        {% set layout_width_key = field.layoutColumns == 3 ? 'quarter' : (field.layoutColumns == 6 ? 'half' : (field.layoutColumns == 9 ? 'three_quarters' : 'full')) %}
+                        <tr>
+                            <td><strong>{{ field.label }}</strong>{% if field.helpText %}<br><small class="text-muted">{{ field.helpText|nl2br }}</small>{% endif %}</td>
+                            <td>{{ field.type.label|trans }}</td>
+                            <td>{{ field.unit ?: '–' }}</td>
+                            <td>
+                                {{ ('production.protocol.field.layout_width_' ~ layout_width_key)|trans }}
+                                {% if field.startNewRow %}<br><small class="text-muted">{{ 'production.protocol.field.starts_new_row'|trans }}</small>{% endif %}
+                            </td>
+                            <td>{% if field.inputField %}{{ (field.required ? 'production.choice.yes' : 'production.choice.no')|trans }}{% else %}–{% endif %}</td>
+                            <td class="text-end"><div class="d-flex justify-content-end gap-1"><form method="post" action="{{ path('production_protocol_field_move', {id: field.id, direction: 'up'}) }}"><input type="hidden" name="_token" value="{{ csrf_token('protocol_field_move_' ~ field.id) }}"><button class="btn btn-sm btn-outline-secondary" title="Nach oben"><i class="fa-solid fa-arrow-up fa-fw"></i></button></form><form method="post" action="{{ path('production_protocol_field_move', {id: field.id, direction: 'down'}) }}"><input type="hidden" name="_token" value="{{ csrf_token('protocol_field_move_' ~ field.id) }}"><button class="btn btn-sm btn-outline-secondary" title="Nach unten"><i class="fa-solid fa-arrow-down fa-fw"></i></button></form><a class="btn btn-sm btn-outline-secondary" href="{{ path('production_protocol_field_edit', {id: field.id}) }}"><i class="fa-solid fa-pen fa-fw"></i></a><form method="post" action="{{ path('production_protocol_field_delete', {id: field.id}) }}" {{ stimulus_controller('elements/delete_btn') }} {{ stimulus_action('elements/delete_btn', 'submit', 'submit') }} data-delete-title="{{ 'production.action.confirm_title'|trans }}" data-delete-message="{{ 'production.protocol.field.delete_confirm'|trans }}" data-delete-message-text><input type="hidden" name="_token" value="{{ csrf_token('protocol_field_delete_' ~ field.id) }}"><button class="btn btn-sm btn-outline-danger" type="submit"><i class="fa-solid fa-trash fa-fw"></i></button></form></div></td>
+                        </tr>
+                    {% else %}<tr><td colspan="6" class="text-muted">{{ 'production.protocol.field.none'|trans }}</td></tr>{% endfor %}
+                </tbody></table></div>
+            </div>
+        </section>
+    {% else %}
+        <div class="alert alert-warning">{{ 'production.protocol.section.none'|trans }}</div>
+    {% endfor %}
+{% endblock %}

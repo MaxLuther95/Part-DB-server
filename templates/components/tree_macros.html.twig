@@ -13,6 +13,7 @@
             is_granted('@production_orders.read') or is_granted('@production_projects.read')
             or is_granted('@production_customers.read') or is_granted('@production_system_templates.read')
             or is_granted('@production_build_instances.read') or is_granted('@production_material.read')
+            or is_granted('@production_protocol_templates.read') or is_granted('@production_datasheet_templates.read')
             or is_granted('@production_import_mappings.read'), 'production'],
         ['tools', path('tree_tools'), 'tools.label', true, 'tool'],
     ] %}

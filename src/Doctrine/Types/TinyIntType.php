@@ -24,7 +24,6 @@ namespace App\Doctrine\Types;
 
 use Doctrine\DBAL\Platforms\AbstractMySQLPlatform;
 use Doctrine\DBAL\Platforms\AbstractPlatform;
-use Doctrine\DBAL\Platforms\SQLitePlatform;
 use Doctrine\DBAL\Types\Type;
 
 /**
@@ -38,8 +37,9 @@ class TinyIntType extends Type
         //MySQL knows the TINYINT type directly
         //We do not use the TINYINT for sqlite, as it will be resolved to a BOOL type and bring problems with migrations
         if ($platform instanceof AbstractMySQLPlatform ) {
-            //Use TINYINT(1) to allow for proper migration diffs
-            return 'TINYINT(1)';
+            // DBAL 4 introspects TINYINT without a display width. Adding (1)
+            // produces a perpetual schema diff even after applying that ALTER.
+            return 'TINYINT';
         }
 
         //For other platforms, we use the smallest integer type available

@@ -36,6 +36,7 @@ final class ProductionEntitiesTest extends TestCase
             ->setProjectNumber(' P-2026-0042 ')
             ->setName(' Messsystem ')
             ->setNotes(' Projekt intern abstimmen. ')
+            ->setPlannedDeliveryDate(new \DateTimeImmutable('2026-10-15'))
             ->setCustomer($customer);
 
         $productionProject = (new ProductionProject())
@@ -48,9 +49,13 @@ final class ProductionEntitiesTest extends TestCase
         self::assertTrue($customer->isActive());
         self::assertSame(CustomerProjectStatus::Planning, $project->getStatus());
         self::assertSame('Projekt intern abstimmen.', $project->getNotes());
+        self::assertSame('2026-10-15', $project->getPlannedDeliveryDate()?->format('Y-m-d'));
         self::assertSame($customer, $project->getCustomer());
         self::assertSame($productionProject, $project->getProductionProject());
         self::assertSame(ProductionProjectStatus::Planning, $productionProject->getStatus());
+
+        $project->setPlannedDeliveryDate(null);
+        self::assertNull($project->getPlannedDeliveryDate());
     }
 
     public function testProjectCanBeAssignedToMultipleUsers(): void
@@ -268,6 +273,7 @@ final class ProductionEntitiesTest extends TestCase
         self::assertSame([$mainboardOne, $mainboardTwo], $position->getAssignmentsForSlot($mainboards));
         self::assertSame(0, $position->getDisplayOffsetForSlot($mainboards));
         self::assertSame(2, $position->getDisplayOffsetForSlot($interface));
+        self::assertSame(3, $position->getNextDisplayOffset());
         self::assertSame($position, $mainboardTwo->getParent());
     }
 }

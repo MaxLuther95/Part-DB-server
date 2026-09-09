@@ -13,7 +13,7 @@
         {{ form_widget(form) }}
         <div class="d-flex gap-2 mt-3">
             <button class="btn btn-primary" type="submit">
-                <i class="fa-solid fa-floppy-disk fa-fw"></i> {{ 'production.action.save'|trans }}
+                <i class="fa-solid fa-floppy-disk fa-fw"></i> {{ save_label|default('production.action.save')|trans }}
             </button>
             <div class="d-flex gap-2 ms-auto">
                 <a class="btn btn-secondary" href="{{ path(cancel_route, cancel_route_params|default({})) }}">{{ 'production.action.cancel'|trans }}</a>
@@ -26,7 +26,11 @@
         </div>
     {{ form_end(form) }}
     {% if delete_route|default(null) and (delete_permission is not defined or is_granted(delete_permission)) %}
-        <form id="production-delete-form" method="post" action="{{ path(delete_route, delete_route_params|default({})) }}" data-turbo-confirm="{{ delete_confirm }}">
+        <form id="production-delete-form" method="post" action="{{ path(delete_route, delete_route_params|default({})) }}"
+              {{ stimulus_controller('elements/delete_btn') }} {{ stimulus_action('elements/delete_btn', 'submit', 'submit') }}
+              data-delete-title="{{ 'production.action.confirm_title'|trans }}"
+              data-delete-message="{{ delete_confirm }}"
+              data-delete-message-text>
             <input type="hidden" name="_token" value="{{ csrf_token(delete_token_id) }}">
         </form>
     {% endif %}

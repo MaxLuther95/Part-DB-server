@@ -1,9 +1,13 @@
 production:
+  datasheet:
+    action:
+      save_draft: Entwurf speichern
   dashboard:
     title: Fertigung
     intro: Projekte, Aufträge, Kunden sowie gefertigte Geräte und Baugruppen werden hier getrennt von den normalen Lagerteilen verwaltet.
   common:
     name: Bezeichnung
+    position_help: Eine belegte Position wird automatisch eingefügt; nachfolgende Positionen werden entsprechend verschoben.
     description: Beschreibung
     notes: Notizen
     no_notes: Keine Notizen vorhanden.
@@ -21,7 +25,9 @@ production:
     back: Zurück
     edit: Bearbeiten
     show_all: Alle anzeigen
+    show: Anzeigen
     delete: Löschen
+    confirm_title: Bitte bestätigen
   flash:
     saved: Die Änderungen wurden gespeichert.
   navigation:
@@ -30,6 +36,8 @@ production:
     management: Verwaltung
     build: Bauen
     templates: Systemvorlagen
+    protocol_templates: Laufzettelvorlagen
+    datasheet_templates: Datenblattvorlagen
     required_parts: Benötigte Teile
     import_mappings: Importzuordnungen
   build:
@@ -66,6 +74,8 @@ production:
     my_projects: Meine Aufträge
     number: Auftragsnummer
     order_date: Datum der Auftragsbestätigung
+    planned_delivery_date: Geplantes Lieferdatum
+    delivery_date_unset: Noch nicht geplant
     project_placeholder: Bitte ein Projekt auswählen
     customer_placeholder: Bitte einen Kunden auswählen
     assigned_users: Zugeordnete Nutzer
@@ -82,6 +92,7 @@ production:
     new: Auftrag anlegen
     edit: Auftrag bearbeiten
     delete_confirm: 'Auftrag %number% wirklich vollständig löschen? Positionen, Reservierungen, Zubehör und Historie werden gelöscht. %builds% Geräte bzw. Baugruppen bleiben erhalten und werden freigegeben.'
+    attachment_delete_confirm: Diesen Dateianhang wirklich löschen?
     deleted: 'Der Auftrag wurde gelöscht. %builds% Geräte bzw. Baugruppen wurden freigegeben und bleiben erhalten.'
     delete_has_material: Der Auftrag kann nicht gelöscht werden, solange ihm bereits ausgebuchter Auftragsbestand zugeordnet ist.
     status:
@@ -111,6 +122,7 @@ production:
     cancelled_hint: Dieser Auftrag wurde storniert.
     build_instances: Geräte und Baugruppen im Auftrag
   project_position:
+    detached_from_template: Von Vorlage gelöst
     label: Auftragsposition
     plural: Auftragspositionen
     position: Position
@@ -182,6 +194,10 @@ production:
       plural: Vorgegebene Plätze
       new: Platz hinzufügen
       edit: Platz bearbeiten
+      delete: Platz löschen
+      delete_confirm: 'Diesen Vorlagenplatz wirklich löschen? Betroffen sind aktuell %count% Auftragszuordnung(en). Bereits ausgewählte Inhalte bleiben an ihrer bisherigen Stelle im Auftrag sichtbar und werden eindeutig als „Von Vorlage gelöst“ gekennzeichnet.'
+      deleted: 'Der Vorlagenplatz „%name%“ wurde gelöscht.'
+      deleted_with_assignments: 'Der Vorlagenplatz „%name%“ wurde gelöscht. %count% bestehende Auftragszuordnung(en) wurden an ihrer bisherigen Stelle beibehalten und von der Vorlage gelöst.'
       empty: Diese Systemvorlage besitzt noch keine konfigurierbaren Plätze.
       position: Reihenfolge
       name: Platzbezeichnung
@@ -204,6 +220,8 @@ production:
     plural: Zusätzliches Zubehör
     new: Lagerteil hinzufügen
     edit: Zubehör bearbeiten
+    delete_confirm: 'Zusätzliches Teil „%name%“ wirklich aus dem Auftrag löschen?'
+    deleted: Das zusätzliche Teil wurde aus dem Auftrag gelöscht.
     empty: Kein zusätzliches Zubehör eingetragen.
     part: Part-DB-Lagerteil
     quantity: Menge
@@ -212,6 +230,7 @@ production:
     note: Notiz
     inventory_part: Lagerteil
   material_plan:
+    release_confirm: Alle offenen Materialreservierungen dieses Projekts freigeben?
     label: Materialverfügbarkeit
     complete: Alle Teile verfügbar
     available_status: Material verfügbar
@@ -261,6 +280,7 @@ production:
       position_configured: Systemkonfiguration geändert
       accessory_created: Zubehör hinzugefügt
       accessory_updated: Zubehör bearbeitet
+      accessory_deleted: Zubehör gelöscht
       material_allocated: Material in den Auftragsbestand umgebucht
       material_reservation_updated: Materialreservierung aktualisiert
       material_reservation_released: Materialreservierung freigegeben
@@ -311,3 +331,90 @@ production:
       completed: Fertig
       installed: Eingebaut
       scrapped: Ausgesondert
+  protocol:
+    revision_status:
+      draft: Entwurf
+      published: Veröffentlicht
+      retired: Zurückgezogen
+    run_status:
+      draft: Entwurf
+      completed: Fertiggestellt
+      invalid: Ungültig
+    test_result:
+      pass: Bestanden
+      fail: Nicht bestanden
+      not_applicable: Nicht verwendet
+    field_type:
+      text: Text
+      long_text: Mehrzeiliger Text
+      integer: Ganzzahl
+      decimal: Messwert / Dezimalzahl
+      boolean: Ja / Nein
+      test_result: Prüfstatus (✓ / – / ✕)
+      choice: Auswahl
+      date: Datum
+      datetime: Datum und Uhrzeit
+      static_note: Hinweis / Zwischenüberschrift
+    template:
+      plural: Laufzettelvorlagen
+      name: Name der Vorlage
+      new: Laufzettelvorlage anlegen
+      edit: Laufzettelvorlage bearbeiten
+      active: Aktiv
+      inactive: Inaktiv
+      none: Noch keine Laufzettelvorlage vorhanden.
+      revision: Revision
+      revisions: Revisionen
+      published_revision: Aktuelle Revision
+      published_at: Veröffentlicht am
+      structure: Aufbau
+      edit_draft: Entwurf bearbeiten
+      new_revision: Neue Revision erstellen
+      save_draft: Entwurf speichern
+      draft_saved: Der Vorlagenentwurf wurde gespeichert.
+      publish: Revision veröffentlichen
+      publish_confirm: Nach dem Veröffentlichen ist diese Revision unveränderlich. Neue Laufzettel verwenden sie anschließend als feste Grundlage.
+      draft_explanation: Änderungen an Abschnitten und Feldern werden jeweils direkt gespeichert. Mit „Entwurf speichern“ beendest du die Bearbeitung, ohne die Revision zu veröffentlichen. Beim Veröffentlichen wird sie unveränderlich.
+    section:
+      plural: Abschnitte
+      name: Bezeichnung des Abschnitts
+      new: Abschnitt anlegen
+      edit: Abschnitt bearbeiten
+      none: Lege zunächst einen Abschnitt an.
+      delete_confirm: Abschnitt samt aller enthaltenen Felder aus diesem Entwurf entfernen?
+    field:
+      plural: Felder
+      label: Feldbezeichnung
+      type: Feldtyp
+      unit: Einheit
+      unit_help: Zum Beispiel µA, µV, mm oder V.
+      help_text: Hilfetext / Hinweistext
+      help_text_help: Bei Eingabefeldern erscheint dieser Text als Hilfe. Beim Typ „Hinweis / Zwischenüberschrift“ bildet er den frei formulierten Inhalt.
+      layout: Breite / Platzierung
+      layout_width: Breite im Laufzettel
+      layout_width_help: Auf kleinen Bildschirmen werden alle Elemente automatisch untereinander dargestellt.
+      layout_width_quarter: 25 %
+      layout_width_half: 50 %
+      layout_width_three_quarters: 75 %
+      layout_width_full: 100 %
+      start_new_row: In einer neuen Zeile beginnen
+      start_new_row_help: Erzwingt vor diesem Element einen Zeilenumbruch.
+      starts_new_row: Beginnt in neuer Zeile
+      required: Pflichtfeld beim Fertigstellen
+      options: Auswahlmöglichkeiten
+      options_help: Nur für den Typ „Auswahl“; eine Möglichkeit pro Zeile.
+      new: Feld anlegen
+      edit: Feld bearbeiten
+      none: Dieser Abschnitt enthält noch keine Felder.
+      delete_confirm: Dieses Feld aus dem Vorlagenentwurf entfernen?
+    run:
+      save: Entwurf speichern
+      complete: Fertigstellen
+      complete_confirm: Laufzettel wirklich fertigstellen? Danach sind Aufbau und Werte unveränderlich. Eine spätere Prüfung wird als neuer Laufzettel angelegt.
+      invalidate: Als ungültig markieren
+      invalidate_confirm: Der Laufzettel bleibt vollständig erhalten, wird aber deutlich als ungültig gekennzeichnet.
+      invalid_reason: Begründung
+      no_rows: Dieser Abschnitt enthält momentan keine Zeile.
+  choice:
+    yes: Ja
+    no: Nein

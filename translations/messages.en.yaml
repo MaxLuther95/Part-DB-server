@@ -11,6 +11,10 @@ perm:
     customers: Customers
     system_templates: System templates
     build_instances: Devices and assemblies
+    protocol_templates: Protocol templates
+    protocols: Protocol runs
+    datasheet_templates: Datasheet templates
+    datasheets: Customer datasheets
     material: Material operations
     import_mappings: Import mappings
     operation:
@@ -20,3 +24,6 @@ perm:
       reserve: Reserve or release material
       provide: Provide material
       withdraw: Withdraw material
+      publish: Publish template revisions
+      complete: Complete protocol runs
+      invalidate: Invalidate completed protocol runs

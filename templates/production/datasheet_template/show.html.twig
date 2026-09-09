@@ -1,0 +1,38 @@
+{% extends 'main_card.html.twig' %}
+{% trans_default_domain 'production' %}
+
+{% block title %}{{ template.name }}{% endblock %}
+{% block card_title %}<i class="fa-solid fa-file-pdf fa-fw"></i> {{ template.name }}{% endblock %}
+
+{% block card_content %}
+    <div class="d-flex flex-wrap gap-2 mb-3">
+        <a class="btn btn-outline-secondary" href="{{ path('production_datasheet_template_index') }}"><i class="fa-solid fa-arrow-left fa-fw"></i> Datenblattvorlagen</a>
+        {% if is_granted('@production_datasheet_templates.edit') and (is_granted('@users.edit_permissions') or is_granted('@groups.edit_permissions')) %}
+            <a class="btn btn-outline-primary" href="{{ path('production_datasheet_template_edit', {id: template.id}) }}"><i class="fa-solid fa-pen fa-fw"></i> Stammdaten bearbeiten</a>
+            {% if template.draftRevision %}
+                <a class="btn btn-primary" href="{{ path('production_datasheet_revision_edit', {id: template.draftRevision.id}) }}"><i class="fa-solid fa-table-columns fa-fw"></i> Entwurf bearbeiten</a>
+            {% else %}
+                <form method="post" action="{{ path('production_datasheet_template_draft', {id: template.id}) }}">
+                    <input type="hidden" name="_token" value="{{ csrf_token('datasheet_template_draft_' ~ template.id) }}">
+                    <button class="btn btn-primary" type="submit"><i class="fa-solid fa-code-branch fa-fw"></i> Neue Revision</button>
+                </form>
+            {% endif %}
+        {% endif %}
+    </div>
+    <dl class="row">
+        <dt class="col-sm-3">Produktüberschrift</dt><dd class="col-sm-9">{{ template.productTitle }}</dd>
+        <dt class="col-sm-3">Beschreibung</dt><dd class="col-sm-9">{{ template.description ? template.description|nl2br : '–' }}</dd>
+        <dt class="col-sm-3">Status</dt><dd class="col-sm-9">{{ template.active ? 'Aktiv' : 'Inaktiv' }}</dd>
+    </dl>
+    <h5>Revisionen</h5>
+    <div class="table-responsive"><table class="table table-sm align-middle">
+        <thead><tr><th>Revision</th><th>Status</th><th>Veröffentlicht</th><th>Bausteine</th><th></th></tr></thead>
+        <tbody>{% for revision in template.revisions %}<tr>
+            <td>v{{ revision.revisionNumber }}</td>
+            <td><span class="badge {{ revision.status.value == 'published' ? 'text-bg-success' : (revision.status.value == 'draft' ? 'text-bg-warning' : 'text-bg-secondary') }}">{{ revision.status.value }}</span></td>
+            <td>{{ revision.publishedAt ? revision.publishedAt|format_datetime('short', 'short') : '–' }}</td>
+            <td>{{ revision.blocks|length }}</td>
+            <td class="text-end"><a class="btn btn-sm btn-outline-secondary" target="_blank" rel="noopener" href="{{ path('production_datasheet_revision_pdf', {id: revision.id}) }}"><i class="fa-solid fa-file-pdf fa-fw"></i> PDF-Vorschau</a></td>
+        </tr>{% endfor %}</tbody>
+    </table></div>
+{% endblock %}

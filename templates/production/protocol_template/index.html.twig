@@ -1,0 +1,32 @@
+{% extends 'main_card.html.twig' %}
+{% trans_default_domain 'production' %}
+
+{% block title %}{{ 'production.protocol.template.plural'|trans }}{% endblock %}
+{% block card_title %}<i class="fa-solid fa-clipboard-list fa-fw"></i> {{ 'production.protocol.template.plural'|trans }}{% endblock %}
+
+{% block card_content %}
+    <div class="d-flex gap-2 mb-3">
+        <a class="btn btn-outline-secondary" href="{{ path('production_build_instance_index') }}"><i class="fa-solid fa-arrow-left fa-fw"></i> {{ 'production.build_instance.plural'|trans }}</a>
+        {% if is_granted('@production_datasheet_templates.read') %}<a class="btn btn-outline-secondary" href="{{ path('production_datasheet_template_index') }}"><i class="fa-solid fa-file-pdf fa-fw"></i> Datenblattvorlagen</a>{% endif %}
+        {% if is_granted('@production_protocol_templates.create') and (is_granted('@users.edit_permissions') or is_granted('@groups.edit_permissions')) %}
+            <a class="btn btn-primary ms-auto" href="{{ path('production_protocol_template_new') }}"><i class="fa-solid fa-plus fa-fw"></i> {{ 'production.protocol.template.new'|trans }}</a>
+        {% endif %}
+    </div>
+    <div class="table-responsive">
+        <table class="table table-hover align-middle">
+            <thead><tr><th>{{ 'production.protocol.template.name'|trans }}</th><th>{{ 'production.common.status'|trans }}</th><th>{{ 'production.protocol.template.published_revision'|trans }}</th><th></th></tr></thead>
+            <tbody>
+            {% for template in templates %}
+                <tr>
+                    <td><a href="{{ path('production_protocol_template_show', {id: template.id}) }}"><strong>{{ template.name }}</strong></a><br><small class="text-muted">{{ template.description|u.truncate(100, '…') }}</small></td>
+                    <td><span class="badge {{ template.active ? 'text-bg-success' : 'text-bg-secondary' }}">{{ (template.active ? 'production.protocol.template.active' : 'production.protocol.template.inactive')|trans }}</span></td>
+                    <td>{{ template.publishedRevision ? ('v' ~ template.publishedRevision.revisionNumber) : '–' }}</td>
+                    <td class="text-end"><a class="btn btn-sm btn-outline-primary" href="{{ path('production_protocol_template_show', {id: template.id}) }}">{{ 'production.action.show'|trans }}</a></td>
+                </tr>
+            {% else %}
+                <tr><td colspan="4" class="text-muted">{{ 'production.protocol.template.none'|trans }}</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+{% endblock %}

@@ -256,6 +256,16 @@ class ProjectPosition extends AbstractProductionEntity
         return $offset;
     }
 
+    public function getNextDisplayOffset(): int
+    {
+        $offset = 0;
+        foreach ($this->systemTemplate?->getSlots() ?? [] as $templateSlot) {
+            $offset += max(1, count($this->getAssignmentsForSlot($templateSlot)));
+        }
+
+        return $offset;
+    }
+
     public function getPartAssignmentForSlot(SystemTemplateSlot $slot): ?ProjectAccessory
     {
         foreach ($this->partAssignments as $assignment) {

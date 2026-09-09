@@ -43,7 +43,7 @@ final class PermissionData implements \JsonSerializable
     /**
      * The current schema version of the permission data
      */
-    public const CURRENT_SCHEMA_VERSION = 5;
+    public const CURRENT_SCHEMA_VERSION = 7;
 
     /**
      * Creates a new Permission Data Instance using the given data.
@@ -207,6 +207,17 @@ final class PermissionData implements \JsonSerializable
         }
 
         return $ret;
+    }
+
+    /**
+     * Returns the complete representation used by Doctrine, including schema
+     * metadata which is deliberately omitted from the public JSON view.
+     *
+     * @return array<string, mixed>
+     */
+    public function toPersistenceArray(): array
+    {
+        return $this->data;
     }
 
     /**

@@ -47,10 +47,16 @@ export default class extends Controller
         const submitter = event.submitter;
         const that = this;
 
-        ConfirmSwal.fire({
+        const dialogOptions = {
             titleText: title,
-            html: message, //Message contains a <br> tag and no user injectable HTML
-        }).then(({isConfirmed}) => {
+        };
+        if (this.element.hasAttribute('data-delete-message-text')) {
+            dialogOptions.text = message;
+        } else {
+            dialogOptions.html = message; //Existing Part-DB messages contain trusted HTML such as <br>.
+        }
+
+        ConfirmSwal.fire(dialogOptions).then(({isConfirmed}) => {
             //If the dialog was confirmed, then submit the form.
             if (isConfirmed) {
                 //Set a flag to prevent the dialog from popping up again and allowing turbo to submit the form

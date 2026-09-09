@@ -80,6 +80,17 @@ paths; every position also has its own database ID. A position has no separate
 production status. The order view shows the status of its assigned physical
 device/assembly or an unassigned marker.
 
+Template use deliberately has two layers. The selected system template and its
+current slot definition remain live references, while every concrete choice,
+quantity and purchased part is stored as a separate order-owned entity. Adding
+an unambiguous required slot synchronizes that default into existing orders;
+changing the template definition can therefore affect their configuration and
+material plan. Removing a used slot never deletes or reparents those concrete
+order entities: their slot reference is cleared, their existing order/build
+hierarchy is retained and the order view labels them as detached from the
+template. This rule avoids hidden material demand and preserves physical build
+traceability.
+
 Positions without physical assignments can be deleted together with their
 nested configuration. Positions with assigned devices and orders that hold
 allocated material are protected where deleting them would destroy production
@@ -122,6 +133,67 @@ The deliberately limited workflow is:
 This boundary avoids silently building or reconfiguring an entire nested
 system when only one physical assembly is being manufactured. Configuration
 can still be changed until an order is delivered.
+
+## Build documentation and measurement protocols
+
+Every device or assembly can hold protected attachments and any number of
+numbered protocol runs. Protocols are deliberately generic rather than tied to
+electronics, cables or complete systems:
+
+- Administrators define templates and immutable published revisions. A
+  revision contains ordered sections, typed input fields and static notes or
+  intermediate headings. Elements use constrained responsive widths and may
+  explicitly start a new row.
+- A run pins exactly one published revision and owns one answer set per section and its measured
+  answers. Later template edits therefore do not rewrite historic or active
+  runs, while the unchanged field keys remain available for later datasheet
+  mappings.
+- Runs start as editable drafts and may be saved over several days. Explicit
+  completion validates required fields and makes the captured values
+  immutable. No four-eyes approval is required.
+- A completed run is never silently reopened or deleted. It can be marked
+  invalid with a required reason, preserving the audit trail, and a new run can
+  then be created.
+- Template mutations require both the production protocol permission and the
+  native Part-DB permission-administration right. Ordinary production users
+  can work with runs only according to their separate read, create, edit,
+  complete and invalidate permissions.
+
+Build-instance attachments use random storage names outside the public web
+root, restrictive permissions, checksums, path guards, MIME/extension/content
+validation and safe download headers. The current limits are 100 files and
+250 MiB total per instance, in addition to Part-DB's configured per-file upload
+limit.
+
+Customer-facing data sheets use a separate generic and versioned template
+engine. Administrators arrange safe predefined blocks (headings, static text,
+mapped values, child-instance tables, editable notes, separators and page
+breaks) on a constrained 12-column layout. Labels and static customer content
+are entered in English; PDFs are always rendered as A4 portrait. No template
+field accepts Twig, SQL, HTML or another executable expression.
+
+Value blocks map either direct build/order properties or stable field keys
+from completed protocol runs. A complete case can therefore combine its own
+final measurements with rows sourced from the finished protocols of its three
+installed electronics. Draft and invalid protocol runs are excluded. If more
+than one completed run matches, the author must explicitly select one before
+release; the system never guesses. Table blocks can enforce minimum and
+maximum row counts, including exactly three installed boards for the initial
+electronics layout.
+
+Template revisions become immutable when published. A generated customer PDF
+may additionally contain bounded plain-text notes created only for that
+document. Preview PDFs carry a DRAFT watermark. Releasing validates every
+required value, stores the exact PDF outside the public web root with a random
+name and read-only permissions, and records its SHA-256 checksum, selected
+template revision, source protocol-run IDs and resolved source snapshot.
+Released document rows cannot be updated; a correction creates the next
+numbered document revision. Downloads require a dedicated permission and
+verify the checksum before serving the file with safe response headers.
+
+The footer currently reserves the Magnicon logo area with a text placeholder.
+The placeholder must be replaced after an approved SVG or high-resolution
+transparent PNG asset is supplied.
 
 ## Material lifecycle
 

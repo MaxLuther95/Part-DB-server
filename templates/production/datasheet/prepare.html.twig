@@ -1,0 +1,58 @@
+{% extends 'main_card.html.twig' %}
+{% trans_default_domain 'production' %}
+
+{% block title %}{{ template.productTitle }} · {{ instance.displayIdentifier }}{% endblock %}
+{% block card_title %}<i class="fa-solid fa-file-pdf fa-fw"></i> PDF-Vorschau vorbereiten{% endblock %}
+
+{% block card_content %}
+    <div class="d-flex flex-wrap gap-2 mb-3">
+        <a class="btn btn-outline-secondary" href="{{ path('production_build_instance_show', {id: instance.id}) }}"><i class="fa-solid fa-arrow-left fa-fw"></i> {{ instance.displayIdentifier }}</a>
+        <a class="btn btn-outline-secondary" href="{{ path('production_datasheet_template_show', {id: template.id}) }}">Vorlage anzeigen</a>
+    </div>
+    <div class="alert alert-warning"><strong>Vorschau, noch keine Freigabe:</strong> Die erzeugte PDF trägt ein DRAFT-Wasserzeichen und wird nicht als offizielles Kundendokument gespeichert.</div>
+    <dl class="row">
+        <dt class="col-sm-3">Product title</dt><dd class="col-sm-9">{{ template.productTitle }}</dd>
+        <dt class="col-sm-3">Build instance</dt><dd class="col-sm-9">{{ instance.displayIdentifier }} · {{ instance.contentName }}</dd>
+        <dt class="col-sm-3">Template revision</dt><dd class="col-sm-9">{{ revision.revisionNumber }}</dd>
+    </dl>
+
+    <form method="post" action="{{ path('production_datasheet_release', {instance: instance.id, template: template.id}) }}" {{ stimulus_controller('production/datasheet-release production/datasheet-additional-notes') }} data-confirm-title="Kundendatenblatt freigeben" data-confirm-message="Die erzeugte PDF wird unveränderlich gespeichert. Korrekturen erzeugen anschließend eine neue Dokumentrevision.">
+        <input type="hidden" name="_token" value="{{ csrf_token('datasheet_preview_' ~ instance.id ~ '_' ~ template.id) }}">
+        {% for key, choice in run_choices %}
+            <div class="mb-3"><label class="form-label" for="datasheet-run-{{ key }}">Laufzettel für {{ choice.instance.displayIdentifier }}</label><select class="form-select" id="datasheet-run-{{ key }}" name="runs[{{ key }}]" required><option value="">Bitte eindeutig auswählen</option>{% for run in choice.runs %}<option value="{{ run.id }}">{{ run.revision.template.name }} #{{ run.runNumber }} · fertiggestellt {{ run.completedAt|format_datetime('short', 'short') }}</option>{% endfor %}</select><div class="form-text">Mehrere abgeschlossene Laufzettel passen. Für das offizielle Datenblatt ist eine bewusste Auswahl erforderlich.</div></div>
+        {% endfor %}
+        {% set note_count = 0 %}
+        {% for block in revision.blocks %}
+            {% if block.type.value == 'editable_note' %}
+                {% set note_count = note_count + 1 %}
+                <div class="mb-3"><label class="form-label" for="datasheet-note-{{ block.stableKey }}">{{ block.label ?: 'Additional information' }}</label><textarea class="form-control" id="datasheet-note-{{ block.stableKey }}" name="notes[{{ block.stableKey }}]" rows="4" maxlength="10000">{{ block.text }}</textarea><div class="form-text">Dieser Text gilt nur für diese PDF-Vorschau. Es wird kein HTML oder Programmcode ausgeführt.</div></div>
+            {% endif %}
+        {% endfor %}
+        {% if note_count == 0 %}<p class="text-muted">Diese Vorlage enthält keine beim Erstellen bearbeitbaren Notizfelder.</p>{% endif %}
+        <div class="card mb-3">
+            <div class="card-header d-flex align-items-center"><strong>Additional notes</strong><button class="btn btn-sm btn-outline-primary ms-auto" type="button" {{ stimulus_action('production/datasheet-additional-notes', 'add') }}><i class="fa-solid fa-plus fa-fw"></i> Add note</button></div>
+            <div class="card-body" {{ stimulus_target('production/datasheet-additional-notes', 'list') }}></div>
+            <template {{ stimulus_target('production/datasheet-additional-notes', 'template') }}>
+                <div class="border rounded p-3 mb-3" data-note-row>
+                    <div class="d-flex gap-2 align-items-start">
+                        <div class="flex-grow-1"><label class="form-label">English heading</label><input class="form-control" type="text" data-field="title" maxlength="255"></div>
+                        <button class="btn btn-outline-danger mt-4" type="button" title="Remove note" {{ stimulus_action('production/datasheet-additional-notes', 'remove') }}><i class="fa-solid fa-trash fa-fw"></i></button>
+                    </div>
+                    <label class="form-label mt-2">English note</label><textarea class="form-control" data-field="text" rows="4" maxlength="10000"></textarea>
+                    <label class="form-label mt-2">Width</label><select class="form-select" data-field="width"><option value="3">25 %</option><option value="6">50 %</option><option value="9">75 %</option><option value="12" selected>100 %</option></select>
+                </div>
+            </template>
+            <div class="card-footer text-muted small">Optional notes are added only to this data sheet and are stored in its immutable source record. Plain text only; no HTML or program code is executed.</div>
+        </div>
+        <div class="d-flex flex-wrap gap-2"><button class="btn btn-outline-primary" type="submit" formtarget="_blank" formaction="{{ path('production_datasheet_instance_preview_pdf', {instance: instance.id, template: template.id}) }}"><i class="fa-solid fa-file-pdf fa-fw"></i> DRAFT-PDF ansehen</button><button class="btn btn-success" type="submit" {{ stimulus_action('production/datasheet-release', 'confirm', 'click') }}><i class="fa-solid fa-check fa-fw"></i> Offizielles Datenblatt freigeben</button></div>
+    </form>
+
+    <hr>
+    <h5>Aufgelöste Datenquellen</h5>
+    <p class="text-muted small">Fehlende Werte werden in der Vorschau als Strich dargestellt. Wenn mehrere abgeschlossene Laufzettel zu einer Quelle passen, weist die PDF ausdrücklich auf die notwendige Auswahl hin.</p>
+    <div class="table-responsive"><table class="table table-sm align-middle"><thead><tr><th>Output field</th><th>Resolved value</th></tr></thead><tbody>
+        {% for item in datasheet_view.blocks %}
+            {% if item.block.type.value == 'value' %}<tr><td>{{ item.block.label }}</td><td>{{ item.value ?: '–' }}</td></tr>{% endif %}
+        {% else %}<tr><td colspan="2" class="text-muted">No mapped values.</td></tr>{% endfor %}
+    </tbody></table></div>
+{% endblock %}

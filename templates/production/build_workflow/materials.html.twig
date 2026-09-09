@@ -30,7 +30,6 @@
                                         {% if description %}<div class="small text-muted">{{ description|u.truncate(160, '…') }}</div>{% endif %}
                                     </div>
                                 </div>
-                                {% for row in item.lots %}<input type="hidden" name="lots[{{ item.part.id }}][{{ row.lot.id }}]" value="{{ draft.lots[item.part.id ~ ''][row.lot.id ~ '']|default(0) }}">{% endfor %}
                             </td>
                             <td class="text-center fw-semibold">{{ item.required }}</td>
                             <td class="text-center"><span class="badge {{ available_at_site >= required_at_site ? 'bg-success' : 'bg-danger' }}">{{ available_at_site }}</span>{% if item.project_stock > 0 %}<div class="small text-muted">+ {{ item.project_stock }} im Auftragsbestand</div>{% endif %}</td>

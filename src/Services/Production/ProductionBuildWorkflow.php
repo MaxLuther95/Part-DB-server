@@ -222,6 +222,78 @@ final readonly class ProductionBuildWorkflow
         return ['items' => $items, 'complete' => $complete];
     }
 
+    /**
+     * The material page currently offers automatic allocation only. Rebuild the
+     * complete selection from the current plan so stale session fragments can
+     * never leave newly required parts without a source lot.
+     *
+     * @param array{items: list<array<string, mixed>>, complete: bool} $plan
+     *
+     * @return array<string, array<string, int>>
+     */
+    public function allocateAvailableLots(array $plan): array
+    {
+        $allocation = [];
+        foreach ($plan['items'] as $item) {
+            $partId = $item['part']->getId();
+            if (null === $partId) {
+                throw new \LogicException('A material plan cannot contain an unsaved part.');
+            }
+            $remaining = (int) $item['remaining'];
+            foreach ($item['lots'] as $row) {
+                if ($remaining < 1) {
+                    break;
+                }
+                $lotId = $row['lot']->getId();
+                if (null === $lotId) {
+                    throw new \LogicException('A material plan cannot contain an unsaved part lot.');
+                }
+                $take = min($remaining, (int) $row['available']);
+                if ($take > 0) {
+                    $allocation[(string) $partId][(string) $lotId] = $take;
+                    $remaining -= $take;
+                }
+            }
+        }
+
+        return $allocation;
+    }
+
+    /**
+     * @param array<string, mixed>                                      $draft
+     * @param array{items: list<array<string, mixed>>, complete: bool} $plan
+     *
+     * @return list<string>
+     */
+    public function validateMaterialSelection(array $draft, array $plan): array
+    {
+        $errors = [];
+        foreach ($plan['items'] as $item) {
+            $partId = (string) $item['part']->getId();
+            if (true !== ($draft['materials_taken'][$partId] ?? false)) {
+                $errors[] = sprintf('%s: Bitte die Materialentnahme bestätigen.', $item['part']->getName());
+                continue;
+            }
+            $sum = 0;
+            foreach ($item['lots'] as $row) {
+                $amount = $draft['lots'][$partId][(string) $row['lot']->getId()] ?? 0;
+                if (!is_int($amount) || $amount < 0 || $amount > (int) $row['available']) {
+                    $errors[] = sprintf('%s: Ungültige automatische Lagerplatzzuordnung.', $item['part']->getName());
+                    continue 2;
+                }
+                $sum += $amount;
+            }
+            if ($sum !== (int) $item['remaining']) {
+                $errors[] = sprintf('%s: Die automatische Lagerplatzzuordnung deckt den Bedarf nicht vollständig.', $item['part']->getName());
+            }
+        }
+        if (!$plan['complete']) {
+            $errors[] = 'Am gewählten Standort ist nicht genügend Material verfügbar.';
+        }
+
+        return $errors;
+    }
+
     /** @param array<string, mixed> $draft */
     public function finalize(array $draft, User $user): BuildInstance
     {
@@ -232,6 +304,10 @@ final readonly class ProductionBuildWorkflow
         $plan = $this->createMaterialPlan($draft, $site);
         if (!$plan['complete']) {
             throw new \RuntimeException('Am gewählten Standort ist nicht genügend Material verfügbar.');
+        }
+        $selectionErrors = $this->validateMaterialSelection($draft, $plan);
+        if ([] !== $selectionErrors) {
+            throw new \RuntimeException($selectionErrors[0]);
         }
         $instances = [];
         return $this->entityManager->wrapInTransaction(function () use ($draft, $user, $site, $plan, &$instances): BuildInstance {

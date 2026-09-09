@@ -78,6 +78,21 @@ class BuildInstance extends AbstractProductionEntity
     #[ORM\OrderBy(['addedDate' => 'ASC'])]
     private Collection $materialUsages;
 
+    /** @var Collection<int, ProtocolRun> */
+    #[ORM\OneToMany(mappedBy: 'buildInstance', targetEntity: ProtocolRun::class)]
+    #[ORM\OrderBy(['runNumber' => 'DESC'])]
+    private Collection $protocolRuns;
+
+    /** @var Collection<int, BuildInstanceAttachment> */
+    #[ORM\OneToMany(mappedBy: 'buildInstance', targetEntity: BuildInstanceAttachment::class, cascade: ['persist'], orphanRemoval: true)]
+    #[ORM\OrderBy(['addedDate' => 'DESC'])]
+    private Collection $attachments;
+
+    /** @var Collection<int, DatasheetDocument> */
+    #[ORM\OneToMany(mappedBy: 'buildInstance', targetEntity: DatasheetDocument::class)]
+    #[ORM\OrderBy(['releasedAt' => 'DESC'])]
+    private Collection $datasheets;
+
     #[ORM\Column(type: Types::STRING, length: 32, enumType: BuildStatus::class)]
     private BuildStatus $status = BuildStatus::Planned;
 
@@ -95,6 +110,9 @@ class BuildInstance extends AbstractProductionEntity
     {
         $this->children = new ArrayCollection();
         $this->materialUsages = new ArrayCollection();
+        $this->protocolRuns = new ArrayCollection();
+        $this->attachments = new ArrayCollection();
+        $this->datasheets = new ArrayCollection();
     }
 
     public function __toString(): string
@@ -309,6 +327,41 @@ class BuildInstance extends AbstractProductionEntity
     public function getMaterialUsages(): Collection
     {
         return $this->materialUsages;
+    }
+
+    /** @return Collection<int, ProtocolRun> */
+    public function getProtocolRuns(): Collection
+    {
+        return $this->protocolRuns;
+    }
+
+    /** @return Collection<int, BuildInstanceAttachment> */
+    public function getAttachments(): Collection
+    {
+        return $this->attachments;
+    }
+
+    public function addAttachment(BuildInstanceAttachment $attachment): self
+    {
+        if (!$this->attachments->contains($attachment)) {
+            $this->attachments->add($attachment);
+            $attachment->setBuildInstance($this);
+        }
+
+        return $this;
+    }
+
+    public function removeAttachment(BuildInstanceAttachment $attachment): self
+    {
+        $this->attachments->removeElement($attachment);
+
+        return $this;
+    }
+
+    /** @return Collection<int, DatasheetDocument> */
+    public function getDatasheets(): Collection
+    {
+        return $this->datasheets;
     }
 
     public function getStatus(): BuildStatus

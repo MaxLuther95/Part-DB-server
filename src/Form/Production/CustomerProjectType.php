@@ -43,7 +43,11 @@ final class CustomerProjectType extends AbstractType
                 'label' => 'production.customer_project.order_date',
                 'required' => false,
                 'widget' => 'single_text',
-                'model_timezone' => 'UTC',
+            ])
+            ->add('plannedDeliveryDate', DateType::class, [
+                'label' => 'production.customer_project.planned_delivery_date',
+                'required' => false,
+                'widget' => 'single_text',
             ])
             ->add('customer', EntityType::class, [
                 'class' => Customer::class,

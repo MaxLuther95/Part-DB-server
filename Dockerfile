@@ -200,10 +200,10 @@ RUN a2dissite 000-default.conf && \
 
 # Install composer and yarn dependencies for Part-DB
 USER www-data
-# Use BuildKit cache for Composer when running as www-data by setting COMPOSER_CACHE_DIR
-RUN --mount=type=cache,id=composer-cache,target=/tmp/.composer-cache \
-    COMPOSER_CACHE_DIR=/tmp/.composer-cache composer install -a --no-dev && \
-    composer clear-cache
+# Keep the runtime dependency cache separate from the root-owned builder cache.
+# UID/GID 33 belongs to www-data in the Debian base image.
+RUN --mount=type=cache,id=composer-cache-www-data,target=/tmp/.composer-cache,uid=33,gid=33,mode=0770 \
+    COMPOSER_CACHE_DIR=/tmp/.composer-cache composer install -a --no-dev
 
 # Copy built frontend assets from node-builder stage
 COPY --from=node-builder --chown=www-data:www-data /app/public/build ./public/build
