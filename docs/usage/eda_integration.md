@@ -24,9 +24,9 @@ You require a user account in Part-DB, which has permission to access the Part-D
 
 {: .warning }
 > **HTTPS with Self-Signed Certificates**
-> 
+>
 > KiCad does not trust self-signed SSL/TLS certificates. If your Part-DB instance uses HTTPS with a self-signed certificate, KiCad will fail to connect and show an error like: `API responded with error code: 0: Unknown`.
-> 
+>
 > To resolve this issue, you have the following options:
 > - Use HTTP instead of HTTPS for the `root_url` (only recommended for local networks)
 > - Use a certificate from a trusted Certificate Authority (CA) like [Let's Encrypt](https://letsencrypt.org/)
@@ -48,15 +48,22 @@ To connect KiCad with Part-DB do the following steps:
         "type": "REST_API",
         "api_version": "v1",
         "root_url": "http://kicad-instance.invalid/en/kicad-api/",
-        "token": "THE_GENERATED_API_TOKEN"
+        "token": "THE_GENERATED_API_TOKEN",
+        "timeout_parts_seconds": 60,
+        "timeout_categories_seconds": 600
     }
-}    
+}
 ```
 4. Replace the `root_url` with the URL of your Part-DB instance plus `/en/kicad-api/`. You can find the right value for this in the Part-DB user settings page under "API endpoints" in the "API tokens" panel.
 5. Replace the `token` field value with the token you have generated in step 1.
 6. Open KiCad and add this created file as a HTTP library in the KiCad symbol table under (Preferences --> Manage Symbol Libraries)
 
 If you then place a new part, the library dialog opens, and you should be able to see the categories and parts from Part-DB.
+
+The `timeout_parts_seconds` and `timeout_categories_seconds` values define how long KiCad will cache the parts and categories from Part-DB.
+If you change parts in Part-DB, you need to wait this times until KiCad notices. If you want to see the changes quicker, you can set these values to a lower value (like 5 seconds),
+but this will increase the load on your Part-DB server, and make KiCad feel slower, as it has to fetch the data more often.
+The `timeout_parts_seconds` is required until detail changes to a single part is seen, the `timeout_categories_seconds` is required until changes to the categories (like new parts, or new categories) are seen.
 
 ### How to associate footprints and symbols with parts
 
@@ -99,7 +106,7 @@ It uses names and alternative names, when the primary name doesn't match, to fin
 If you are happy with the suggestions, you can run the command without the `--dry-run` option to apply the changes to your database. By default, only empty values are updated, but you can use the `--force` option to overwrite existing values as well.
 
 It uses the mapping under `assets/commands/kicad_populate_default_mappings.json` by default, but you can extend/override it by providing your own mapping file
-with the `--mapping-file` option. 
+with the `--mapping-file` option.
 The mapping file is a JSON file with the following structure, where the key is the name of the footprint or category, and the value is the corresponding KiCad library path:
 ```json
 {
@@ -115,4 +122,4 @@ The mapping file is a JSON file with the following structure, where the key is t
 ```
 Its okay if the file contains just one of the `footprints` or `categories` keys, so you can choose to only provide mappings for one of them if you want.
 
-It is recommended to take a backup of your database before running this command. 
+It is recommended to take a backup of your database before running this command.

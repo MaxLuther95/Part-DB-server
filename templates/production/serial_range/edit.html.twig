@@ -1,0 +1,12 @@
+{% extends 'main_card.html.twig' %}
+{% block title %}Nummernkreis bearbeiten{% endblock %}
+{% block card_title %}<i class="fa-solid fa-barcode fa-fw"></i> {{ range.id ? 'Nummernkreis bearbeiten' : 'Nummernkreis anlegen' }}{% endblock %}
+{% block card_content %}
+    <p>Systeme und Bauprojekte unten auswählen. Mehrfachauswahl mit Strg bzw. ⌘. Eine bereits belegte Zuordnung muss zuerst im bisherigen Kreis gelöst werden.</p>
+    <p class="text-muted">Änderungen gelten für neue Seriennummern. Bestehende Geräte werden nicht umnummeriert.</p>
+    {{ form_start(form) }}
+        {{ form_widget(form) }}
+        <button type="submit" class="btn {{ range.id ? 'btn-primary' : 'btn-success' }}">Speichern</button>
+        <a class="btn btn-secondary" href="{{ path('production_serial_range_index') }}">Abbrechen</a>
+    {{ form_end(form) }}
+{% endblock %}

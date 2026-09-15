@@ -1,0 +1,12 @@
+{% extends 'main_card.html.twig' %}
+{% block title %}Auftragsposition zuordnen{% endblock %}
+{% block card_title %}Auftragsposition zuordnen{% endblock %}
+{% block card_content %}
+    <p>PDF-Position {{ line.lineNumber }}: <strong>{{ line.description }}</strong> · {{ line.quantity }} {{ line.unitLabel }}</p>
+    <p class="text-muted">Genau ein Ziel auswählen. Systemvorlagen und Bauprojekte erzeugen Fertigungspositionen. Lagerteile erscheinen als zusätzliches Zubehör im Materialbedarf.</p>
+    {{ form_start(form) }}
+    {{ form_widget(form) }}
+    <button type="submit" class="btn btn-success">Zuordnung übernehmen</button>
+    <a class="btn btn-secondary" href="{{ path('production_customer_project_show', {id: line.order.id}) }}">Zurück</a>
+    {{ form_end(form) }}
+{% endblock %}

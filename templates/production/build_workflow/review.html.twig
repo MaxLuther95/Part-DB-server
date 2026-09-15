@@ -6,7 +6,6 @@
     {% for error in errors %}<div class="alert alert-danger">{{ error }}</div>{% endfor %}
     <form method="post">
         <input type="hidden" name="_token" value="{{ csrf_token('build_finish_' ~ token) }}">
-        {% set statuses = ['planned', 'in_progress', 'paused', 'completed', 'installed', 'scrapped'] %}
         <h5>Geräte und Baugruppen</h5>
         <div class="table-responsive"><table class="table align-middle"><thead><tr><th>Bezeichnung</th><th>Seriennummer</th><th>Status</th><th>Notizen</th></tr></thead><tbody>
         {% for key, node in draft.nodes %}
@@ -14,7 +13,7 @@
             <tr>
                 <td style="padding-left: {{ node.parent ? '2.5rem' : '.5rem' }}"><strong>{{ node.name }}</strong></td>
                 <td>{{ draft.details[key].serial ?: '–' }}</td>
-                <td><select class="form-select" name="final[{{ key }}][status]">{% for status in statuses %}<option value="{{ status }}" {{ selected_status == status ? 'selected' : '' }}>{{ ('production.build_instance.status.' ~ status)|trans({}, 'production') }}</option>{% endfor %}</select></td>
+                <td><select class="form-select" name="final[{{ key }}][status]">{% for status in statuses %}<option value="{{ status.value }}" {{ selected_status == status.value ? 'selected' : '' }}>{{ ('production.build_instance.status.' ~ status.value)|trans({}, 'production') }}</option>{% endfor %}</select></td>
                 <td><textarea class="form-control" rows="1" name="final[{{ key }}][notes]" placeholder="Optional">{{ draft.details[key].notes|default('') }}</textarea></td>
             </tr>
         {% endfor %}

@@ -31,6 +31,17 @@
     font-size: 12px;
 }
 
+/* Keep labels readable inside a narrow sidebar without shrinking tree icons. */
+.treeview .list-group-item > .text {
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.treeview .list-group-item > .icon,
+.treeview .list-group-item > .indent {
+    flex-shrink: 0;
+}
+
 @media (max-width: 768px) {
     .treeview span.icon {
         width: 20px !important;

@@ -14,12 +14,22 @@ final readonly class PdfOrderConfirmationParser
     private const MAX_EXTRACTED_TEXT_BYTES = 8 * 1024 * 1024;
     private const MAX_TEXT_BLOCKS = 4000;
     private const MAX_IMPORT_LINES = 500;
+    private const UNIT_PATTERN = '(?:sets?|pcs?\.?|pieces?|stk\.?|stück|stueck|psch\.?|pauschal)';
+    private const DATE_PATTERN = '(?:\d{4}-\d{2}-\d{2}|\d{2}\.\d{2}\.\d{4})';
+    private const HEADER_LABELS = [
+        'order_number' => '(?:Document[ \t]*#?|(?:Dokument|Auftrags?)(?:[- \t]*(?:Nr\.?|Nummer))?)',
+        'customer_number' => '(?:Customer[ \t]*#?|Kunden(?:[- \t]*(?:Nr\.?|Nummer))?)',
+        'customer_name' => '(?:Customer[ \t]+Name|Kundenname)',
+        'project_number' => '(?:Project[ \t]*#?|Projekt(?:[- \t]*(?:Nr\.?|Nummer))?)',
+        'order_date' => '(?:Date|Datum)',
+        'reference' => '(?:Your[ \t]+Reference[ \t]*#?|Ihre[ \t]+Referenz(?:[- \t]*(?:Nr\.?|Nummer))?)',
+    ];
 
     public function __construct(private AttachmentSubmitHandler $attachmentSubmitHandler)
     {
     }
 
-    /** @return array{order_number:string,customer_number:string,customer_name:string,project_number:string,order_date:string,reference:string,lines:list<array{number:int,description:string,quantity:int,unit:string}>,raw_text:string} */
+    /** @return array{order_number:string,customer_number:string,customer_name:string,project_number:string,order_date:string,reference:string,notes:string,lines:list<array{number:int,description:string,quantity:int,unit:string}>,raw_text:string} */
     public function parseFile(string $path): array
     {
         $size = filesize($path);
@@ -34,60 +44,84 @@ final readonly class PdfOrderConfirmationParser
 
         $result = $this->parseText($text);
         $layoutResult = $this->parsePositionedItems($positionedItems);
-        foreach (['order_number', 'customer_number', 'project_number', 'order_date', 'reference'] as $field) {
-            if ('' !== ($layoutResult[$field] ?? '')) {
+        foreach (array_keys(self::HEADER_LABELS) as $field) {
+            // An explicitly empty visual field must override incidental raw-stream text.
+            if (array_key_exists($field, $layoutResult)) {
                 $result[$field] = $layoutResult[$field];
             }
         }
+        if ('' !== ($layoutResult['notes'] ?? '')) {
+            $result['notes'] = $layoutResult['notes'];
+        }
         if ([] !== ($layoutResult['lines'] ?? [])) {
             $result['lines'] = $layoutResult['lines'];
-        }
-        foreach (['order_number', 'customer_number', 'project_number'] as $field) {
-            if (in_array(mb_strtolower($result[$field]), ['document', 'customer', 'project', 'date', 'reference'], true)) {
-                $result[$field] = '';
-            }
         }
 
         return $result;
     }
 
-    /** @return array{order_number:string,customer_number:string,customer_name:string,project_number:string,order_date:string,reference:string,lines:list<array{number:int,description:string,quantity:int,unit:string}>,raw_text:string} */
+    /** @return array{order_number:string,customer_number:string,customer_name:string,project_number:string,order_date:string,reference:string,notes:string,lines:list<array{number:int,description:string,quantity:int,unit:string}>,raw_text:string} */
     public function parseText(string $text): array
     {
         if (strlen($text) > self::MAX_EXTRACTED_TEXT_BYTES) {
             throw new \RuntimeException('Der ausgelesene PDF-Text überschreitet die Sicherheitsgrenze.');
         }
         $text = $this->sanitizeExtractedText(str_replace(["\r\n", "\r"], "\n", $text));
-        $field = static function (string $pattern, int $maximumLength) use ($text): string {
-            return 1 === preg_match($pattern, $text, $matches) ? mb_substr(trim($matches[1]), 0, $maximumLength) : '';
-        };
-
         $lines = [];
         foreach (explode("\n", $text) as $line) {
             if (count($lines) >= self::MAX_IMPORT_LINES) {
                 break;
             }
-            if (1 !== preg_match('/^\s*(\d{1,6})\s+(.{1,500}?)\s+(\d{1,7})\s+(set|pcs?\.?|pieces?)\s*$/iu', trim($line), $matches)) {
+            if (1 !== preg_match('/^\s*(\d{1,6})\s+(.{1,500}?)\s+(\d{1,7})\s+('.self::UNIT_PATTERN.')\s*$/iu', trim($line), $matches)) {
                 continue;
             }
             $lines[] = $this->createLine($matches);
         }
-        if ([] === $lines && 0 < preg_match_all('/(?:^|\n)\s*(\d{1,6})\s*\n+\s*([^\n]{1,500}?)\s*\n+\s*(\d{1,7})\s*\n+\s*(set|pcs?\.?|pieces?)\s*(?:\n|$)/iu', $text, $matches, PREG_SET_ORDER)) {
+        if ([] === $lines && 0 < preg_match_all('/(?:^|\n)\s*(\d{1,6})\s*\n+\s*([^\n]{1,500}?)\s*\n+\s*(\d{1,7})\s*\n+\s*('.self::UNIT_PATTERN.')\s*(?:\n|$)/iu', $text, $matches, PREG_SET_ORDER)) {
             foreach (array_slice($matches, 0, self::MAX_IMPORT_LINES) as $match) {
                 $lines[] = $this->createLine($match);
             }
         }
 
-        return [
-            'order_number' => $field('/Document\s*#?\s*:\s*([^\s]+)/iu', 64),
-            'customer_number' => $field('/Customer\s*#?\s*:\s*([^\s]+)/iu', 64),
-            'customer_name' => $field('/Customer\s+Name\s*:\s*([^\n]+)/iu', 255),
-            'project_number' => $field('/Project\s*#?\s*:\s*([^\s]+)/iu', 64),
-            'order_date' => $field('/Date\s*:\s*(\d{4}-\d{2}-\d{2})/iu', 10),
-            'reference' => $field('/Your\s+Reference\s*#?\s*:\s*([^\s]+)/iu', 255),
+        return array_replace(array_fill_keys(array_keys(self::HEADER_LABELS), ''), $this->parseHeaderFields($text), [
+            'notes' => $this->extractNotes([explode("\n", $text)]),
             'lines' => $lines,
             'raw_text' => $text,
-        ];
+        ]);
+    }
+
+    /** @return array<string, string> Only labels actually found in the text are returned. */
+    private function parseHeaderFields(string $text): array
+    {
+        $result = [];
+        foreach (self::HEADER_LABELS as $field => $label) {
+            if (1 !== preg_match('/(?<![\p{L}\p{N}])'.$label.'[ \t]*:[ \t]*([^\r\n]*)/iu', $text, $match)) {
+                continue;
+            }
+            $value = trim($match[1]);
+            if (in_array($field, ['order_number', 'customer_number', 'project_number'], true)) {
+                $value = 1 === preg_match('/^([A-Z0-9][A-Z0-9._\/-]{0,63})(?=\s|$)/iu', $value, $identifier) ? $identifier[1] : '';
+            } elseif ('order_date' === $field) {
+                $value = $this->normalizeDate($value);
+            } elseif ('reference' === $field) {
+                $value = preg_replace('/[ \t]+(?:from|von|vom)[ \t]+'.self::DATE_PATTERN.'[ \t]*$/iu', '', $value) ?? $value;
+            }
+            $result[$field] = mb_substr($value, 0, in_array($field, ['reference', 'customer_name'], true) ? 255 : 64);
+        }
+
+        return $result;
+    }
+
+    private function normalizeDate(string $value): string
+    {
+        foreach (['Y-m-d', 'd.m.Y'] as $format) {
+            $date = \DateTimeImmutable::createFromFormat('!'.$format, $value);
+            if (false !== $date && $date->format($format) === $value) {
+                return $date->format('Y-m-d');
+            }
+        }
+
+        return '';
     }
 
     /** @param list<array{stream:int,x:float,y:float,text:string}> $positionedItems */
@@ -98,6 +132,9 @@ final readonly class PdfOrderConfirmationParser
         if (false === $pdf || strlen($pdf) > $maximumBytes || !str_starts_with($pdf, '%PDF-')) {
             throw new \RuntimeException('Die hochgeladene Datei ist keine gültige PDF-Datei.');
         }
+
+        $fontDecoder = new PdfImportFontDecoder();
+        $fonts = $fontDecoder->readFonts($pdf);
 
         $text = [];
         $textBytes = 0;
@@ -136,6 +173,10 @@ final readonly class PdfOrderConfirmationParser
                 throw new \RuntimeException('Die PDF enthält zu viele Textblöcke für den sicheren Import.');
             }
             foreach ($blocks as $block) {
+                $font = null;
+                if (1 === preg_match('/\/([A-Za-z0-9_-]+)\s+[-\d.]+\s+Tf/', $block['block'], $fontMatch)) {
+                    $font = $fonts[$fontMatch[1]] ?? null;
+                }
                 if (1 > preg_match_all('/\((?<literal>(?:\\\\.|[^\\\\)])*)\)|<(?<hex>[0-9A-Fa-f\s]+)>/', $block['block'], $strings, PREG_SET_ORDER)) {
                     continue;
                 }
@@ -144,6 +185,9 @@ final readonly class PdfOrderConfirmationParser
                     $value = '' !== ($string['literal'] ?? '')
                         ? $this->decodePdfLiteral($string['literal'])
                         : $this->decodePdfHex($string['hex'] ?? '');
+                    if (null !== $font && 1 !== preg_match('/^\s*fe\s*ff/i', $string['hex'] ?? '')) {
+                        $value = $fontDecoder->decode($value, $font);
+                    }
                     $value = $this->sanitizeExtractedText($value);
                     $blockText .= $value;
                     $trimmedValue = trim($value);
@@ -172,18 +216,11 @@ final readonly class PdfOrderConfirmationParser
 
     /**
      * @param list<array{stream:int,x:float,y:float,text:string}> $items
-     * @return array{order_number:string,customer_number:string,project_number:string,order_date:string,reference:string,lines:list<array{number:int,description:string,quantity:int,unit:string}>}
+     * @return array{order_number?:string,customer_number?:string,customer_name?:string,project_number?:string,order_date?:string,reference?:string,notes:string,lines:list<array{number:int,description:string,quantity:int,unit:string}>}
      */
     private function parsePositionedItems(array $items): array
     {
-        $result = [
-            'order_number' => '',
-            'customer_number' => '',
-            'project_number' => '',
-            'order_date' => '',
-            'reference' => '',
-            'lines' => [],
-        ];
+        $result = ['notes' => '', 'lines' => []];
         if ([] === $items) {
             return $result;
         }
@@ -193,11 +230,15 @@ final readonly class PdfOrderConfirmationParser
             $itemsByStream[$item['stream']][] = $item;
         }
         $allLineTexts = [];
+        $pages = [];
         foreach ($itemsByStream as $streamItems) {
             $lines = $this->groupPositionedItemsIntoLines($streamItems);
+            $page = [];
             foreach ($lines as $line) {
-                $allLineTexts[] = $this->joinPositionedText($line['items']);
+                $page[] = $this->joinPositionedText($line['items']);
             }
+            $pages[] = $page;
+            array_push($allLineTexts, ...$page);
             foreach ($this->extractPositionLines($lines) as $position) {
                 if (count($result['lines']) >= self::MAX_IMPORT_LINES) {
                     break 2;
@@ -207,16 +248,48 @@ final readonly class PdfOrderConfirmationParser
         }
 
         $layoutText = implode("\n", $allLineTexts);
-        $field = static function (string $pattern, int $maximumLength) use ($layoutText): string {
-            return 1 === preg_match($pattern, $layoutText, $matches) ? mb_substr(trim($matches[1]), 0, $maximumLength) : '';
-        };
-        $result['order_number'] = $field('/Document[ \t]*#?[ \t]*:[ \t]*([A-Z0-9][A-Z0-9._\/-]{0,63})/iu', 64);
-        $result['customer_number'] = $field('/Customer[ \t]*#?[ \t]*:[ \t]*([A-Z0-9][A-Z0-9._\/-]{0,63})/iu', 64);
-        $result['project_number'] = $field('/Project[ \t]*#?[ \t]*:[ \t]*([A-Z0-9][A-Z0-9._\/-]{0,63})/iu', 64);
-        $result['order_date'] = $field('/Date[ \t]*:[ \t]*(\d{4}-\d{2}-\d{2})/iu', 10);
-        $result['reference'] = $field('/Your[ \t]+Reference[ \t]*#?[ \t]*:[ \t]*(.+?)[ \t]+from[ \t]+\d{4}-\d{2}-\d{2}/iu', 255);
+        $result = array_merge($result, $this->parseHeaderFields($layoutText));
+        $result['notes'] = $this->extractNotes($pages);
 
         return $result;
+    }
+
+    /** @param list<list<string>> $pages */
+    private function extractNotes(array $pages): string
+    {
+        $afterTotal = false;
+        $notes = [];
+        foreach ($pages as $page) {
+            foreach ($page as $line) {
+                $line = trim($line);
+                if ($this->isTotalLine($line)) {
+                    $afterTotal = true;
+                    continue;
+                }
+                if (!$afterTotal || '' === $line || 1 === preg_match('/^(?:page|seite)\s+\d+/iu', $line)) {
+                    continue;
+                }
+                // Footer columns are not order notes. Continue on the next page.
+                if (1 === preg_match('/(?:IBAN|BIC|VAT\s+ID|Bank\s+name|Registered\s+Seat|Handelsregister|Geschäftsführer|Sitz|USt\.?[ \t]*ID\.?|BLZ|Kto\.?[ \t]*Nr\.?)\s*:/iu', $line)) {
+                    break;
+                }
+                if ([] === $notes && 1 === preg_match('/^(?:(?:EUR|USD|GBP|CHF|€|\$)\s*)?[\d.,\s]+\s*(?:EUR|USD|GBP|CHF|€|\$)?$/u', $line)) {
+                    continue;
+                }
+                $notes[] = $line;
+            }
+        }
+        $text = implode("\n", $notes);
+        if (mb_strlen($text) > 50000) {
+            throw new \RuntimeException('Die erkannten Auftragsnotizen überschreiten die zulässige Länge von 50.000 Zeichen.');
+        }
+
+        return $text;
+    }
+
+    private function isTotalLine(string $line): bool
+    {
+        return 1 === preg_match('/^(?:total\s+amount|grand\s+total|gesamtbetrag|gesamtsumme|endbetrag)(?=[\s:\d€$]|$)/iu', $line);
     }
 
     /**
@@ -252,20 +325,25 @@ final readonly class PdfOrderConfirmationParser
         $headerIndex = null;
         $descriptionX = null;
         $quantityX = null;
+        $unitX = null;
         $unitPriceX = null;
         foreach ($lines as $index => $line) {
             $lineText = mb_strtolower($this->joinPositionedText($line['items']));
-            if (!str_contains($lineText, 'description') || !str_contains($lineText, 'of units')) {
+            if ((!str_contains($lineText, 'description') || !str_contains($lineText, 'of units'))
+                && (!str_contains($lineText, 'bezeichnung') || !str_contains($lineText, 'menge'))) {
                 continue;
             }
+            $descriptionX = $quantityX = $unitX = $unitPriceX = null;
             foreach ($line['items'] as $item) {
                 $text = mb_strtolower(trim($item['text']));
-                if ('description' === $text) {
+                if (in_array($text, ['description', 'bezeichnung'], true)) {
                     $descriptionX = $item['x'];
-                } elseif ('#' === $text) {
+                } elseif (in_array($text, ['#', '# of units', 'menge'], true)) {
                     $quantityX = $item['x'];
-                } elseif ('unit' === $text) {
-                    $unitPriceX = $item['x'];
+                } elseif ('einh.' === $text) {
+                    $unitX = $item['x'];
+                } elseif (in_array($text, ['unit', 'unit price', 'mwst.', 'einzelpreis'], true)) {
+                    $unitPriceX = null === $unitPriceX ? $item['x'] : min($unitPriceX, $item['x']);
                 }
             }
             if (null !== $descriptionX && null !== $quantityX && null !== $unitPriceX) {
@@ -278,10 +356,10 @@ final readonly class PdfOrderConfirmationParser
         }
 
         $result = [];
-        $quantityEndX = ($quantityX + $unitPriceX) / 2;
+        $quantityEndX = (($unitX ?? $quantityX) + $unitPriceX) / 2;
         foreach (array_slice($lines, $headerIndex + 1) as $line) {
             $fullText = mb_strtolower($this->joinPositionedText($line['items']));
-            if (str_contains($fullText, 'total amount')) {
+            if ($this->isTotalLine($fullText)) {
                 break;
             }
             $numberItems = array_values(array_filter($line['items'], static fn(array $item): bool => $item['x'] < $descriptionX - 20));
@@ -290,7 +368,7 @@ final readonly class PdfOrderConfirmationParser
             $numberText = trim($this->joinPositionedText($numberItems));
             $description = trim($this->joinPositionedText($descriptionItems));
             $quantityText = trim($this->joinPositionedText($quantityItems));
-            if (1 !== preg_match('/^\d{1,6}$/', $numberText) || '' === $description || 1 !== preg_match('/^(\d{1,7})\s*(set|pcs?\.?|pieces?)$/iu', $quantityText, $quantityMatch)) {
+            if (1 !== preg_match('/^\d{1,6}$/', $numberText) || '' === $description || 1 !== preg_match('/^(\d{1,7})\s*('.self::UNIT_PATTERN.')$/iu', $quantityText, $quantityMatch)) {
                 continue;
             }
             $result[] = [
@@ -333,6 +411,8 @@ final readonly class PdfOrderConfirmationParser
         if (!mb_check_encoding($value, 'UTF-8')) {
             $value = mb_convert_encoding($value, 'UTF-8', 'Windows-1252');
         }
+
+        $value = \Normalizer::normalize($value, \Normalizer::FORM_C) ?: $value;
 
         return preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/u', '', $value) ?? '';
     }

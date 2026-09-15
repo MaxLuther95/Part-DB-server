@@ -11,6 +11,7 @@ use App\Entity\Production\BuildInstance;
 use App\Entity\Production\BuildMaterialUsage;
 use App\Entity\Production\BuildStatus;
 use App\Entity\Production\CustomerProject;
+use App\Entity\Production\CustomerProjectStatus;
 use App\Entity\Production\ProjectAccessory;
 use App\Entity\Production\ProjectMaterialAllocation;
 use App\Entity\Production\ProjectMaterialReservation;
@@ -25,7 +26,7 @@ use App\Repository\Production\ProjectMaterialReservationRepository;
 
 final readonly class ProductionBuildWorkflow
 {
-    public const DRAFT_VERSION = 2;
+    public const DRAFT_VERSION = 5;
 
     public function __construct(
         private EntityManagerInterface $entityManager,
@@ -34,6 +35,7 @@ final readonly class ProductionBuildWorkflow
         private BuildConfigurationCompatibility $configurationCompatibility,
         private ProjectMaterialReservationRepository $reservationRepository,
         private ProductionReservationManager $reservationManager,
+        private SerialNumberManager $serialNumbers,
     ) {
     }
 
@@ -50,6 +52,91 @@ final readonly class ProductionBuildWorkflow
         }
 
         return $draft;
+    }
+
+    /**
+     * Compare the reviewed configuration with current request entities before any
+     * identifier claim or withdrawal. This does not change stock concurrency rules.
+     *
+     * @param array<string, mixed> $draft
+     */
+    public function assertCurrentDraft(array $draft): void
+    {
+        if (self::DRAFT_VERSION !== ($draft['version'] ?? null)) {
+            throw new StaleBuildDraftException('Dieser Bauvorgang stammt aus einer älteren Ablaufversion. Bitte starten Sie ihn erneut.');
+        }
+        foreach ($draft['nodes'] as $node) {
+            if (null !== $node['position_id']) {
+                $position = $this->entityManager->find(ProjectPosition::class, $node['position_id']);
+                $order = $position?->getCustomerProject();
+                if (!$position instanceof ProjectPosition || !$order instanceof CustomerProject) {
+                    throw new StaleBuildDraftException('Die Auftragsposition oder ihr Auftrag ist nicht mehr vorhanden. Bitte wählen Sie eine aktuelle Auftragsposition.');
+                }
+                if (CustomerProjectStatus::InProduction !== $order->getStatus()) {
+                    throw new StaleBuildDraftException('Der Auftrag ist nicht mehr in Produktion. Für ihn darf dieser Bauvorgang nicht abgeschlossen werden.');
+                }
+                if (!$position->getBuildInstances()->isEmpty()
+                    || ($node['position_signature'] ?? null) !== $this->positionSignature($position)) {
+                    throw new StaleBuildDraftException('Die Auftragsposition, ihre Konfiguration oder der Fertigungsstandort wurde geändert oder die Position ist bereits belegt. Bitte prüfen Sie den Auftrag und starten Sie den Bauvorgang erneut.');
+                }
+            }
+            $content = $this->entityManager->find('system' === $node['type'] ? SystemTemplate::class : Project::class, $node['content_id']);
+            if ((!$content instanceof SystemTemplate && !$content instanceof Project)
+                || ($node['content_signature'] ?? null) !== $this->nodeContentSignature($node, $content)) {
+                throw new StaleBuildDraftException('Der Bautyp wurde entfernt oder der geprüfte Fertigungsstand ist nicht mehr gültig. Bitte prüfen Sie den Bauplan und starten Sie den Bauvorgang erneut.');
+            }
+        }
+    }
+
+    /** @param array<string, mixed> $node */
+    private function nodeContentSignature(array $node, SystemTemplate|Project $content): string
+    {
+        $position = null === $node['position_id'] ? null : $this->entityManager->find(ProjectPosition::class, $node['position_id']);
+        return $position?->getDefinition()?->getFingerprint() ?? $this->contentSignature($content);
+    }
+
+    private function contentSignature(SystemTemplate|Project $content): string
+    {
+        $projects = [];
+        foreach ($content instanceof Project ? [$content] : $content->getBaseProjects() as $project) {
+            $entries = [];
+            foreach ($project->getBomEntries() as $entry) {
+                if ($entry->getPart() instanceof Part) {
+                    $entries[] = [$entry->getPart()->getId(), $entry->getQuantity()];
+                }
+            }
+            sort($entries);
+            $projects[] = [$project->getId(), $entries];
+        }
+        sort($projects);
+
+        return hash('sha256', json_encode([$content instanceof SystemTemplate ? 'system' : 'project', $content->getId(), $projects], JSON_THROW_ON_ERROR));
+    }
+
+    private function positionSignature(ProjectPosition $position): string
+    {
+        $parts = [];
+        foreach ($position->getPartAssignments() as $assignment) {
+            $parts[] = [$assignment->getPart()?->getId(), $assignment->getQuantity(), $assignment->getSourceSlot()?->getId()];
+        }
+        sort($parts);
+        $parent = $position->getParent();
+        $slot = $position->getSourceSlot();
+        $siblings = null !== $parent && null !== $slot
+            ? array_map(static fn(ProjectPosition $sibling): ?int => $sibling->getId(), $parent->getAssignmentsForSlot($slot))
+            : [];
+
+        return hash('sha256', json_encode([
+            $position->getCustomerProject()?->getId(),
+            $position->getCustomerProject()?->getProductionSite()?->getId(),
+            $position->getSystemTemplate()?->getId(),
+            $position->getTemplateProject()?->getId(),
+            $position->getQuantity(),
+            $parent?->getId(),
+            $slot?->getId(),
+            $siblings,
+            $parts,
+        ], JSON_THROW_ON_ERROR));
     }
 
     /** @param array<string, mixed> $draft */
@@ -297,6 +384,7 @@ final readonly class ProductionBuildWorkflow
     /** @param array<string, mixed> $draft */
     public function finalize(array $draft, User $user): BuildInstance
     {
+        $this->assertCurrentDraft($draft);
         $site = $this->entityManager->find(StorageLocation::class, $draft['site_id']);
         if (!$site instanceof StorageLocation) {
             throw new \RuntimeException('Der Fertigungsstandort ist nicht mehr vorhanden.');
@@ -333,6 +421,7 @@ final readonly class ProductionBuildWorkflow
                     if (!$position instanceof ProjectPosition || !$position->getBuildInstances()->isEmpty()) {
                         throw new \RuntimeException(sprintf('Die Projektposition %s ist bereits belegt oder nicht mehr vorhanden.', $node['name']));
                     }
+                    if (null !== $position->getDefinition()) { $instance->setManufacturingDefinition($position->getDefinition()); }
                     $instance->setProjectPosition($position);
                     if (!$this->configurationCompatibility->synchronizePhysicalRelations($instance, $position)) {
                         throw new \RuntimeException(sprintf('Die Projektposition %s kann nicht widerspruchsfrei zugewiesen werden.', $node['name']));
@@ -347,7 +436,11 @@ final readonly class ProductionBuildWorkflow
                     }
                     $instance->setInstalledSlot($installedSlot)->setInstalledSlotIndex((int) ($node['slot_index'] ?? 0));
                 }
+                $this->serialNumbers->claim($instance, ($details['confirmed_serial'] ?? null) === $serial);
+                // Flush each reviewed identifier within this transaction so siblings
+                // cannot claim the same number before the final material withdrawal.
                 $this->entityManager->persist($instance);
+                $this->entityManager->flush();
                 $instances[$key] = $instance;
             }
             $root = $instances[$draft['root']];
@@ -377,6 +470,8 @@ final readonly class ProductionBuildWorkflow
                 $draft['nodes'][$key]['parts'][] = ['part_id' => $assignment->getPart()->getId(), 'quantity' => $assignment->getQuantity(), 'slot' => $assignment->getSourceSlot()?->getName() ?? 'Zubehör', 'slot_id' => $assignment->getSourceSlot()?->getId()];
             }
         }
+        $draft['nodes'][$key]['content_signature'] = $position->getDefinition()?->getFingerprint() ?? $this->contentSignature($content);
+        $draft['nodes'][$key]['position_signature'] = $this->positionSignature($position);
         return $key;
     }
 
@@ -386,6 +481,7 @@ final readonly class ProductionBuildWorkflow
         $key = 'n'.count($draft['nodes']);
         $isSystem = $content instanceof SystemTemplate;
         $draft['nodes'][$key] = ['type' => $isSystem ? 'system' : 'project', 'content_id' => $content->getId(), 'name' => $name ?? $content->getName(), 'parent' => $parent, 'position_id' => $positionId, 'source_slot_id' => $sourceSlotId, 'slot_index' => $slotIndex, 'configured' => !$isSystem || !$needsConfiguration, 'parts' => []];
+        $draft['nodes'][$key]['content_signature'] = $this->contentSignature($content);
 
         return $key;
     }
@@ -409,13 +505,19 @@ final readonly class ProductionBuildWorkflow
         $requirements = [];
         foreach ($draft['nodes'] as $key => $node) {
             $resolved = $this->resolveNode($draft, (string) $key);
-            $projects = $resolved['content'] instanceof Project
-                ? [$resolved['content']]
-                : $resolved['content']->getBaseProjects();
-            foreach ($projects as $project) {
-                foreach ($project->getBomEntries() as $entry) {
-                    if ($entry->getPart() instanceof Part && null !== $entry->getPart()->getId()) {
-                        $this->addRequirement($requirements, $entry->getPart()->getId(), (int) ceil($entry->getQuantity()), (string) $key);
+            $position = null === $node['position_id'] ? null : $this->entityManager->find(ProjectPosition::class, $node['position_id']);
+            $definition = $position?->getDefinition();
+            if (null !== $definition) {
+                foreach ($definition->getMaterialRows() as $row) {
+                    $this->addRequirement($requirements, $row['part']->getId(), (int) ceil($row['quantity']), (string) $key);
+                }
+            } else {
+                $projects = $resolved['content'] instanceof Project ? [$resolved['content']] : $resolved['content']->getBaseProjects();
+                foreach ($projects as $project) {
+                    foreach ($project->getBomEntries() as $entry) {
+                        if ($entry->getPart() instanceof Part && null !== $entry->getPart()->getId()) {
+                            $this->addRequirement($requirements, $entry->getPart()->getId(), (int) ceil($entry->getQuantity()), (string) $key);
+                        }
                     }
                 }
             }

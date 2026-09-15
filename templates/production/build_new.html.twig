@@ -9,7 +9,7 @@
     {{ form_start(form) }}
         {{ form_widget(form) }}
         <div class="d-flex gap-2 mt-3">
-            <button class="btn btn-success" type="submit"><i class="fa-solid fa-arrow-right fa-fw"></i> {{ 'production.build.prepare'|trans }}</button>
+            <button class="btn btn-primary" type="submit"><i class="fa-solid fa-arrow-right fa-fw"></i> {{ 'production.build.prepare'|trans }}</button>
             <a class="btn btn-secondary" href="{{ path('production_build') }}">{{ 'production.action.cancel'|trans }}</a>
         </div>
     {{ form_end(form) }}

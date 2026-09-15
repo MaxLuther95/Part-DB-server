@@ -30,9 +30,12 @@ class CustomerProject extends AbstractProductionEntity
     private string $projectNumber = '';
 
     #[ORM\Column(type: Types::STRING, length: 255)]
-    #[Assert\NotBlank]
     #[Assert\Length(max: 255)]
     private string $name = '';
+
+    #[ORM\Column(name: 'customer_reference', type: Types::STRING, length: 255, nullable: true)]
+    #[Assert\Length(max: 255)]
+    private ?string $customerReference = null;
 
     #[ORM\ManyToOne(targetEntity: ProductionProject::class, inversedBy: 'orders')]
     #[ORM\JoinColumn(name: 'production_project_id', nullable: false)]
@@ -126,7 +129,7 @@ class CustomerProject extends AbstractProductionEntity
 
     public function __toString(): string
     {
-        return sprintf('%s – %s', $this->projectNumber, $this->name);
+        return '' === $this->name ? $this->projectNumber : sprintf('%s – %s', $this->projectNumber, $this->name);
     }
 
     public function getProjectNumber(): string
@@ -156,6 +159,18 @@ class CustomerProject extends AbstractProductionEntity
     public function getCustomer(): ?Customer
     {
         return $this->customer;
+    }
+
+    public function getCustomerReference(): ?string
+    {
+        return $this->customerReference;
+    }
+
+    public function setCustomerReference(?string $customerReference): self
+    {
+        $this->customerReference = null === $customerReference || '' === trim($customerReference) ? null : trim($customerReference);
+
+        return $this;
     }
 
     public function getProductionProject(): ?ProductionProject
@@ -393,6 +408,9 @@ class CustomerProject extends AbstractProductionEntity
 
     public function isReadyForCompletion(): bool
     {
+        if ([] !== $this->getPendingImportLines()) {
+            return false;
+        }
         foreach ($this->positions as $position) {
             $instance = $position->getBuildInstances()->first();
             if (!$instance instanceof BuildInstance || null === $instance->getSerialNumber()) {
@@ -401,6 +419,22 @@ class CustomerProject extends AbstractProductionEntity
         }
 
         return true;
+    }
+
+    /** @return list<OrderImportLine> */
+    public function getPendingImportLines(): array
+    {
+        return array_values($this->importLines->filter(
+            static fn(OrderImportLine $line): bool => OrderImportLineDisposition::Pending === $line->getDisposition(),
+        )->toArray());
+    }
+
+    /** @return list<OrderImportLine> */
+    public function getUnassignedImportLines(): array
+    {
+        return array_values($this->importLines->filter(
+            static fn(OrderImportLine $line): bool => OrderImportLineDisposition::Assigned !== $line->getDisposition(),
+        )->toArray());
     }
 
     /** @return list<ProjectPosition> */
@@ -418,7 +452,9 @@ class CustomerProject extends AbstractProductionEntity
     {
         if (in_array($this->status, [CustomerProjectStatus::Completed, CustomerProjectStatus::Delivered], true)
             && !$this->isReadyForCompletion()) {
-            $context->buildViolation('production.customer_project.completion_requires_serials')
+            $context->buildViolation([] !== $this->getPendingImportLines()
+                ? 'production.customer_project.completion_requires_assignment'
+                : 'production.customer_project.completion_requires_serials')
                 ->atPath('status')
                 ->addViolation();
         }

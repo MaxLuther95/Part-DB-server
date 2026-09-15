@@ -112,7 +112,7 @@
                     <td>{{ reservation.sourcePartLot ? (reservation.sourcePartLot.name ?: '#' ~ reservation.sourcePartLot.id) : reservation.sourceLotName|default('Verknüpfung gelöscht') }}</td>
                     <td>{{ reservation.sourcePartLot and reservation.sourcePartLot.storageLocation ? reservation.sourcePartLot.storageLocation.fullPath : reservation.siteName }}</td>
                     <td>{% if reservation.transferPending %}<span class="badge bg-warning text-dark"><i class="fa-solid fa-truck fa-fw"></i> Transfer ausstehend</span>{% else %}<span class="badge bg-primary"><i class="fa-solid fa-bookmark fa-fw"></i> Am Fertigungsstandort</span>{% endif %}</td>
-                    <td class="text-end">{% if reservation.transferPending and is_granted('@production_material.provide') and is_granted('@parts_stock.move') %}<a class="btn btn-sm btn-success" href="{{ path('production_material_reservation_receive', {id: reservation.id}) }}"><i class="fa-solid fa-truck-ramp-box fa-fw"></i> Transfer eingetroffen</a>{% endif %}</td>
+                    <td class="text-end">{% if reservation.transferPending and is_granted('@production_material.provide') and is_granted('@parts_stock.move') %}<a class="btn btn-sm btn-primary" href="{{ path('production_material_reservation_receive', {id: reservation.id}) }}"><i class="fa-solid fa-truck-ramp-box fa-fw"></i> Transfer eingetroffen</a>{% endif %}</td>
                 </tr>
             {% endfor %}
             </tbody></table></div>

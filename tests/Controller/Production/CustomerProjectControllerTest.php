@@ -35,6 +35,7 @@ final class CustomerProjectControllerTest extends WebTestCase
         $order = (new CustomerProject())
             ->setProjectNumber('UI-O-'.$suffix)
             ->setName('UI order '.$suffix)
+            ->setDescription("Order description\n<script>alert('not executable')</script>")
             ->setCustomer($customer)
             ->setProductionProject($productionProject)
             ->setPlannedDeliveryDate(new \DateTimeImmutable('2026-10-15'));
@@ -45,6 +46,12 @@ final class CustomerProjectControllerTest extends WebTestCase
 
         $crawler = $client->request('GET', '/en/production/customer-projects/'.$order->getId());
         self::assertResponseIsSuccessful();
+        self::assertCount(1, $crawler->filter('[data-order-description]'));
+        self::assertCount(1, $crawler->filter('[data-order-description] + [data-order-workflow]'));
+        self::assertCount(1, $crawler->filter('[data-order-description]')->previousAll()->filter('h1'));
+        self::assertSelectorTextContains('[data-order-description]', "<script>alert('not executable')</script>");
+        self::assertCount(1, $crawler->filter('[data-order-description] br'));
+        self::assertCount(0, $crawler->filter('[data-order-description] script'));
         self::assertCount(5, $crawler->filter('[data-order-summary]'));
         self::assertCount(1, $crawler->filter('[data-order-summary="planned-delivery"]'));
         self::assertCount(0, $crawler->filter('[data-order-summary="order-number"]'));
@@ -72,6 +79,7 @@ final class CustomerProjectControllerTest extends WebTestCase
         $form = $crawler->selectButton('Save')
             ->form();
         $form['customer_project[plannedDeliveryDate]'] = '';
+        $form['customer_project[description]'] = '';
         $client->submit($form);
         self::assertResponseRedirects('/en/production/customer-projects/'.$order->getId());
         $savedOrder = self::getContainer()
@@ -80,6 +88,10 @@ final class CustomerProjectControllerTest extends WebTestCase
             ->find($order->getId());
         self::assertInstanceOf(CustomerProject::class, $savedOrder);
         self::assertNull($savedOrder->getPlannedDeliveryDate());
+        $client->followRedirect();
+        self::assertResponseIsSuccessful();
+        self::assertSelectorNotExists('[data-order-description]');
+        self::assertSelectorExists('[data-order-workflow]');
 
         $crawler = $client->request('GET', '/en/production/customer-projects/new');
         self::assertResponseIsSuccessful();

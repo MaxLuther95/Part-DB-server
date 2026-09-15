@@ -23,6 +23,25 @@ use Symfony\Component\Validator\Constraints as Assert;
 #[ORM\UniqueConstraint(name: 'UNIQ_PROD_PROTOCOL_RUN_NUMBER', columns: ['build_instance_id', 'run_number'])]
 class ProtocolRun extends AbstractProductionEntity
 {
+    #[ORM\Version]
+    #[ORM\Column(type: Types::INTEGER)]
+    private int $version = 1;
+
+    /** @var list<string>|null */
+    #[ORM\Column(name: 'completion_warnings', type: Types::JSON, nullable: true)]
+    private ?array $completionWarnings = null;
+
+    /** @return list<string> */
+    public function getCompletionWarnings(): array
+    {
+        return $this->completionWarnings ?? [];
+    }
+
+    public function getVersion(): int
+    {
+        return $this->version;
+    }
+
     #[ORM\ManyToOne(targetEntity: BuildInstance::class, inversedBy: 'protocolRuns')]
     #[ORM\JoinColumn(name: 'build_instance_id', nullable: false, onDelete: 'CASCADE')]
     private ?BuildInstance $buildInstance = null;
@@ -37,6 +56,16 @@ class ProtocolRun extends AbstractProductionEntity
 
     #[ORM\Column(type: Types::STRING, length: 24, enumType: ProtocolRunStatus::class)]
     private ProtocolRunStatus $status = ProtocolRunStatus::Draft;
+
+    #[ORM\Column(name: 'protocol_date', type: Types::DATE_IMMUTABLE, nullable: true)]
+    private ?\DateTimeImmutable $protocolDate = null;
+
+    #[ORM\Column(name: 'last_edited_by_name', type: Types::STRING, length: 255, nullable: true)]
+    private ?string $lastEditedByName = null;
+
+    #[ORM\Column(type: Types::TEXT, nullable: true)]
+    #[Assert\Length(max: 10000)]
+    private ?string $notes = null;
 
     #[ORM\ManyToOne(targetEntity: User::class)]
     #[ORM\JoinColumn(name: 'started_by_id', nullable: true, onDelete: 'SET NULL')]
@@ -75,6 +104,7 @@ class ProtocolRun extends AbstractProductionEntity
     public function __construct()
     {
         $this->rows = new ArrayCollection();
+        $this->protocolDate = new \DateTimeImmutable('today');
     }
 
     public function __toString(): string
@@ -133,8 +163,8 @@ class ProtocolRun extends AbstractProductionEntity
 
     public function setStartedBy(?User $startedBy): self
     {
+        $this->touch($startedBy);
         $this->startedBy = $startedBy;
-        $this->lastEditedBy = $startedBy;
 
         return $this;
     }
@@ -147,7 +177,47 @@ class ProtocolRun extends AbstractProductionEntity
     public function touch(?User $user): void
     {
         $this->assertEditable();
+        // Schedule an update even when only answers changed or the editor stayed the same.
+        // Doctrine compares DateTime objects by identity; the integer version provides
+        // concurrency protection even for multiple writes within the same second.
+        $this->updateTimestamps();
         $this->lastEditedBy = $user;
+        $this->lastEditedByName = $user?->getName();
+    }
+
+    public function getProtocolDate(): ?\DateTimeImmutable
+    {
+        return $this->protocolDate;
+    }
+
+    public function setProtocolDate(?\DateTimeImmutable $date): self
+    {
+        $this->assertEditable();
+        $this->protocolDate = $date?->setTime(0, 0);
+
+        return $this;
+    }
+
+    public function getLastEditedByName(): ?string
+    {
+        return $this->lastEditedByName;
+    }
+
+    public function getNotes(): string
+    {
+        return $this->notes ?? '';
+    }
+
+    public function setNotes(?string $notes): self
+    {
+        $this->assertEditable();
+        $notes = trim($notes ?? '');
+        if (mb_strlen($notes) > 10000) {
+            throw new \InvalidArgumentException('Protocol notes must not exceed 10000 characters.');
+        }
+        $this->notes = '' === $notes ? null : $notes;
+
+        return $this;
     }
 
     public function getCompletedBy(): ?User
@@ -205,13 +275,18 @@ class ProtocolRun extends AbstractProductionEntity
         return null;
     }
 
-    public function complete(?User $user): void
+    /** @param list<string> $acceptedWarnings */
+    public function complete(?User $user, array $acceptedWarnings = []): void
     {
         $this->assertEditable();
+        if (null === $this->protocolDate && [] === $acceptedWarnings) {
+            throw new \LogicException('A protocol date is required to complete a run.');
+        }
+        $this->touch($user);
+        $this->completionWarnings = [] === $acceptedWarnings ? null : array_values($acceptedWarnings);
         $this->status = ProtocolRunStatus::Completed;
         $this->completedAt = new \DateTimeImmutable('now');
         $this->completedBy = $user;
-        $this->lastEditedBy = $user;
     }
 
     public function invalidate(string $reason, ?User $user): void

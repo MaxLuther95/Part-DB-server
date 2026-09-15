@@ -1,12 +1,125 @@
 # Production extension roadmap
 
-Last updated: 2026-09-09
+Last updated: 2026-09-15
 
 This file is the shared list of deliberately unfinished production-extension
 work. An item remains open until its behavior, data migration, permissions,
 tests and documentation are complete.
 
+## Security and deployment readiness
+
+- [x] Harden production authorization and native private attachments; see
+  [security remediation](security-remediation-2026-09-13.md).
+- [x] Enable and verify local/LAN HTTPS with a dedicated trusted development CA;
+  see [local HTTPS](local-https.md). This is not the future NAS/public deployment.
+- [x] Inventory versions, check official advisories and rerun current-source
+  regression; see [version review](version-review-2026-09-13.md). No version
+  upgrade or upgrade-compatibility acceptance is implied.
+- [x] Complete the overnight workflow verification and its runtime handoff; see
+  [overnight workflow review](overnight-workflow-review-2026-09-14.md).
+- [x] Fix the local backup failure path: failed or empty SQL dumps now return
+  failure without writing an incomplete archive or replacing an existing
+  backup. Regression tests and an isolated MariaDB full-backup/restore check
+  passed; see [backup correction](backup-failure-fix-2026-09-14.md).
+- [x] Preserve/reconcile the backup correction and its regression tests during
+  the isolated 2.17 merge; full MariaDB/file restore and failure-path checks pass
+  on the Trixie candidate. See [upgrade candidate](upgrade-candidate-2026-09-14.md).
+- [ ] Repeat the restore check on the final NAS candidate.
+- [x] Deploy and verify the diagnosed HTTPS healthcheck correction: BusyBox
+  `wget` leaves orphaned `ssl_client` zombies under Caddy PID 1, eventually
+  exhausting the PID limit. `init: true` passed an isolated same-image comparison
+  and was deployed to the proxy only. TLS/redirect checks and four normal live
+  healthcheck intervals passed with zero residual zombies. See
+  [healthcheck diagnosis](https-healthcheck-diagnosis-2026-09-14.md).
+- [x] Confirm the corrected proxy remains healthy without zombie accumulation
+  beyond the previous roughly one-hour production failure window: observed at
+  13:38 CEST after 61 minutes since the actual last recreation; zero zombies,
+  both HTTPS login endpoints return 200 with certificate verification.
+- [x] Prepare an isolated 2.17 upstream/runtime maintenance candidate preserving
+  custom features and hardening. The label authorization fix, PHP/MariaDB patches,
+  Trixie/OpenSSL maintenance and large-form submission checks are verified.
+  Migration rehearsal preserves the protected checkpoint copy; the full suite
+  including stock workflows passes on synthetic MariaDB data. See
+  [upgrade candidate](upgrade-candidate-2026-09-14.md).
+- [x] Deploy the prepared 2.17 candidate after a fresh consistent backup and
+  controlled migration; verify the live LAN deployment. Existing data and
+  persistent files were preserved. See the
+  [deployment record](upgrade-deployment-2026-09-14.md).
+- [ ] Complete user acceptance of the deployed 2.17 release in the LAN UI.
+- [ ] Follow up the privately documented API-token/account-settings finding with
+  upstream. Set up administrator 2FA later as requested by the user. Complete
+  the remaining security, restore and NAS/proxy checks before internet exposure.
+
+## Workflow corrections identified after the 2.17 rollout
+
+See the [plausibility review](workflow-plausibility-review-2026-09-14.md) for
+reproductions and scope. Deployment status is recorded per item below.
+
+- [x] Reject stale build wizards when the position/type/configuration or order
+  eligibility has changed; do not combine a new device type with an old BOM or
+  finish a build on a cancelled order (F1/F3). Verified and deployed at 20:46
+  CEST; see [stale build guard](stale-build-guard-2026-09-14.md).
+- [x] Protect protocol completion against overlapping draft saves and detect
+  outdated edit forms without discarding the user's submitted values (F2/F4).
+  Verified and deployed at 21:15 CEST; see
+  [protocol concurrency guard](protocol-concurrency-guard-2026-09-14.md).
+- [x] Retain notes and run selections when datasheet release validation fails;
+  correct the misleading preview-only note help (F5). Verified and deployed at
+  21:42 CEST, with explicit acceptance of missing required fields using the
+  existing template requirements; see
+  [incomplete release confirmation](incomplete-release-confirmation-2026-09-14.md).
+- [x] Clarify the status after removing an installed assembly (F6). The user
+  confirmed that installed assemblies are finished and remain finished after
+  removal. Keep the existing `installed` → `completed` transition; no historical
+  status restoration is required. See [build status simplification](build-status-2026-09-14.md).
+
+The requested removal of `paused` from devices and assemblies was deployed at
+22:26 CEST. Both edit and build-wizard choices now derive from the central enum;
+existing installation/removal behavior is retained. See
+[build status simplification](build-status-2026-09-14.md).
+
+Document-section visibility was simplified at 21:56 CEST: hide a section only
+when neither an assigned usable template nor existing records are present.
+See [document section visibility](document-section-visibility-2026-09-14.md).
+
+Production action colors follow native Part-DB as of 22:47 CEST: green for
+creation/addition and final confirmation, blue for navigation and editing.
+This supersedes the earlier blue-creation preference. See
+[production action colors](production-action-colors-2026-09-14.md).
+
+The connected order/reservation/provision/build/protocol/datasheet acceptance
+workflow passed on 2026-09-15. It exposed an unsupported `html5` option on the
+material-provision quantity field; removing that option fixes the HTTP 500.
+See [connected workflow acceptance](workflow-acceptance-2026-09-15.md).
+
+Order import requirements and the separate customer reference/notes workflow
+were corrected on 2026-09-15, including notes below the PDF total and continued
+pages. See [order import review](order-import-review-2026-09-15.md).
+German and English confirmations now share header/position recognition, with
+German units, lump sums and footer handling verified against supplied redacted
+PDFs. See [language support](order-import-languages-2026-09-15.md).
+
+Unmapped imported rows now remain visible as open order positions. They can be
+assigned later or explicitly marked as notes; pending rows prevent completion.
+See [open order positions](open-order-positions-2026-09-15.md).
+
+Simultaneous absolute stock updates are an explicitly accepted limitation,
+reconfirmed by the user during this review; no change is planned for that case.
+
+Laufzettel template deletion and grouped export selection are implemented and
+verified; see [template management](protocol-template-management-2026-09-15.md).
+
 ## Next architecture decisions
+
+- [x] Assign datasheet templates to system/product types and Part-DB build
+  projects, supporting multiple templates per type, current published revisions
+  and server-side applicability checks. Existing PDFs remain unchanged; see
+  [datasheet assignments](datasheet-template-assignments.md).
+- [x] Agree on and implement the production navigation tree: orders/projects,
+  production workflow, templates and master data. Sidebar/selector/tree access
+  now follows the same permitted leaves, including template-only users and
+  serial-number administrators. Targeted MariaDB and isolated browser checks
+  passed; see [navigation implementation](production-navigation.md).
 
 - [ ] Integrate the complete production-extension audit trail into Part-DB's
   existing central history/event-log mechanism as far as its public structure
@@ -14,16 +127,22 @@ tests and documentation are complete.
   details, migrate or retain existing production history safely, and remove
   the separate order-history presentation only after the central integration
   is verified. Do not redesign Part-DB's core history structure for this.
-- [ ] Replace the current live template behavior for newly created order
+- [x] Replace the current live template behavior for newly created order
   positions with an order-owned snapshot. Later changes to a system template
-  must not silently alter an existing order. Updating an existing order from a
-  newer template revision must be an explicit, reviewed action.
+  or any nested assembly/native BOM must not alter existing positions. The
+  user confirmed that adopting a newer definition requires manually deleting
+  and recreating the affected position, subject to existing deletion guards.
+  Do not implement template-update, merge or reset/restart actions for existing
+  positions. Verified with synthetic legacy migration, full regression and
+  browser checks, then deployed with business-data/file comparison. See
+  [implementation report](order-position-snapshots-2026-09-15.md) and
+  [confirmed snapshot rule](order-position-snapshot-decision-2026-09-15.md).
 - [ ] Stabilize the portable template model and then implement a versioned
-  export/import package for system templates, order-import mappings, protocol
-  templates and datasheet templates. This is deliberately a reusable-model
-  exchange format, not an order or production-data export. Complete the model
-  decisions and migration items in `Template portability and export` below
-  before defining version 1 of the package.
+  export/import package for system templates, protocol templates and datasheet
+  templates. This is deliberately a template exchange format, not an order or
+  production-data export. Complete the model decisions and migration items in
+  `Template portability and export` below before defining version 1 of the
+  package.
 - [x] Add protected attachments to devices and assemblies (`BuildInstance`).
   Reuse the hardened production upload/download rules and shared storage code,
   but keep a database relation to the concrete physical instance.
@@ -44,18 +163,21 @@ tests and documentation are complete.
 
 ## Measurement protocol phase 1: database and user interface
 
-- [ ] Allow zero, one or several published protocol-template revisions to be
-  assigned as defaults to a buildable type while retaining manual template
-  selection. The data model must not assume one fixed protocol type per build.
+- [x] Assign one protocol template to multiple systems/native build projects,
+  with zero or one assigned template per build type. New runs use its current
+  published revision without a manual dropdown, as confirmed on 2026-09-10.
+  Existing runs keep their pinned revision. This supersedes the earlier
+  multiple-default/manual-selection proposal.
 - [x] Give every protocol run instance-owned section records and answers and pin it to an
   immutable, published template revision. New template revisions therefore do
   not change existing runs; duplicating the field definitions into every run
   is deliberately unnecessary.
-- [x] Support typed fields such as text, decimal measurement, integer, yes/no,
-  selection, date/time and long notes. Store unit and precision with the
-  pinned revision. Decimals currently use a fixed high-precision database
-  scale. Configurable precision, limits and automatic result interpretation
-  remain later extensions and are not required for the first SEL form.
+- [x] Support text, exact decimal measurement, integer, yes/no, selection,
+  test status and static notes. Header date and optional instance-owned notes
+  replace the removed date/time and multiline template fields. Decimal answers
+  use validated strings, with no float conversion or added fractional zeros;
+  user-entered precision is retained. Configurable rounding, limits and
+  automatic result interpretation remain optional later extensions.
 - [x] Provide a separate three-state test field alongside yes/no. One button
   cycles through passed (green check), not used (orange dash) and failed (red
   cross); the stored values remain explicit for later validation and datasheet
@@ -67,9 +189,9 @@ tests and documentation are complete.
 - [x] Add static notes/intermediate headings and a constrained responsive
   12-column layout. Every element can occupy 25, 50, 75 or 100 percent and may
   explicitly begin a new row; mobile views stack the elements automatically.
-- [ ] Decide whether individual protocol runs really need local fields. Fields
-  can already be added, removed and reordered in a template draft; published
-  revisions and runs are intentionally immutable in structure.
+- [x] Give every run an optional, initially empty notes area at the bottom.
+  Local arbitrary fields are not part of the agreed scope; field structure is
+  edited in template drafts and stays pinned for existing runs.
 - [x] Show protocols as readable tables on the device/assembly detail page.
 - [x] Permit multiple, sequentially numbered protocol runs for one serial
   number so initial test, retest and repair results are not overwritten.
@@ -118,19 +240,14 @@ tests and documentation are complete.
 - [x] Render component matrices with installed subprojects as columns and
   freely configured instance or finished-protocol values as rows, matching the
   supplied Position 1/2/3 electronics example.
-- [ ] Replace the temporary `MAGNICON` footer wordmark with the approved SVG or
-  high-resolution transparent PNG logo.
+- [x] Replace the temporary footer wordmark with the approved Magnicon JPG,
+  centered at the bottom of every PDF page. Multipage output is verified.
 - [ ] Configure and review the first real electronics mapping against the
   supplied customer output. The starter layout deliberately contains no real
   measured values or credentials.
 
 ## Confirmed protocol workflow
 
-- Publishing a new template revision retires previously published revisions.
-  Existing draft and completed runs retain their pinned revision and values;
-  an existing draft run can still be finished. Only new runs use the current
-  published revision. Normalizing the existing duplicate publication state was
-  explicitly approved on 2026-09-09.
 - Every build instance can own more than one protocol run. Runs are numbered
   in a stable sequence within that instance.
 - Saving does not finish a protocol. Drafts remain editable and can be resumed
@@ -152,8 +269,9 @@ tests and documentation are complete.
   and static note/intermediate-heading elements share stable technical keys,
   constrained widths and optional row breaks separate from editable labels.
 - Common field types include text, decimal, integer, yes/no or test status,
-  choice, date/time and notes, with optional unit, help text and required
-  state. Template-level default values remain a possible later extension.
+  choice and static notes, with optional unit, help text and required state.
+  Date and editable notes belong to the run header/footer. Template-level
+  default values remain a possible later extension.
 - A protocol run pins one immutable published revision, owns one answer set per
   section and its typed
   answers, and belongs to a serialized build instance. It can therefore use
@@ -170,12 +288,10 @@ tests and documentation are complete.
 ## Template portability and export — model review 2026-09-09
 
 The current separation is sound: system templates describe build structures,
-order-import mappings translate external position descriptions to one build
-target, protocol templates describe internal data capture, and datasheet
-templates describe controlled customer output. Protocol runs, answers and
-released PDF documents remain instance-owned records pinned to immutable
-revisions. These different responsibilities must not be merged merely to
-simplify export.
+protocol templates describe internal data capture, and datasheet templates
+describe controlled customer output. Protocol runs, answers and released PDF
+documents remain instance-owned records pinned to immutable revisions. These
+different responsibilities must not be merged merely to simplify export.
 
 The template model is not yet ready for a durable cross-installation package.
 The following structure must be settled before an exporter is implemented:
@@ -192,8 +308,7 @@ The following structure must be settled before an exporter is implemented:
   the mutable top-level template although it is rendered as part of a specific
   revision. Decide the same rule explicitly for protocol name and description.
 - [ ] Replace numeric protocol-template database IDs in datasheet source paths
-  with structured source references using portable template UUIDs. Existing
-  stable section and field keys should
+  with portable template UUIDs. Existing stable section and field keys should
   be retained; they already survive a new protocol revision and are the right
   basis for value mappings.
 - [ ] Define portable references to Part-DB core objects without modifying its
@@ -201,20 +316,15 @@ The following structure must be settled before an exporter is implemented:
   when one exists. Projects can be proposed by their complete hierarchical
   path. Missing or ambiguous matches must be shown for manual mapping during
   import; neither a database ID nor a display name alone may be guessed.
-- [ ] Treat every order-import mapping as dependent on exactly one target: a
-  system template, a Part-DB project or a Part-DB part. Its normalized source
-  description can be transported directly, but the target must be resolved by
-  stable template identity or explicit Part/Project mapping before commit.
 - [ ] Include future default protocol assignments as references between stable
   template identities once that assignment model has been implemented.
 
 Version 1 is explicitly limited to reusable definitions and their declared
 dependencies:
 
-- included: selected system templates and their slots, selected order-import
-  mappings, selected protocol templates and revisions, selected datasheet
-  templates and revisions, nested template dependencies, safe layout/style
-  settings and source mappings;
+- included: selected system templates and their slots, selected protocol
+  templates and revisions, selected datasheet templates and revisions, nested
+  template dependencies, safe layout/style settings and source mappings;
 - excluded: orders, customers, production projects, project positions, built
   instances, serial numbers, protocol runs and answers, generated/released
   datasheets, attachments, stock, users and history records.
@@ -231,31 +341,18 @@ versioned JSON format, separate from a complete Part-DB backup:
 - [ ] Resolve nested system-template and datasheet-to-protocol dependencies as
   a graph. The export preview must show what will be included and what remains
   an external Part/Project reference.
-- [ ] Use one package format for both single and bulk transfer. A package can
-  contain one or several explicitly selected root objects. Referenced reusable
-  templates are included as a visible dependency closure by default; Part-DB
-  parts and projects remain external references that must already exist or be
-  mapped explicitly.
-- [ ] Implement import through a temporary validation/staging step and preview,
-  followed by one database transaction only after every required dependency
-  has been resolved. Do not leave half-imported or silently reduced definitions
-  in operational tables. Show missing references and identity/revision
+- [ ] Implement import as validation and preview first, followed by one
+  database transaction. Show missing references and identity/revision
   conflicts to the administrator. Never overwrite, renumber or merge a
   conflicting template silently; an explicit choice is required.
-- [ ] Let administrators save an unresolved import in staging and resume its
-  manual assignments later. Keep it visibly separate from usable templates;
-  incomplete mappings must never become operational definitions.
 - [ ] Define deterministic conflict behavior: an identical UUID/revision can
   be accepted as already present, a differing definition with the same
   UUID/revision is an error, and importing as a new template must generate new
   identities consistently across all internal references.
 - [ ] Validate schema, enum values, string and collection sizes, graph cycles
-  and checksums server-side. Plausibility checks must additionally cover unique
-  positions and keys, slot quantity ranges, exactly one target per import
-  mapping, complete allowed-content references, compatible protocol field
-  types and the existence of every datasheet source field. If the package
-  later becomes an archive with assets, additionally restrict file types,
-  paths and unpacked size before extraction.
+  and checksums server-side. If the package later becomes an archive with
+  assets, additionally restrict file types, paths and unpacked size before
+  extraction.
 - [ ] Protect export/import with dedicated administrator permissions and add
   the operations to the production audit trail.
 
@@ -265,11 +362,6 @@ tests, build the dry-run import and conflict UI, and only then expose export and
 import actions in the template pages. This order keeps the first published
 package version backward-compatible instead of encoding temporary database
 details into a public format.
-
-This package supplements but does not replace the MariaDB and protected-file
-backup. The database backup remains the authoritative full recovery method;
-the model package is the portable backup and transfer mechanism for reusable
-configuration only.
 
 ## External design research — 2026-09-03
 
@@ -415,7 +507,10 @@ all saves and the `Finish` transition are validated again on the server.
 
 - [ ] Rehearse the MariaDB migrations on a one-to-one copy of the production
   data.
-- [ ] Run a complete order-to-reservation-to-build acceptance test.
+- [x] Run a complete order-to-reservation-to-build acceptance test, including
+  partial provision, protocol completion, immutable PDF revisions, protected
+  attachments and order completion/delivery. See
+  [connected workflow acceptance](workflow-acceptance-2026-09-15.md).
 - [ ] Rehearse backup and restore, including protected production attachments.
 - [ ] Harden and document the eventual reverse-proxy/public deployment.
 - [ ] Review and replace the remaining abandoned upstream Composer packages

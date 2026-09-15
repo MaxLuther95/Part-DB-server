@@ -8,7 +8,8 @@
     <div class="alert alert-info"><i class="fa-solid fa-circle-info fa-fw"></i> {{ 'production.protocol.template.draft_explanation'|trans }}</div>
     <div class="d-flex flex-wrap gap-2 mb-3">
         <a class="btn btn-outline-secondary" href="{{ path('production_protocol_template_show', {id: revision.template.id}) }}"><i class="fa-solid fa-arrow-left fa-fw"></i> {{ 'production.action.back'|trans }}</a>
-        <a class="btn btn-primary" href="{{ path('production_protocol_section_new', {id: revision.id}) }}"><i class="fa-solid fa-plus fa-fw"></i> {{ 'production.protocol.section.new'|trans }}</a>
+        <a class="btn btn-outline-primary" href="{{ path('production_protocol_template_edit', {id: revision.template.id}) }}"><i class="fa-solid fa-link fa-fw"></i> {{ 'production.protocol.template.assignment_settings'|trans }}</a>
+        <a class="btn btn-success" href="{{ path('production_protocol_section_new', {id: revision.id}) }}"><i class="fa-solid fa-plus fa-fw"></i> {{ 'production.protocol.section.new'|trans }}</a>
         <form class="ms-auto" method="post" action="{{ path('production_protocol_revision_save', {id: revision.id}) }}">
             <input type="hidden" name="_token" value="{{ csrf_token('protocol_revision_save_' ~ revision.id) }}">
             <button class="btn btn-primary" type="submit"><i class="fa-solid fa-floppy-disk fa-fw"></i> {{ 'production.protocol.template.save_draft'|trans }}</button>
@@ -31,7 +32,7 @@
                 <div class="ms-auto d-flex gap-1">
                     <form method="post" action="{{ path('production_protocol_section_move', {id: section.id, direction: 'up'}) }}"><input type="hidden" name="_token" value="{{ csrf_token('protocol_section_move_' ~ section.id) }}"><button class="btn btn-sm btn-outline-secondary" title="Nach oben"><i class="fa-solid fa-arrow-up fa-fw"></i></button></form>
                     <form method="post" action="{{ path('production_protocol_section_move', {id: section.id, direction: 'down'}) }}"><input type="hidden" name="_token" value="{{ csrf_token('protocol_section_move_' ~ section.id) }}"><button class="btn btn-sm btn-outline-secondary" title="Nach unten"><i class="fa-solid fa-arrow-down fa-fw"></i></button></form>
-                    <a class="btn btn-sm btn-outline-primary" href="{{ path('production_protocol_field_new', {id: section.id}) }}"><i class="fa-solid fa-plus fa-fw"></i> {{ 'production.protocol.field.new'|trans }}</a>
+                    <a class="btn btn-sm btn-outline-success" href="{{ path('production_protocol_field_new', {id: section.id}) }}"><i class="fa-solid fa-plus fa-fw"></i> {{ 'production.protocol.field.new'|trans }}</a>
                     <a class="btn btn-sm btn-outline-secondary" href="{{ path('production_protocol_section_edit', {id: section.id}) }}"><i class="fa-solid fa-pen fa-fw"></i></a>
                     <form method="post" action="{{ path('production_protocol_section_delete', {id: section.id}) }}" {{ stimulus_controller('elements/delete_btn') }} {{ stimulus_action('elements/delete_btn', 'submit', 'submit') }} data-delete-title="{{ 'production.action.confirm_title'|trans }}" data-delete-message="{{ 'production.protocol.section.delete_confirm'|trans }}" data-delete-message-text>
                         <input type="hidden" name="_token" value="{{ csrf_token('protocol_section_delete_' ~ section.id) }}"><button class="btn btn-sm btn-outline-danger" type="submit"><i class="fa-solid fa-trash fa-fw"></i></button>

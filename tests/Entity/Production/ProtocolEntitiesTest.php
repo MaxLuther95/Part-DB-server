@@ -15,10 +15,74 @@ use App\Entity\Production\ProtocolTemplate;
 use App\Entity\Production\ProtocolTemplateField;
 use App\Entity\Production\ProtocolTemplateRevision;
 use App\Entity\Production\ProtocolTemplateSection;
+use App\Entity\UserSystem\User;
 use PHPUnit\Framework\TestCase;
 
 final class ProtocolEntitiesTest extends TestCase
 {
+    public function testNotesAreOptionalPrivateToEachRunAndFreezeOnCompletion(): void
+    {
+        $run = new ProtocolRun();
+        $another = new ProtocolRun();
+        self::assertSame('', $run->getNotes());
+        $run->setNotes("First line\nSecond line");
+        self::assertSame('', $another->getNotes());
+        $run->setNotes(null);
+        self::assertSame('', $run->getNotes());
+        $run->setNotes('Internal measurement context');
+        $run->complete(null);
+        self::assertSame('Internal measurement context', $run->getNotes());
+        $this->expectException(\LogicException::class);
+        $run->setNotes('Changed after completion');
+    }
+
+    public function testOversizedNotesAreRejectedWithoutLosingPreviousNotes(): void
+    {
+        $run = (new ProtocolRun())->setNotes('Keep this');
+        try {
+            $run->setNotes(str_repeat('x', 10001));
+            self::fail('Oversized notes must be rejected.');
+        } catch (\InvalidArgumentException) {
+            self::assertSame('Keep this', $run->getNotes());
+        }
+    }
+
+    public function testHeaderDefaultsAndEditorSnapshot(): void
+    {
+        $creator = (new User())->setName('creator');
+        $editor = (new User())->setName('editor');
+        $run = (new ProtocolRun())->setStartedBy($creator);
+        self::assertSame((new \DateTimeImmutable('today'))->format('Y-m-d'), $run->getProtocolDate()?->format('Y-m-d'));
+        self::assertSame('creator', $run->getLastEditedByName());
+        $run->setProtocolDate(new \DateTimeImmutable('2026-09-08 16:30'));
+        $run->touch($editor);
+        self::assertSame('2026-09-08 00:00', $run->getProtocolDate()?->format('Y-m-d H:i'));
+        self::assertSame($creator, $run->getStartedBy());
+        self::assertSame($editor, $run->getLastEditedBy());
+        self::assertSame('editor', $run->getLastEditedByName());
+        $run->complete($editor);
+        $editor->setName('renamed');
+        $run->invalidate('Correction required', $creator);
+        self::assertSame('editor', $run->getLastEditedByName());
+        self::assertSame('2026-09-08', $run->getProtocolDate()?->format('Y-m-d'));
+    }
+
+    public function testCompletedRunDateCannotChange(): void
+    {
+        $run = new ProtocolRun();
+        $run->complete(null);
+        $this->expectException(\LogicException::class);
+        $run->setProtocolDate(new \DateTimeImmutable('2020-01-01'));
+    }
+
+    public function testCompletedRunEditorCannotChange(): void
+    {
+        $run = new ProtocolRun();
+        $run->complete(null);
+        $this->expectException(\LogicException::class);
+        $run->setStartedBy((new User())->setName('forged'));
+    }
+
     public function testPublishedTemplateRevisionIsImmutable(): void
     {
         [$revision, $section, $field] = $this->createDraftDefinition();

@@ -40,14 +40,17 @@ services:
       BASE_CURRENCY: ${PARTDB_BASE_CURRENCY:-EUR}
       INSTANCE_NAME: ${PARTDB_INSTANCE_NAME:-Part-DB}
       TRUSTED_HOSTS: ${PARTDB_TRUSTED_HOSTS:-^(localhost|127[.]0[.]0[.]1)$}
+      TRUSTED_PROXIES: ${PARTDB_PROXY_IP:-10.89.1.254}
+      DEFAULT_URI: https://${PARTDB_HTTPS_HOST:-localhost}:${PARTDB_HTTPS_PORT:-8443}
       CHECK_FOR_UPDATES: ${PARTDB_CHECK_FOR_UPDATES:-0}
       USE_GRAVATAR: ${PARTDB_USE_GRAVATAR:-0}
       ALLOW_ATTACHMENT_DOWNLOADS: ${PARTDB_ALLOW_ATTACHMENT_DOWNLOADS:-0}
-    ports:
-      - ${PARTDB_HTTP_BIND:-127.0.0.1}:${PARTDB_HTTP_PORT:-8081}:80
+      FORCE_PRIVATE_ATTACHMENTS: "1"
     volumes:
       - partdb_uploads:/var/www/html/uploads
       - partdb_public_media:/var/www/html/public/media
+      - partdb_sessions:/var/lib/php/sessions
+      - ./.docker/https/framework.yaml:/var/www/html/config/packages/docker/local_https.yaml:ro
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://127.0.0.1/ >/dev/null || exit 1"]
       start_period: 90s
@@ -59,8 +62,50 @@ services:
       - frontend
       - database
 
+  https:
+    image: docker.io/library/caddy:2.11.4-alpine
+    restart: unless-stopped
+    # Reap orphaned BusyBox wget TLS helpers created by the healthcheck.
+    init: true
+    depends_on:
+      partdb:
+        condition: service_healthy
+    environment:
+      PARTDB_HTTPS_HOST: ${PARTDB_HTTPS_HOST:-localhost}
+      PARTDB_HTTPS_PORT: ${PARTDB_HTTPS_PORT:-8443}
+      PARTDB_HTTPS_DEFAULT_SNI: ${PARTDB_HTTPS_DEFAULT_SNI:-${PARTDB_HTTPS_HOST:-localhost}}
+      PARTDB_HTTPS_EXTRA_SITES: ${PARTDB_HTTPS_EXTRA_SITES:-}
+    ports:
+      - ${PARTDB_HTTP_BIND:-127.0.0.1}:${PARTDB_HTTPS_PORT:-8443}:443
+      - ${PARTDB_HTTP_BIND:-127.0.0.1}:${PARTDB_HTTP_PORT:-8081}:8080
+    volumes:
+      - ./.docker/https/Caddyfile:/etc/caddy/Caddyfile:ro
+      - partdb_tls_data:/data
+      - partdb_tls_config:/config
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop: [ALL]
+    cap_add: [NET_BIND_SERVICE]
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 256m
+    pids_limit: 128
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --no-check-certificate --spider https://localhost/en/login || exit 1"]
+      start_period: 30s
+      interval: 30s
+      timeout: 5s
+      retries: 5
+    networks:
+      frontend:
+        ipv4_address: ${PARTDB_PROXY_IP:-10.89.1.254}
+
 networks:
   frontend:
+    ipam:
+      config:
+        - subnet: ${PARTDB_FRONTEND_SUBNET:-10.89.1.0/24}
   database:
     internal: true
 
@@ -68,3 +113,6 @@ volumes:
   mariadb_data:
   partdb_uploads:
   partdb_public_media:
+  partdb_sessions:
+  partdb_tls_data:
+  partdb_tls_config:

@@ -21,6 +21,11 @@ jobs:
     steps:
     - uses: actions/checkout@v7
 
+    - name: Check source privacy
+      run: |
+        python3 .github/privacy/check_source_privacy.py --ref HEAD
+        python3 .github/privacy/test_source_privacy.py
+
     - name: Setup PHP
       uses: shivammathur/setup-php@v2
       with:

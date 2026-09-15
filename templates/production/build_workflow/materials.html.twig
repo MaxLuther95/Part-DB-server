@@ -45,7 +45,7 @@
         {% else %}
             <div class="alert alert-info">Die ausgewählte Baugruppe besitzt keine Lagerteile in ihrer BOM.</div>
         {% endif %}
-        <button class="btn btn-success" type="submit" {{ not plan.complete ? 'disabled' : '' }}><i class="fa-solid fa-arrow-right fa-fw"></i> Auswahl prüfen</button>
+        <button class="btn btn-primary" type="submit" {{ not plan.complete ? 'disabled' : '' }}><i class="fa-solid fa-arrow-right fa-fw"></i> Auswahl prüfen</button>
         <a class="btn btn-outline-secondary" href="{{ path('production_build_workflow_details', {token: token}) }}">Zurück</a>
     </form>
 

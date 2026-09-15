@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-ARG BASE_IMAGE=debian:bookworm-slim
+ARG BASE_IMAGE=debian:trixie-slim
 ARG PHP_VERSION=8.4
 ARG NODE_VERSION=22
 # Node.js build stage for building frontend assets
@@ -55,7 +55,7 @@ COPY package.json yarn.lock ./
 # Use BuildKit cache for yarn/npm
 RUN --mount=type=cache,id=yarn-cache,target=/root/.cache/yarn \
     --mount=type=cache,id=npm-cache,target=/root/.npm \
-    yarn install --network-timeout 600000
+    yarn install --frozen-lockfile --non-interactive --network-timeout 600000
 
 # Build the assets
 RUN yarn build
@@ -172,6 +172,7 @@ EOF
 COPY <<EOF /etc/php/${PHP_VERSION}/fpm/conf.d/partdb.ini
 upload_max_filesize=256M
 post_max_size=300M
+max_input_vars=8000
 ;opcache.preload_user=www-data
 ;opcache.preload=/var/www/html/config/preload.php
 log_limit=8096
@@ -199,6 +200,8 @@ RUN a2dissite 000-default.conf && \
     a2enmod rewrite headers
 
 # Install composer and yarn dependencies for Part-DB
+RUN mkdir -p var/cache var/log uploads public/media && \
+    chown -R www-data:www-data var uploads public/media
 USER www-data
 # Keep the runtime dependency cache separate from the root-owned builder cache.
 # UID/GID 33 belongs to www-data in the Debian base image.
@@ -210,6 +213,7 @@ COPY --from=node-builder --chown=www-data:www-data /app/public/build ./public/bu
 
 # Use docker env to output logs to stdout
 ENV APP_ENV=docker
+ENV MCP_ENABLED=0 MCP_EDITING_ENABLED=0 OAUTH_SERVER_ENABLED=0 OAUTH_DCR_ENABLED=0
 ENV DATABASE_URL="sqlite:///%kernel.project_dir%/uploads/app.db"
 
 USER root

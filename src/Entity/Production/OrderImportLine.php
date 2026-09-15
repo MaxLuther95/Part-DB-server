@@ -20,6 +20,9 @@ class OrderImportLine extends AbstractProductionEntity
     #[ORM\JoinColumn(name: 'mapping_id', nullable: true, onDelete: 'SET NULL')]
     private ?OrderImportMapping $mapping = null;
 
+    #[ORM\Column(type: Types::STRING, length: 16, enumType: OrderImportLineDisposition::class, options: ['default' => 'pending'])]
+    private OrderImportLineDisposition $disposition = OrderImportLineDisposition::Pending;
+
     #[ORM\Column(type: Types::INTEGER)] private int $lineNumber = 0;
     #[ORM\Column(type: Types::STRING, length: 255)] private string $description = '';
     #[ORM\Column(type: Types::INTEGER)] private int $quantity = 1;
@@ -40,6 +43,9 @@ class OrderImportLine extends AbstractProductionEntity
         return $this;
     }
     public function getMapping(): ?OrderImportMapping { return $this->mapping; }
+    public function getDisposition(): OrderImportLineDisposition { return $this->disposition; }
+    public function setDisposition(OrderImportLineDisposition $disposition): self { $this->disposition = $disposition; return $this; }
+    public function getUnitLabel(): string { return OrderPositionUnit::fromImportedValue($this->unit)?->getLabel() ?? $this->unit; }
     public function setMapping(?OrderImportMapping $mapping): self { $this->mapping = $mapping; return $this; }
     public function getLineNumber(): int { return $this->lineNumber; }
     public function setLineNumber(int $lineNumber): self { $this->lineNumber = max(0, $lineNumber); return $this; }

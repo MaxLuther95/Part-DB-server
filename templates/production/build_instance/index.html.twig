@@ -6,7 +6,7 @@
 
 {% block card_content %}
     <div class="d-flex justify-content-end mb-2">
-        {% if is_granted('@production_build_instances.build') %}<a href="{{ path('production_build') }}" class="btn btn-success"><i class="fa-solid fa-hammer fa-fw"></i> {{ 'production.navigation.build'|trans }}</a>{% endif %}
+        {% if is_granted('@production_build_instances.build') %}<a href="{{ path('production_build') }}" class="btn btn-primary"><i class="fa-solid fa-hammer fa-fw"></i> {{ 'production.navigation.build'|trans }}</a>{% endif %}
     </div>
     {% include 'production/_list_datatable.html.twig' with {
         datatable: datatable, state_tag: 'production_build_instances_v3',

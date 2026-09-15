@@ -1,5 +1,6 @@
 {% extends 'main_card.html.twig' %}
 {% trans_default_domain 'production' %}
+{% form_theme form 'form/serial_number.html.twig' %}
 
 {% block title %}{{ title|trans }}{% endblock %}
 
@@ -12,7 +13,7 @@
     {{ form_start(form) }}
         {{ form_widget(form) }}
         <div class="d-flex gap-2 mt-3">
-            <button class="btn btn-primary" type="submit">
+            <button class="btn {{ form.vars.data.id is null ? 'btn-success' : 'btn-primary' }}" type="submit">
                 <i class="fa-solid fa-floppy-disk fa-fw"></i> {{ save_label|default('production.action.save')|trans }}
             </button>
             <div class="d-flex gap-2 ms-auto">

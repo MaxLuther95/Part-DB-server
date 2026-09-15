@@ -6,19 +6,12 @@
 {% block card_title %}<i class="fa-solid {{ my_projects|default(false) ? 'fa-user-check' : 'fa-folder-open' }} fa-fw"></i> {{ page_title|trans }}{% endblock %}
 
 {% block card_content %}
-    <div class="d-flex justify-content-between mb-2">
-        <div class="d-flex gap-2">
-            {% if my_projects|default(false) %}
-                <a href="{{ path('production_customer_project_index') }}" class="btn btn-outline-primary"><i class="fa-solid fa-folder-open fa-fw"></i> {{ 'production.customer_project.all_projects'|trans }}</a>
-            {% endif %}
-        </div>
         {% if not my_projects|default(false) %}
-            <div class="d-flex align-items-center gap-2 flex-wrap justify-content-end">
-                {% if is_granted('@production_orders.import') %}<a href="{{ path('production_order_import') }}" class="btn btn-outline-success text-nowrap"><i class="fa-solid fa-file-import fa-fw"></i> Auftrag aus PDF importieren</a>{% endif %}
+            <div class="d-flex align-items-center gap-2 flex-wrap justify-content-end mb-2">
+                {% if is_granted('@production_orders.import') %}<a href="{{ path('production_order_import') }}" class="btn btn-outline-primary text-nowrap"><i class="fa-solid fa-file-import fa-fw"></i> Auftrag aus PDF importieren</a>{% endif %}
                 {% if is_granted('@production_orders.create') %}<a href="{{ path('production_customer_project_new') }}" class="btn btn-success text-nowrap"><i class="fa-solid fa-plus fa-fw"></i> {{ 'production.customer_project.new'|trans }}</a>{% endif %}
             </div>
         {% endif %}
-    </div>
 
     {% include 'production/_list_datatable.html.twig' with {
         datatable: datatable,

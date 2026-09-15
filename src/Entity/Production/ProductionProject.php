@@ -24,7 +24,6 @@ class ProductionProject extends AbstractProductionEntity
     private string $projectNumber = '';
 
     #[ORM\Column(type: Types::STRING, length: 255)]
-    #[Assert\NotBlank]
     #[Assert\Length(max: 255)]
     private string $name = '';
 
@@ -49,7 +48,7 @@ class ProductionProject extends AbstractProductionEntity
 
     public function __toString(): string
     {
-        return sprintf('%s – %s', $this->projectNumber, $this->name);
+        return '' === $this->name ? $this->projectNumber : sprintf('%s – %s', $this->projectNumber, $this->name);
     }
 
     public function getProjectNumber(): string

@@ -21,7 +21,7 @@
                 </tr>
             {% else %}<tr><td colspan="4" class="text-muted text-center">Diese Systemvorlage besitzt keine konfigurierbaren Plätze.</td></tr>{% endfor %}</tbody>
         </table></div>
-        <button class="btn btn-success" type="submit"><i class="fa-solid fa-arrow-right fa-fw"></i> Konfiguration übernehmen</button>
+        <button class="btn btn-primary" type="submit"><i class="fa-solid fa-arrow-right fa-fw"></i> Konfiguration übernehmen</button>
         <a class="btn btn-secondary" href="{{ path('production_build') }}">Abbrechen</a>
     </form>
 {% endblock %}

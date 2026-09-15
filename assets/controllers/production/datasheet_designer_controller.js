@@ -9,6 +9,7 @@ const TYPE_META = {
     value: {label: 'Zugeordneter Wert', icon: 'fa-database'},
     child_table: {label: 'Komponententabelle', icon: 'fa-table'},
     separator: {label: 'Trennlinie', icon: 'fa-minus'},
+    spacer: {label: 'Leerraum', icon: 'fa-arrows-up-down'},
     page_break: {label: 'Seitenumbruch', icon: 'fa-file-arrow-down'},
 };
 
@@ -19,6 +20,7 @@ const VISIBLE_SETTINGS = {
     value: ['label', 'source', 'typography', 'layout', 'behavior', 'required', 'hide'],
     child_table: ['label', 'typography', 'layout', 'behavior', 'required', 'hide', 'table'],
     separator: ['layout'],
+    spacer: ['spacing'],
     page_break: [],
 };
 
@@ -31,6 +33,7 @@ const WIDTH_PERCENT = {3: 25, 6: 50, 9: 75, 12: 100};
  * here and all persisted properties are validated again by the server.
  */
 export default class extends Controller {
+    static values = {previewUrl: String};
     static targets = [
         'blockInspector',
         'canvas',
@@ -43,8 +46,10 @@ export default class extends Controller {
         'pageTitle',
         'payload',
         'rootSource',
+        'headerSource',
         'status',
         'tableRows',
+        'previewButton', 'previewPanel', 'previewFrame', 'previewLink', 'workspace',
     ];
 
     connect() {
@@ -58,8 +63,14 @@ export default class extends Controller {
 
         this.selectedId = null;
         this.submitting = false;
+        // Turbo may restore a cached DOM whose old blob URL has been revoked.
+        this.previewButtonTarget.disabled = false;
+        this.previewButtonTarget.removeAttribute('aria-busy');
+        this.previewFrameTarget.removeAttribute('src');
+        this.previewLinkTarget.removeAttribute('href');
         this.assignEditorIds();
         this.populateSourceSelect(this.rootSourceTarget, this.catalogData.root, 'Datenquelle auswählen');
+        this.populateSourceSelect(this.headerSourceTarget, this.catalogData.child, 'Automatisch: Einbauplatzbezeichnung');
         this.savedPayload = this.serializeState();
         this.boundBeforeUnload = this.beforeUnload.bind(this);
         window.addEventListener('beforeunload', this.boundBeforeUnload);
@@ -70,6 +81,8 @@ export default class extends Controller {
     }
 
     disconnect() {
+        this.previewRequest?.abort();
+        if (this.previewObjectUrl) URL.revokeObjectURL(this.previewObjectUrl);
         window.removeEventListener('beforeunload', this.boundBeforeUnload);
         this.layerSortable?.destroy();
         this.canvasSortable?.destroy();
@@ -96,9 +109,21 @@ export default class extends Controller {
 
     selectDocument(event) {
         event?.stopPropagation();
+        this.closePreview();
         this.selectedId = null;
         this.renderSelection();
         this.renderInspector();
+        if (event) {
+            this.documentInspectorTarget.scrollIntoView({behavior: 'smooth', block: 'nearest'});
+            this.documentInspectorTarget.querySelector('input')?.focus({preventScroll: true});
+        }
+    }
+
+    beforePublish(event) {
+        if (this.serializeState() !== this.savedPayload) {
+            event.preventDefault();
+            AlertSwal.fire({icon: 'warning', title: 'Entwurf zuerst speichern', text: 'Bitte speichere und prüfe deine Änderungen vor der Veröffentlichung.'});
+        }
     }
 
     selectBlock(event) {
@@ -143,9 +168,15 @@ export default class extends Controller {
                 value = Number.isNaN(parsedValue) ? 0 : parsedValue;
             }
         } else {
-            value = event.currentTarget.value || (property === 'sourcePath' ? null : '');
+            value = event.currentTarget.value || (['sourcePath', 'headerSourcePath'].includes(property) ? null : '');
         }
         block[property] = value;
+        if (property === 'type' && value === 'spacer') {
+            block.layoutColumns = 12;
+            block.startNewRow = true;
+            block.required = false;
+            block.hideIfEmpty = false;
+        }
         this.changed();
         this.renderCanvas();
         this.renderLayers();
@@ -231,6 +262,55 @@ export default class extends Controller {
             return;
         }
         this.submitting = true;
+    }
+
+    async previewPdf() {
+        if (this.previewButtonTarget.disabled) return;
+        this.previewButtonTarget.disabled = true;
+        this.previewButtonTarget.setAttribute('aria-busy', 'true');
+        this.previewRequest = new AbortController();
+        try {
+            const data = new FormData();
+            data.set('_token', this.element.querySelector('input[name="_token"]').value);
+            data.set('editor_payload', this.serializeState());
+            const response = await fetch(this.previewUrlValue, {
+                method: 'POST', body: data, credentials: 'same-origin',
+                signal: this.previewRequest.signal,
+            });
+            if (!response.ok || !response.headers.get('content-type')?.includes('application/pdf')) {
+                const error = response.headers.get('content-type')?.includes('application/json') ? await response.json() : null;
+                throw new Error(error?.error || 'Die PDF-Vorschau konnte nicht erstellt werden. Bitte prüfe deine Anmeldung und versuche es erneut.');
+            }
+            const blob = await response.blob();
+            // The existing CSP permits data: PDF frames, not blob: frames.
+            // Keep that policy intact; the blob URL is only used for opening
+            // the PDF in a separate tab, never for embedded HTML.
+            const frameUrl = await new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result);
+                reader.onerror = () => reject(new Error('Die PDF-Vorschau konnte nicht geladen werden.'));
+                reader.readAsDataURL(blob);
+            });
+            if (this.previewRequest.signal.aborted) return;
+            if (this.previewObjectUrl) URL.revokeObjectURL(this.previewObjectUrl);
+            this.previewObjectUrl = URL.createObjectURL(blob);
+            this.previewFrameTarget.src = `${frameUrl}#view=FitH`;
+            this.previewLinkTarget.href = this.previewObjectUrl;
+            this.previewPanelTarget.hidden = false;
+            this.workspaceTarget.hidden = true;
+        } catch (error) {
+            if (error.name !== 'AbortError') await AlertSwal.fire({text: error.message});
+        } finally {
+            if (this.element.isConnected) {
+                this.previewButtonTarget.disabled = false;
+                this.previewButtonTarget.removeAttribute('aria-busy');
+            }
+        }
+    }
+
+    closePreview() {
+        this.previewPanelTarget.hidden = true;
+        this.workspaceTarget.hidden = false;
     }
 
     beforeUnload(event) {
@@ -366,6 +446,7 @@ export default class extends Controller {
 
         container.className = [
             'datasheet-block',
+            block.layoutColumns === 12 ? 'datasheet-block-full' : '',
             'datasheet-designer-canvas-block',
             `datasheet-block-${block.type}`,
             `datasheet-text-size-${block.textSize}`,
@@ -412,6 +493,11 @@ export default class extends Controller {
                 inner.append(line);
                 break;
             }
+            case 'spacer': {
+                const lines = {small: 1, normal: 2, large: 3, extra_large: 4}[block.textSize] || 1;
+                inner.append(this.textElement('div', `Leerraum · ${lines} ${lines === 1 ? 'Zeile' : 'Zeilen'}`, 'datasheet-spacer'));
+                break;
+            }
         }
         container.append(inner);
         return container;
@@ -425,7 +511,8 @@ export default class extends Controller {
         headerRow.append(document.createElement('th'));
         const previewColumns = Math.max(1, Math.min(12, block.minimumRows));
         for (let index = 1; index <= previewColumns; index++) {
-            headerRow.append(this.textElement('th', `Position ${index}`));
+            const value = block.headerSourcePath ? `{${this.describeSource(block.headerSourcePath)}}` : `Installation slot ${index}`;
+            headerRow.append(this.textElement('th', (block.headerFormat ?? '{value}').replace('{value}', value)));
         }
         head.append(headerRow);
         table.append(head);
@@ -644,6 +731,7 @@ export default class extends Controller {
             value: {label: 'Value'},
             child_table: {label: 'Installed components'},
             separator: {},
+            spacer: {},
             page_break: {},
         }[type];
 
@@ -654,14 +742,16 @@ export default class extends Controller {
             label: defaults.label ?? '',
             text: defaults.text ?? '',
             sourcePath: null,
-            textSize: 'normal',
+            headerSourcePath: null,
+            headerFormat: '{value}',
+            textSize: type === 'spacer' ? 'small' : 'normal',
             fontFamily: 'sans_serif',
             textAlignment: 'left',
             textBold: false,
             textItalic: false,
             textUnderlined: false,
             layoutColumns: 12,
-            startNewRow: false,
+            startNewRow: type === 'spacer',
             required: false,
             hideIfEmpty: false,
             minimumRows: 0,
@@ -691,6 +781,8 @@ export default class extends Controller {
                 label: block.label,
                 text: block.text,
                 sourcePath: block.sourcePath,
+                headerSourcePath: block.headerSourcePath,
+                headerFormat: block.headerFormat,
                 textSize: block.textSize,
                 fontFamily: block.fontFamily,
                 textAlignment: block.textAlignment,

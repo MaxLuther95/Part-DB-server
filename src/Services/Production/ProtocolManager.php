@@ -16,6 +16,7 @@ use App\Entity\Production\ProtocolTemplateSection;
 use App\Entity\UserSystem\User;
 use App\Repository\Production\ProtocolRunRepository;
 use Doctrine\DBAL\LockMode;
+use Doctrine\DBAL\Exception\ForeignKeyConstraintViolationException;
 use Doctrine\DBAL\Platforms\SQLitePlatform;
 use Doctrine\ORM\EntityManagerInterface;
 
@@ -25,6 +26,28 @@ final readonly class ProtocolManager
         private EntityManagerInterface $entityManager,
         private ProtocolRunRepository $runRepository,
     ) {
+    }
+
+    public function deleteTemplate(ProtocolTemplate $template): void
+    {
+        $run = $this->runRepository->createQueryBuilder('run')
+            ->select('run.id')
+            ->innerJoin('run.revision', 'revision')
+            ->andWhere('revision.template = :template')
+            ->setParameter('template', $template)
+            ->setMaxResults(1)
+            ->getQuery()->getOneOrNullResult();
+        if (null !== $run) {
+            throw new \DomainException('production.protocol.template.delete_in_use');
+        }
+
+        try {
+            $this->entityManager->remove($template);
+            $this->entityManager->flush();
+        } catch (ForeignKeyConstraintViolationException $exception) {
+            // A concurrently created run must also prevent deletion; Doctrine rolls back the flush.
+            throw new \DomainException('production.protocol.template.delete_in_use', previous: $exception);
+        }
     }
 
     public function createInitialDraft(ProtocolTemplate $template): ProtocolTemplateRevision
@@ -171,6 +194,10 @@ final readonly class ProtocolManager
             throw new \InvalidArgumentException('Only an active, published protocol template can be used.');
         }
 
+        if (! $revision->getTemplate()->appliesTo($buildInstance) || $revision->getTemplate()->getPublishedRevision() !== $revision) {
+            throw new \InvalidArgumentException('Only the current published revision assigned to this build type can be used.');
+        }
+
         return $this->entityManager->wrapInTransaction(function () use ($buildInstance, $revision, $user): ProtocolRun {
             // SQLite serializes writers at database level and does not support SELECT ... FOR UPDATE.
             // MariaDB/MySQL and PostgreSQL use a row lock to keep numbering race-free.
@@ -199,11 +226,14 @@ final readonly class ProtocolManager
     public function validateForCompletion(ProtocolRun $run): array
     {
         $errors = [];
+        if (null === $run->getProtocolDate()) {
+            $errors[] = 'Bitte das Laufzetteldatum eintragen.';
+        }
         foreach ($run->getRows() as $row) {
             foreach ($row->getAnswers() as $answer) {
                 $field = $answer->getField();
-                if ($field?->isRequired() && $answer->isEmpty()) {
-                    $errors[] = sprintf('Das Pflichtfeld „%s“ ist nicht ausgefüllt.', $field->getLabel());
+                if ($field?->isRequired() && (null === $answer->getValue() || (is_string($answer->getValue()) && '' === trim($answer->getValue())))) {
+                    $errors[] = sprintf('Das Feld „%s / %s“ ist nicht ausgefüllt.', $row->getSection()?->getName(), $field->getLabel());
                 }
             }
         }

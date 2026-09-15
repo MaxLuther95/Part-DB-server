@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Entity\Production;
 
+use App\Entity\ProjectSystem\Project;
 use App\Repository\Production\ProtocolTemplateRepository;
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
@@ -28,6 +29,22 @@ class ProtocolTemplate extends AbstractProductionEntity
     ])]
     private bool $active = true;
 
+    /** @var Collection<int, SystemTemplate> */
+    #[ORM\ManyToMany(targetEntity: SystemTemplate::class)]
+    #[ORM\JoinTable(name: 'production_protocol_template_systems')]
+    #[ORM\JoinColumn(name: 'protocol_template_id', referencedColumnName: 'id', onDelete: 'CASCADE')]
+    #[ORM\InverseJoinColumn(name: 'system_template_id', referencedColumnName: 'id', unique: true, onDelete: 'CASCADE')]
+    #[ORM\OrderBy(['name' => 'ASC'])]
+    private Collection $systemTemplates;
+
+    /** @var Collection<int, Project> */
+    #[ORM\ManyToMany(targetEntity: Project::class)]
+    #[ORM\JoinTable(name: 'production_protocol_template_projects')]
+    #[ORM\JoinColumn(name: 'protocol_template_id', referencedColumnName: 'id', onDelete: 'CASCADE')]
+    #[ORM\InverseJoinColumn(name: 'project_id', referencedColumnName: 'id', unique: true, onDelete: 'CASCADE')]
+    #[ORM\OrderBy(['name' => 'ASC'])]
+    private Collection $projects;
+
     /**
      * @var Collection<int, ProtocolTemplateRevision>
      */
@@ -40,6 +57,8 @@ class ProtocolTemplate extends AbstractProductionEntity
     public function __construct()
     {
         $this->revisions = new ArrayCollection();
+        $this->systemTemplates = new ArrayCollection();
+        $this->projects = new ArrayCollection();
     }
 
     public function __toString(): string
@@ -52,11 +71,65 @@ class ProtocolTemplate extends AbstractProductionEntity
         return $this->name;
     }
 
+    /** @return Collection<int, SystemTemplate> */
+    public function getSystemTemplates(): Collection
+    {
+        return $this->systemTemplates;
+    }
+
+    public function addSystemTemplate(SystemTemplate $system): self
+    {
+        if (! $this->systemTemplates->contains($system)) {
+            $this->systemTemplates->add($system);
+        }
+
+        return $this;
+    }
+
+    public function removeSystemTemplate(SystemTemplate $system): self
+    {
+        $this->systemTemplates->removeElement($system);
+
+        return $this;
+    }
+
     public function setName(string $name): self
     {
         $this->name = trim($name);
 
         return $this;
+    }
+
+    /** @return Collection<int, Project> */
+    public function getProjects(): Collection
+    {
+        return $this->projects;
+    }
+
+    public function addProject(Project $project): self
+    {
+        if (! $this->projects->contains($project)) {
+            $this->projects->add($project);
+        }
+
+        return $this;
+    }
+
+    public function removeProject(Project $project): self
+    {
+        $this->projects->removeElement($project);
+
+        return $this;
+    }
+
+    public function appliesTo(BuildInstance $instance): bool
+    {
+        // A system never inherits its components' or base project's assignment.
+        if (null !== $instance->getSystemTemplate()) {
+            return $this->systemTemplates->contains($instance->getSystemTemplate());
+        }
+
+        return null !== $instance->getTemplateProject() && $this->projects->contains($instance->getTemplateProject());
     }
 
     public function getDescription(): string

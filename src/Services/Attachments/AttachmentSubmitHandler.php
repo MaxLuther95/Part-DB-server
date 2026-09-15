@@ -228,8 +228,9 @@ class AttachmentSubmitHandler
             $file = new UploadedBase64EncodedFile(new Base64EncodedFile($upload->data), $upload->filename ?? 'base64');
         }
 
-        //By default we assume a public upload
-        $secure_attachment = $upload->private ?? false;
+        // Enforce the installation policy for all entry points, including API
+        // uploads and attempts to move a private file back to public storage.
+        $secure_attachment = $this->settings->forcePrivateAttachments || ($upload->private ?? false);
 
         //When a file is given then upload it, otherwise check if we need to download the URL
         if ($file instanceof UploadedFile) {

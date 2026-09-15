@@ -11,7 +11,6 @@ use Doctrine\DBAL\Platforms\SQLitePlatform;
 use Doctrine\DBAL\Platforms\AbstractMySQLPlatform;
 use Doctrine\ORM\EntityManagerInterface;
 use PhpZip\Constants\ZipCompressionMethod;
-use PhpZip\Exception\ZipException;
 use PhpZip\ZipFile;
 use Spatie\DbDumper\Databases\MySql;
 use Spatie\DbDumper\DbDumper;
@@ -26,6 +25,9 @@ use Symfony\Component\Console\Style\SymfonyStyle;
 #[AsCommand('partdb:backup', 'Backup the files and the database of Part-DB')]
 class BackupCommand extends Command
 {
+    /** @var list<resource> Keep SQL dumps alive until the ZIP has been written. */
+    private array $temporaryDumps = [];
+
     public function __construct(
         #[Autowire(param: 'kernel.project_dir')]
         private readonly string $project_dir,
@@ -88,27 +90,32 @@ class BackupCommand extends Command
         //Open ZIP file
         $zip = new ZipFile();
 
-        if ($backup_config) {
-            $this->backupConfig($zip, $io);
-        }
-        if ($backup_attachments) {
-            $this->backupAttachments($zip, $io);
-        }
-        if ($backup_database) {
-            $this->backupDatabase($zip, $io);
-        }
-
-        $zip->setArchiveComment('Part-DB Backup of '.date('Y-m-d H:i:s'));
-
-        //Write and close ZIP file
         try {
+            if ($backup_config) {
+                $this->backupConfig($zip, $io);
+            }
+            if ($backup_attachments) {
+                $this->backupAttachments($zip, $io);
+            }
+            if ($backup_database) {
+                $this->backupDatabase($zip, $io);
+            }
+
+            $zip->setArchiveComment('Part-DB Backup of '.date('Y-m-d H:i:s'));
+
+            // Do not write the archive until every requested backup step succeeded.
             $zip->saveAsFile($output_filepath);
-        } catch (ZipException $e) {
-            $io->error('Could not write ZIP file: '.$e->getMessage());
+        } catch (\Exception $e) {
+            $io->error('Backup failed: '.$e->getMessage());
 
             return Command::FAILURE;
+        } finally {
+            $zip->close();
+            foreach ($this->temporaryDumps as $temporaryDump) {
+                fclose($temporaryDump);
+            }
+            $this->temporaryDumps = [];
         }
-        $zip->close();
 
         $io->success('Backup finished! You can find the backup file at '.$output_filepath);
 
@@ -150,7 +157,12 @@ class BackupCommand extends Command
     {
         $this->configureDumper($connectionParams, $dumper);
 
-        $tmp_file = tempnam(sys_get_temp_dir(), 'partdb_sql_dump');
+        $temporaryDump = tmpfile();
+        if ($temporaryDump === false) {
+            throw new \RuntimeException('Could not create a temporary database dump file.');
+        }
+        $this->temporaryDumps[] = $temporaryDump;
+        $tmp_file = stream_get_meta_data($temporaryDump)['uri'];
 
         $dumper->dumpToFile($tmp_file);
         $zip->addFile($tmp_file, 'database.sql');
@@ -169,22 +181,20 @@ class BackupCommand extends Command
                 $io->note('MySQL database detected. Dump DB to SQL using mysqldump...');
                 $this->runSQLDumper(MySql::create(), $zip, $params);
             } catch (\Exception $e) {
-                $io->error('Could not dump database: '.$e->getMessage());
-                $io->error('This can maybe be fixed by installing the mysqldump binary and adding it to the PATH variable!');
+                throw new \RuntimeException('Could not dump database using mysqldump: '.$e->getMessage(), 0, $e);
             }
         } elseif ($platform instanceof PostgreSQLPlatform) {
             try {
                 $io->note('PostgreSQL database detected. Dump DB to SQL using pg_dump...');
                 $this->runSQLDumper(PostgreSql::create(), $zip, $params);
             } catch (\Exception $e) {
-                $io->error('Could not dump database: '.$e->getMessage());
-                $io->error('This can maybe be fixed by installing the pg_dump binary and adding it to the PATH variable!');
+                throw new \RuntimeException('Could not dump database using pg_dump: '.$e->getMessage(), 0, $e);
             }
         } elseif ($platform instanceof SQLitePlatform) {
             $io->note('SQLite database detected. Copy DB file to ZIP...');
             $zip->addFile($params['path'], 'var/app.db');
         } else {
-            $io->error('Unknown database platform. Could not backup database!');
+            throw new \RuntimeException('Unknown database platform. Could not backup database!');
         }
 
 

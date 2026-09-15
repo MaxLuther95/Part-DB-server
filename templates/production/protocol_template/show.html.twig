@@ -14,21 +14,51 @@
             {% else %}
                 <form method="post" action="{{ path('production_protocol_template_draft', {id: template.id}) }}">
                     <input type="hidden" name="_token" value="{{ csrf_token('protocol_template_draft_' ~ template.id) }}">
-                    <button class="btn btn-primary" type="submit"><i class="fa-solid fa-code-branch fa-fw"></i> {{ 'production.protocol.template.new_revision'|trans }}</button>
+                    <button class="btn btn-success" type="submit"><i class="fa-solid fa-code-branch fa-fw"></i> {{ 'production.protocol.template.new_revision'|trans }}</button>
                 </form>
             {% endif %}
+        {% endif %}
+        {% if is_granted('@production_protocol_templates.delete') and (is_granted('@users.edit_permissions') or is_granted('@groups.edit_permissions')) %}
+            <form class="ms-auto" method="post" action="{{ path('production_protocol_template_delete', {id: template.id}) }}"
+                  {{ stimulus_controller('elements/delete_btn') }} {{ stimulus_action('elements/delete_btn', 'submit', 'submit') }}
+                  data-delete-title="{{ 'production.action.confirm_title'|trans }}"
+                  data-delete-message="{{ 'production.protocol.template.delete_confirm'|trans({'%name%': template.name}) }}" data-delete-message-text>
+                <input type="hidden" name="_token" value="{{ csrf_token('protocol_template_delete_' ~ template.id) }}">
+                <button class="btn btn-outline-danger" type="submit"><i class="fa-solid fa-trash fa-fw"></i> {{ 'production.action.delete'|trans }}</button>
+            </form>
         {% endif %}
     </div>
     <dl class="row">
         <dt class="col-sm-3">{{ 'production.common.description'|trans }}</dt><dd class="col-sm-9">{{ template.description ? template.description|nl2br : '–' }}</dd>
         <dt class="col-sm-3">{{ 'production.common.status'|trans }}</dt><dd class="col-sm-9">{{ (template.active ? 'production.protocol.template.active' : 'production.protocol.template.inactive')|trans }}</dd>
     </dl>
+    {% if is_granted('@production_system_templates.read') %}
+        <div class="mb-3" data-protocol-system-assignments>
+            <strong>{{ 'production.protocol.template.systems'|trans }}:</strong>
+            {% for system in template.systemTemplates %}
+                <a class="badge text-bg-light border text-decoration-none" href="{{ path('production_template_show', {id: system.id}) }}">{{ system.name }}</a>
+            {% else %}<span class="text-muted">{{ 'production.protocol.template.systems_none'|trans }}</span>{% endfor %}
+        </div>
+    {% endif %}
+    <p class="small text-muted">{{ 'production.protocol.template.notes_hint'|trans }}</p>
+    {% if is_granted('@projects.read') %}
+        <div class="mb-3" data-protocol-project-assignments>
+            <strong>{{ 'production.protocol.template.projects'|trans }}:</strong>
+            {% for project in template.projects %}
+                <a class="badge text-bg-light border text-decoration-none" href="{{ path('project_info', {id: project.id}) }}">{{ project.fullPath }}</a>
+            {% else %}<span class="text-muted">{{ 'production.protocol.template.projects_none'|trans }}</span>{% endfor %}
+        </div>
+    {% endif %}
 
     <h5>{{ 'production.protocol.template.revisions'|trans }}</h5>
     <div class="table-responsive"><table class="table table-sm align-middle"><thead><tr><th>{{ 'production.protocol.template.revision'|trans }}</th><th>{{ 'production.common.status'|trans }}</th><th>{{ 'production.protocol.template.published_at'|trans }}</th><th>{{ 'production.protocol.template.structure'|trans }}</th></tr></thead><tbody>
         {% for revision in template.revisions %}
             <tr>
-                <td>v{{ revision.revisionNumber }}</td>
+                <td>v{{ revision.revisionNumber }}
+                    {% if is_granted('@production_protocol_templates.read') and (is_granted('@users.edit_permissions') or is_granted('@groups.edit_permissions')) %}
+                        <a class="btn btn-sm btn-outline-secondary ms-2" href="{{ path('production_protocol_revision_export', {id: revision.id}) }}" data-turbo="false" data-turbo-frame="_top" download><i class="fa-solid fa-download fa-fw"></i> {{ 'production.protocol.export.download'|trans }}</a>
+                    {% endif %}
+                </td>
                 <td><span class="badge {{ revision.status.value == 'published' ? 'text-bg-success' : (revision.status.value == 'draft' ? 'text-bg-warning' : 'text-bg-secondary') }}">{{ ('production.protocol.revision_status.' ~ revision.status.value)|trans }}</span></td>
                 <td>{{ revision.publishedAt ? revision.publishedAt|format_datetime('short', 'short') : '–' }}</td>
                 <td>{{ revision.sections|length }} {{ 'production.protocol.section.plural'|trans }}, {% set field_count = 0 %}{% for section in revision.sections %}{% set field_count = field_count + section.fields|length %}{% endfor %}{{ field_count }} {{ 'production.protocol.field.plural'|trans }}</td>

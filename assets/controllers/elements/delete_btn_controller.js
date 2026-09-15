@@ -29,6 +29,10 @@ export default class extends Controller
     }
 
     submit(event) {
+        // A form can have both a normal Save and an irreversible Complete action.
+        if (this.element.dataset.deleteSubmitValue && event.submitter?.value !== this.element.dataset.deleteSubmitValue) {
+            return;
+        }
         //If a user has not already confirmed the deletion, just let turbo do its work
         if (this._confirmed) {
             this._confirmed = false;
@@ -47,9 +51,9 @@ export default class extends Controller
         const submitter = event.submitter;
         const that = this;
 
-        const dialogOptions = {
-            titleText: title,
-        };
+        const dialogOptions = this.element.dataset.deleteTitleHtml === 'true'
+            ? {title: title}
+            : {titleText: title};
         if (this.element.hasAttribute('data-delete-message-text')) {
             dialogOptions.text = message;
         } else {

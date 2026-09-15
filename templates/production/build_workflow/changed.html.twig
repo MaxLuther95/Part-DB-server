@@ -1,0 +1,24 @@
+{% extends 'main_card.html.twig' %}
+{% block title %}Bauplan erneut prüfen{% endblock %}
+{% block card_title %}Bauplan erneut prüfen{% endblock %}
+{% block card_content %}
+    <div class="alert alert-warning" role="alert">{{ reason }}</div>
+    <p>Dieser Abschluss wurde abgebrochen. Es wurden keine Geräte angelegt, Seriennummern vergeben oder Materialien ausgebucht.</p>
+    <p>Prüfen Sie den aktuellen Auftrag bzw. Bautyp und starten Sie anschließend einen neuen Bauvorgang. Bestätigen Sie dabei die Seriennummer und die Materialauswahl erneut.</p>
+    {% if draft.details|default([]) %}
+        <details class="mb-3">
+            <summary>Bisherige Geräteangaben ansehen</summary>
+            <dl class="mt-2">
+                {% for key, details in draft.details %}
+                    <dt>{{ draft.nodes[key].name|default('Gerät') }}</dt>
+                    <dd>{{ details.serial|default('Ohne Seriennummer') }}{% if details.notes|default('') %}<br>{{ details.notes|nl2br }}{% endif %}</dd>
+                {% endfor %}
+            </dl>
+        </details>
+    {% endif %}
+    {% if draft.position_id|default(null) is not null %}
+        <a class="btn btn-primary" href="{{ path('production_customer_project_index') }}">Auftrag prüfen</a>
+    {% else %}
+        <a class="btn btn-primary" href="{{ path('production_build') }}">Bautyp erneut wählen</a>
+    {% endif %}
+{% endblock %}

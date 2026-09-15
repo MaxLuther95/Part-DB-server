@@ -85,3 +85,7 @@ vendor/
 .env.local.php
 .env.test
 
+# Local runtime copies and operational handovers are not application source.
+/docker-data/
+/uploads.*/
+/CODEX_HANDOVER.md

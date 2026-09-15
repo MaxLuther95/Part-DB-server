@@ -73,3 +73,15 @@ db/
 # Temporary development database snapshots are kept outside the active DB mount.
 /development_backups/
 docker-compose.yaml
+
+# Local runtime data and operational handovers must never enter source control.
+.DS_Store
+/uploads.*/
+/CODEX_HANDOVER.md
+/public/media/*
+!/public/media/.gitignore
+!/public/media/.htaccess
+
+# Python tooling caches are local build products.
+__pycache__/
+*.pyc

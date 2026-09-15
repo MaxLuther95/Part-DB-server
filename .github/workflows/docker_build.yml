@@ -31,6 +31,9 @@ jobs:
       -
         name: Checkout
         uses: actions/checkout@v7
+
+      - name: Check source privacy
+        run: python3 .github/privacy/check_source_privacy.py --ref HEAD
       -
         name: Docker meta
         id: docker_meta

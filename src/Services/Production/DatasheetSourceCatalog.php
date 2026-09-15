@@ -333,9 +333,6 @@ final readonly class DatasheetSourceCatalog
                     continue;
                 }
                 $value = $answer->getValue();
-                if ($value instanceof \DateTimeInterface) {
-                    return $value->format('Y-m-d H:i');
-                }
                 if (is_bool($value)) {
                     return $value ? 'Yes' : 'No';
                 }

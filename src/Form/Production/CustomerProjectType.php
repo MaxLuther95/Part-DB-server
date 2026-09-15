@@ -38,6 +38,13 @@ final class CustomerProjectType extends AbstractType
             ])
             ->add('name', TextType::class, [
                 'label' => 'production.common.name',
+                'required' => false,
+                'empty_data' => '',
+            ])
+            ->add('customerReference', TextType::class, [
+                'label' => 'production.customer_project.customer_reference',
+                'required' => false,
+                'attr' => ['maxlength' => 255],
             ])
             ->add('orderDate', DateType::class, [
                 'label' => 'production.customer_project.order_date',

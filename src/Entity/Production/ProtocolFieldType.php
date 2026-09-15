@@ -7,15 +7,12 @@ namespace App\Entity\Production;
 enum ProtocolFieldType: string
 {
     case Text = 'text';
-    case LongText = 'long_text';
     case Integer = 'integer';
     case Decimal = 'decimal';
     case Boolean = 'boolean';
     case TestResult = 'test_result';
     case Choice = 'choice';
     case StaticNote = 'static_note';
-    case Date = 'date';
-    case DateTime = 'datetime';
 
     public function getLabel(): string
     {

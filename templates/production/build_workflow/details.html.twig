@@ -7,10 +7,19 @@
     <form method="post">
         <input type="hidden" name="_token" value="{{ csrf_token('build_details_' ~ token) }}">
         <div class="mb-4"><label class="form-label fw-bold" for="site">Fertigungsstandort</label><select id="site" class="form-select" name="site_id" required><option value="">Bitte Standort wählen</option>{% for location in locations %}<option value="{{ location.id }}" {{ draft.site_id == location.id ? 'selected' : '' }}>{{ location.fullPath }}</option>{% endfor %}</select><div class="form-text">Bei der Materialauswahl werden nur dieser Standort und seine untergeordneten Lagerorte berücksichtigt.</div></div>
-        <div class="table-responsive"><table class="table align-middle"><thead><tr><th>Gerät / Baugruppe</th><th>Seriennummer</th><th>Notizen / Grund ohne Seriennummer</th></tr></thead><tbody>
-        {% for key, node in draft.nodes %}<tr><td style="padding-left: {{ node.parent ? '2.5rem' : '.5rem' }}"><strong>{{ node.name }}</strong><br><span class="badge text-bg-light border">{{ node.type == 'system' ? 'Systemvorlage' : 'Bauprojekt' }}</span></td><td><input class="form-control" maxlength="128" name="details[{{ key }}][serial]" value="{{ draft.details[key].serial|default('') }}" placeholder="Optional"></td><td><textarea class="form-control" rows="1" name="details[{{ key }}][notes]" placeholder="Pflicht, wenn keine Seriennummer vergeben wird">{{ draft.details[key].notes|default('') }}</textarea></td></tr>{% endfor %}
+        <div class="table-responsive"><table class="table align-top" data-build-details-table><thead><tr><th>Gerät / Baugruppe</th><th>Seriennummer</th><th>Notizen / Grund ohne Seriennummer</th></tr></thead><tbody>
+        {% for key, node in draft.nodes %}<tr><td style="padding-left: {{ node.parent ? '2.5rem' : '.5rem' }}"><strong class="d-block" style="padding-top: .375rem;">{{ node.name }}</strong><span class="badge text-bg-light border">{{ node.type == 'system' ? 'Systemvorlage' : 'Bauprojekt' }}</span></td>
+            <td><div data-controller="production--serial-number">
+                <div class="d-flex gap-2">
+                    <input aria-label="Präfix für {{ node.name }}" class="form-control" style="flex: 0 0 10%; min-width: 5rem;" maxlength="4" name="details[{{ key }}][prefix]" value="{{ draft.details[key].prefix|default('') }}" placeholder="Präfix" data-serial-prefix>
+                    <input aria-label="Seriennummer für {{ node.name }}" class="form-control" maxlength="128" name="details[{{ key }}][number]" value="{{ draft.details[key].number|default('') }}" placeholder="Nummer" data-serial-number>
+                </div>
+                <label class="form-check mt-2"><input class="form-check-input" type="checkbox" name="details[{{ key }}][confirmed]" value="1" data-serial-confirmed {{ draft.details[key].confirmed_serial|default(null) ? 'checked' : '' }}> Seriennummer geprüft und bestätigt</label>
+                <small class="text-muted" data-serial-hint>Vorschlag ist nicht reserviert.</small>
+            </div></td>
+            <td><textarea class="form-control" rows="1" name="details[{{ key }}][notes]" placeholder="Pflicht, wenn keine Seriennummer vergeben wird">{{ draft.details[key].notes|default('') }}</textarea></td></tr>{% endfor %}
         </tbody></table></div>
-        <button class="btn btn-success" type="submit"><i class="fa-solid fa-arrow-right fa-fw"></i> Material auswählen</button>
+        <button class="btn btn-primary" type="submit"><i class="fa-solid fa-arrow-right fa-fw"></i> Material auswählen</button>
         <a class="btn btn-secondary" href="{{ path('production_build') }}">Abbrechen</a>
     </form>
 {% endblock %}

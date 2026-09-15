@@ -1,0 +1,47 @@
+{% extends 'main_card.html.twig' %}
+{% trans_default_domain 'production' %}
+
+{% block title %}{{ 'production.protocol.export.title'|trans }}{% endblock %}
+{% block card_title %}<i class="fa-solid fa-file-export fa-fw"></i> {{ 'production.protocol.export.title'|trans }}{% endblock %}
+
+{% block card_content %}
+    <p>{{ 'production.protocol.export.explanation'|trans }}</p>
+    {# File responses must be handled by the browser, not a Turbo frame fetch. #}
+    {{ form_start(form, {attr: {'data-turbo': 'false', 'data-turbo-frame': '_top'}}) }}
+        {{ form_errors(form) }}
+        <fieldset>
+            <legend class="h5">{{ 'production.protocol.export.selection'|trans }}</legend>
+            {{ form_help(form.revisions) }}
+            {{ form_errors(form.revisions) }}
+            {% for template_id, group in form.revisions.vars.choices %}
+                {% set template_name = (group.choices|first).data.template.name %}
+                {% if group.choices|length == 1 %}
+                    <div class="border rounded p-3 mb-2" data-export-template="{{ template_id }}">
+                        {% for name, choice in group.choices %}
+                            {{ form_widget(form.revisions[name], {label: template_name ~ ' · ' ~ choice.label}) }}
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    {% set selected = false %}
+                    {% for name, choice in group.choices %}
+                        {% if form.revisions[name].vars.checked %}{% set selected = true %}{% endif %}
+                    {% endfor %}
+                    <details class="border rounded p-3 mb-2" data-export-template="{{ template_id }}"{% if selected %} open{% endif %}>
+                        <summary class="fw-semibold">{{ template_name }} <span class="badge text-bg-secondary ms-2">{{ group.choices|length }} {{ 'production.protocol.template.revisions'|trans }}</span></summary>
+                        <fieldset class="ms-3 mt-3" data-export-revisions>
+                            <legend class="h6">{{ 'production.protocol.export.revisions_for'|trans({'%name%': template_name}) }}</legend>
+                            {% for name, choice in group.choices %}<div class="mb-2">{{ form_widget(form.revisions[name]) }}</div>{% endfor %}
+                        </fieldset>
+                    </details>
+                {% endif %}
+            {% else %}
+                <p class="text-muted">{{ 'production.protocol.template.none'|trans }}</p>
+            {% endfor %}
+        </fieldset>
+        {% do form.revisions.setRendered() %}
+        <div class="d-flex flex-wrap gap-2 mt-3">
+            <button class="btn btn-primary" type="submit"><i class="fa-solid fa-download fa-fw"></i> {{ 'production.protocol.export.download'|trans }}</button>
+            <a class="btn btn-outline-secondary" href="{{ path('production_protocol_template_index') }}">{{ 'production.action.back'|trans }}</a>
+        </div>
+    {{ form_end(form) }}
+{% endblock %}

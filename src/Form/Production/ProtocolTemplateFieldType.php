@@ -16,6 +16,7 @@ use Symfony\Component\Form\FormBuilderInterface;
 use Symfony\Component\Form\FormEvent;
 use Symfony\Component\Form\FormEvents;
 use Symfony\Component\OptionsResolver\OptionsResolver;
+use Symfony\Component\Validator\Constraints\NotNull;
 
 final class ProtocolTemplateFieldType extends AbstractType
 {
@@ -28,6 +29,13 @@ final class ProtocolTemplateFieldType extends AbstractType
             ->add('type', ChoiceType::class, [
                 'label' => 'production.protocol.field.type',
                 'choices' => array_combine(array_map(static fn (ProtocolFieldType $type): string => $type->getLabel(), ProtocolFieldType::cases()), ProtocolFieldType::cases()),
+                'constraints' => [new NotNull()],
+                // Validate an empty selection without assigning null to a non-nullable entity property.
+                'setter' => static function (ProtocolTemplateField $field, ?ProtocolFieldType $type): void {
+                    if (null !== $type) {
+                        $field->setType($type);
+                    }
+                },
             ])
             ->add('unit', TextType::class, [
                 'label' => 'production.protocol.field.unit',
@@ -45,6 +53,12 @@ final class ProtocolTemplateFieldType extends AbstractType
             ->add('layoutColumns', ChoiceType::class, [
                 'label' => 'production.protocol.field.layout_width',
                 'help' => 'production.protocol.field.layout_width_help',
+                'constraints' => [new NotNull()],
+                'setter' => static function (ProtocolTemplateField $field, ?int $columns): void {
+                    if (null !== $columns) {
+                        $field->setLayoutColumns($columns);
+                    }
+                },
                 'attr' => [
                     'data-controller' => 'production--protocol-layout-width',
                 ],

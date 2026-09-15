@@ -49,6 +49,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
+      - name: Check source privacy
+        run: python3 .github/privacy/check_source_privacy.py --ref HEAD
+
       - name: Setup PHP
         uses: shivammathur/setup-php@v2
         with:

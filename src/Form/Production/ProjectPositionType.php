@@ -59,9 +59,10 @@ final class ProjectPositionType extends AbstractType
                     : 'production.project_position.selection_group.project',
                 'data' => $position->getSystemTemplate() ?? $position->getTemplateProject(),
                 'mapped' => false,
+                'disabled' => null !== $position->getId(),
                 'required' => null === $position->getContentName(),
                 'placeholder' => 'production.project_position.selection_placeholder',
-                'help' => 'production.project_position.selection_help',
+                'help' => null === $position->getId() ? 'production.project_position.selection_help' : 'production.project_position.selection_fixed_help',
             ])
             ->add('notes', TextareaType::class, [
                 'label' => 'production.common.notes',
@@ -79,6 +80,10 @@ final class ProjectPositionType extends AbstractType
                 return;
             }
 
+            if (null !== $position->getId()) {
+                if ('' === $position->getName()) { $position->setName($position->getContentName() ?? ''); }
+                return;
+            }
             $selection = $form->get('content')->getData();
             if ($selection instanceof SystemTemplate) {
                 $position->setSystemTemplate($selection);

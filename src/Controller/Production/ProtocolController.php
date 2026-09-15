@@ -19,11 +19,16 @@ use App\Form\Production\ProtocolTemplateSectionType;
 use App\Form\Production\ProtocolTemplateType;
 use App\Repository\Production\ProtocolTemplateRepository;
 use App\Services\Production\ProtocolManager;
+use App\Services\Production\IncompleteReleaseConfirmation;
+use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
 use Doctrine\ORM\EntityManagerInterface;
+use Doctrine\ORM\OptimisticLockException;
+use Symfony\Component\Form\FormInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
+use Symfony\Contracts\Translation\TranslatorInterface;
 
 #[Route(path: '/production')]
 final class ProtocolController extends AbstractController
@@ -46,12 +51,21 @@ final class ProtocolController extends AbstractController
         $this->denyAccessUnlessGranted('@production_protocol_templates.create');
         $this->denyTemplateAdministration();
         $template = new ProtocolTemplate();
-        $form = $this->createForm(ProtocolTemplateType::class, $template);
+        $form = $this->createForm(ProtocolTemplateType::class, $template, [
+            'allow_system_assignment' => $this->isGranted('@production_system_templates.read'),
+            'allow_project_assignment' => $this->isGranted('@projects.read'),
+        ]);
         $form->handleRequest($request);
         if ($form->isSubmitted() && $form->isValid()) {
             $manager->createInitialDraft($template);
             $entityManager->persist($template);
-            $entityManager->flush();
+            try {
+                $entityManager->flush();
+            } catch (UniqueConstraintViolationException) {
+                $this->addFlash('error', 'Die Zuordnung wurde zwischenzeitlich geändert. Es wurde nichts gespeichert. Bitte prüfe die Zuordnungen erneut.');
+
+                return $this->redirectToRoute('production_protocol_template_new');
+            }
             $this->addFlash('success', 'Die Laufzettelvorlage wurde angelegt. Ergänze jetzt Abschnitte und Felder.');
 
             return $this->redirectToRoute('production_protocol_revision_edit', [
@@ -82,14 +96,23 @@ final class ProtocolController extends AbstractController
     #[Route(path: '/protocol-templates/{id}/edit', name: 'production_protocol_template_edit', requirements: [
         'id' => '\\d+',
     ], methods: ['GET', 'POST'])]
-    public function templateEdit(ProtocolTemplate $template, Request $request, EntityManagerInterface $entityManager): Response
+    public function templateEdit(ProtocolTemplate $template, Request $request, EntityManagerInterface $entityManager, TranslatorInterface $translator): Response
     {
         $this->denyAccessUnlessGranted('@production_protocol_templates.edit');
         $this->denyTemplateAdministration();
-        $form = $this->createForm(ProtocolTemplateType::class, $template);
+        $form = $this->createForm(ProtocolTemplateType::class, $template, [
+            'allow_system_assignment' => $this->isGranted('@production_system_templates.read'),
+            'allow_project_assignment' => $this->isGranted('@projects.read'),
+        ]);
         $form->handleRequest($request);
         if ($form->isSubmitted() && $form->isValid()) {
-            $entityManager->flush();
+            try {
+                $entityManager->flush();
+            } catch (UniqueConstraintViolationException) {
+                $this->addFlash('error', 'Die Zuordnung wurde zwischenzeitlich geändert. Es wurde nichts gespeichert. Bitte prüfe die Zuordnungen erneut.');
+
+                return $this->redirectToRoute('production_protocol_template_edit', ['id' => $template->getId()]);
+            }
             $this->addFlash('success', 'production.flash.saved');
 
             return $this->redirectToRoute('production_protocol_template_show', [
@@ -100,12 +123,36 @@ final class ProtocolController extends AbstractController
         return $this->render('production/form.html.twig', [
             'form' => $form,
             'title' => 'production.protocol.template.edit',
+            'delete_route' => 'production_protocol_template_delete',
+            'delete_route_params' => ['id' => $template->getId()],
+            'delete_permission' => '@production_protocol_templates.delete',
+            'delete_token_id' => 'protocol_template_delete_'.$template->getId(),
+            'delete_confirm' => $translator->trans('production.protocol.template.delete_confirm', ['%name%' => $template->getName()], 'production'),
             'save_label' => 'production.protocol.template.save_draft',
             'cancel_route' => 'production_protocol_template_show',
             'cancel_route_params' => [
                 'id' => $template->getId(),
             ],
         ]);
+    }
+
+    #[Route(path: '/protocol-templates/{id}/delete', name: 'production_protocol_template_delete', requirements: ['id' => '\\d+'], methods: ['POST'])]
+    public function templateDelete(ProtocolTemplate $template, Request $request, ProtocolManager $manager, TranslatorInterface $translator): Response
+    {
+        $this->denyAccessUnlessGranted('@production_protocol_templates.delete');
+        $this->denyTemplateAdministration();
+        $this->assertCsrf('protocol_template_delete_'.$template->getId(), $request);
+        $id = $template->getId();
+        try {
+            $manager->deleteTemplate($template);
+        } catch (\DomainException $exception) {
+            $this->addFlash('error', $translator->trans($exception->getMessage(), [], 'production'));
+
+            return $this->redirectToRoute('production_protocol_template_show', ['id' => $id]);
+        }
+        $this->addFlash('success', $translator->trans('production.protocol.template.deleted', [], 'production'));
+
+        return $this->redirectToRoute('production_protocol_template_index');
     }
 
     #[Route(path: '/protocol-templates/{id}/draft', name: 'production_protocol_template_draft', requirements: [
@@ -315,10 +362,11 @@ final class ProtocolController extends AbstractController
     {
         $this->denyAccessUnlessGranted('@production_protocols.create');
         $this->assertCsrf('protocol_run_new_'.$buildInstance->getId(), $request);
-        $template = $repository->find($request->request->getInt('template_id'));
+        $this->denyAccessUnlessGranted('read', $buildInstance);
+        $template = $repository->findForInstance($buildInstance);
         $revision = $template?->getPublishedRevision();
         if (! $template instanceof ProtocolTemplate || ! $template->isActive() || ! $revision instanceof ProtocolTemplateRevision) {
-            $this->addFlash('error', 'Bitte eine aktive, veröffentlichte Laufzettelvorlage auswählen.');
+            $this->addFlash('error', 'Diesem Bautyp ist keine aktive, veröffentlichte Laufzettelvorlage zugeordnet.');
 
             return $this->redirectToRoute('production_build_instance_show', [
                 'id' => $buildInstance->getId(),
@@ -338,6 +386,7 @@ final class ProtocolController extends AbstractController
     public function runShow(ProtocolRun $run): Response
     {
         $this->denyAccessUnlessGranted('@production_protocols.read');
+        $this->denyAccessUnlessGranted('read', $run->getBuildInstance() ?? throw $this->createNotFoundException());
 
         return $this->render('production/protocol_run/show.html.twig', [
             'run' => $run,
@@ -348,10 +397,11 @@ final class ProtocolController extends AbstractController
     #[Route(path: '/protocol-runs/{id}/edit', name: 'production_protocol_run_edit', requirements: [
         'id' => '\\d+',
     ], methods: ['GET', 'POST'])]
-    public function runEdit(ProtocolRun $run, Request $request, EntityManagerInterface $entityManager): Response
+    public function runEdit(ProtocolRun $run, Request $request, EntityManagerInterface $entityManager, ProtocolManager $manager, IncompleteReleaseConfirmation $confirmation): Response
     {
         $this->denyAccessUnlessGranted('@production_protocols.edit');
-        if (ProtocolRunStatus::Draft !== $run->getStatus()) {
+        $this->denyAccessUnlessGranted('read', $run->getBuildInstance() ?? throw $this->createNotFoundException());
+        if (! $request->isMethod('POST') && ProtocolRunStatus::Draft !== $run->getStatus()) {
             return $this->redirectToRoute('production_protocol_run_show', [
                 'id' => $run->getId(),
             ]);
@@ -359,10 +409,46 @@ final class ProtocolController extends AbstractController
         $form = $this->createForm(ProtocolRunType::class, null, [
             'protocol_run' => $run,
         ]);
+        $complete = 'complete' === $request->request->get('_action');
+        if ($complete) {
+            $this->denyAccessUnlessGranted('@production_protocols.complete');
+        }
         $form->handleRequest($request);
+        if ($form->isSubmitted() && (ProtocolRunStatus::Draft !== $run->getStatus()
+            || $form->get('edit_version')->getData() !== (string) $run->getVersion())) {
+            return $this->renderRunConflict($this->runConflictContext($run, $form));
+        }
         if ($form->isSubmitted() && $form->isValid()) {
-            $run->touch($this->currentUser());
-            $entityManager->flush();
+            $acceptedWarnings = [];
+            if ($complete) {
+                $warningContext = $this->completionWarningContext($run, $manager, $confirmation);
+                if ([] !== $warningContext['incomplete_warnings'] && ! $confirmation->isAccepted($request, $warningContext['incomplete_confirmation'])) {
+                    return $this->render('production/protocol_run/show.html.twig', [
+                        'run' => $run,
+                        'form' => $form,
+                        ...$warningContext,
+                    ], new Response(status: Response::HTTP_UNPROCESSABLE_ENTITY));
+                }
+                $acceptedWarnings = $warningContext['incomplete_warnings'];
+            }
+            // Materialize the submitted form before flush: an optimistic conflict closes
+            // the entity manager, so recovery must not depend on lazy entity relations.
+            $conflict = $this->runConflictContext($run, $form);
+            try {
+                if ($complete) {
+                    $run->complete($this->currentUser(), $acceptedWarnings);
+                } else {
+                    $run->touch($this->currentUser());
+                }
+                $entityManager->flush();
+            } catch (OptimisticLockException) {
+                return $this->renderRunConflict($conflict);
+            }
+            if ($complete) {
+                $this->addFlash('success', 'Der Laufzettel wurde fertiggestellt. Seine Werte sind jetzt unveränderlich.');
+
+                return $this->redirectToRoute('production_protocol_run_show', ['id' => $run->getId()]);
+            }
             $this->addFlash('success', 'Der Laufzettelentwurf wurde gespeichert und bleibt bearbeitbar.');
             $buildInstance = $run->getBuildInstance() ?? throw $this->createNotFoundException('This protocol run has no build instance.');
 
@@ -380,10 +466,15 @@ final class ProtocolController extends AbstractController
     #[Route(path: '/protocol-runs/{id}/complete', name: 'production_protocol_run_complete', requirements: [
         'id' => '\\d+',
     ], methods: ['POST'])]
-    public function runComplete(ProtocolRun $run, Request $request, EntityManagerInterface $entityManager, ProtocolManager $manager): Response
+    public function runComplete(ProtocolRun $run, Request $request, EntityManagerInterface $entityManager, ProtocolManager $manager, IncompleteReleaseConfirmation $confirmation): Response
     {
         $this->denyAccessUnlessGranted('@production_protocols.complete');
         $this->assertCsrf('protocol_run_complete_'.$run->getId(), $request);
+        $this->denyAccessUnlessGranted('read', $run->getBuildInstance() ?? throw $this->createNotFoundException());
+        $conflict = $this->runConflictContext($run);
+        if ($request->request->getString('_version') !== (string) $run->getVersion()) {
+            return $this->renderRunConflict($conflict);
+        }
         if (ProtocolRunStatus::Draft !== $run->getStatus()) {
             $this->addFlash('info', 'Dieser Laufzettel ist bereits abgeschlossen und wurde nicht verändert.');
 
@@ -391,18 +482,23 @@ final class ProtocolController extends AbstractController
                 'id' => $run->getId(),
             ]);
         }
-        $errors = $manager->validateForCompletion($run);
-        if ([] !== $errors) {
-            foreach ($errors as $error) {
-                $this->addFlash('error', $error);
-            }
-
-            return $this->redirectToRoute('production_protocol_run_edit', [
-                'id' => $run->getId(),
+        $warningContext = $this->completionWarningContext($run, $manager, $confirmation);
+        if ([] !== $warningContext['incomplete_warnings'] && ! $confirmation->isAccepted($request, $warningContext['incomplete_confirmation'])) {
+            $form = $this->createForm(ProtocolRunType::class, null, [
+                'protocol_run' => $run,
+                'action' => $this->generateUrl('production_protocol_run_edit', ['id' => $run->getId()]),
             ]);
+
+            return $this->render('production/protocol_run/show.html.twig', [
+                'run' => $run, 'form' => $form, ...$warningContext,
+            ], new Response(status: Response::HTTP_UNPROCESSABLE_ENTITY));
         }
-        $run->complete($this->currentUser());
-        $entityManager->flush();
+        try {
+            $run->complete($this->currentUser(), $warningContext['incomplete_warnings']);
+            $entityManager->flush();
+        } catch (OptimisticLockException) {
+            return $this->renderRunConflict($conflict);
+        }
         $this->addFlash('success', 'Der Laufzettel wurde fertiggestellt. Seine Werte sind jetzt unveränderlich.');
 
         return $this->redirectToRoute('production_protocol_run_show', [
@@ -416,12 +512,19 @@ final class ProtocolController extends AbstractController
     public function runInvalidate(ProtocolRun $run, Request $request, EntityManagerInterface $entityManager): Response
     {
         $this->denyAccessUnlessGranted('@production_protocols.invalidate');
+        $this->denyAccessUnlessGranted('read', $run->getBuildInstance() ?? throw $this->createNotFoundException());
         $this->assertCsrf('protocol_run_invalidate_'.$run->getId(), $request);
         $reason = mb_substr(trim($request->request->getString('reason')), 0, 2000);
+        $conflict = $this->runConflictContext($run, reason: $reason);
+        if ($request->request->getString('_version') !== (string) $run->getVersion()) {
+            return $this->renderRunConflict($conflict);
+        }
         try {
             $run->invalidate($reason, $this->currentUser());
             $entityManager->flush();
             $this->addFlash('warning', 'Der Laufzettel wurde als ungültig markiert. Die historischen Werte bleiben erhalten.');
+        } catch (OptimisticLockException) {
+            return $this->renderRunConflict($conflict);
         } catch (\InvalidArgumentException|\LogicException $exception) {
             $this->addFlash('error', $exception->getMessage());
         }
@@ -429,6 +532,52 @@ final class ProtocolController extends AbstractController
         return $this->redirectToRoute('production_protocol_run_show', [
             'id' => $run->getId(),
         ]);
+    }
+
+    /** @return array{incomplete_warnings: list<string>, incomplete_confirmation: string} */
+    private function completionWarningContext(ProtocolRun $run, ProtocolManager $manager, IncompleteReleaseConfirmation $confirmation): array
+    {
+        $warnings = $manager->validateForCompletion($run);
+        $answers = [];
+        foreach ($run->getRows() as $row) {
+            foreach ($row->getAnswers() as $answer) {
+                $answers[$answer->getId()] = $answer->getValue();
+            }
+        }
+        $tokenId = $confirmation->tokenId('protocol_'.$run->getId(), [
+            'version' => $run->getVersion(),
+            'date' => $run->getProtocolDate()?->format('Y-m-d'),
+            'notes' => $run->getNotes(),
+            'answers' => $answers,
+            'warnings' => $warnings,
+        ]);
+
+        return ['incomplete_warnings' => $warnings, 'incomplete_confirmation' => $tokenId];
+    }
+
+    /** @return array<string, mixed> */
+    private function runConflictContext(ProtocolRun $run, ?FormInterface $form = null, ?string $reason = null): array
+    {
+        $view = $form?->createView();
+        if (null !== $view) {
+            foreach ($run->getRows() as $row) {
+                foreach ($row->getAnswers() as $answer) {
+                    $name = 'answer_'.$answer->getId();
+                    if (isset($view->children[$name])) {
+                        $view->children[$name]->vars['label'] = $row->getSection()?->getName().' / '.$answer->getField()?->getLabel();
+                        $view->children[$name]->vars['translation_domain'] = false;
+                    }
+                }
+            }
+        }
+
+        return ['run_id' => $run->getId(), 'run_title' => (string) $run, 'form' => $view, 'reason' => $reason];
+    }
+
+    /** @param array<string, mixed> $context */
+    private function renderRunConflict(array $context): Response
+    {
+        return $this->render('production/protocol_run/conflict.html.twig', $context, new Response(status: Response::HTTP_CONFLICT));
     }
 
     private function handleSectionForm(ProtocolTemplateSection $section, Request $request, EntityManagerInterface $entityManager, bool $isNew): Response

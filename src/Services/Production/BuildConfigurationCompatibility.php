@@ -8,6 +8,7 @@ use App\Entity\Production\BuildInstance;
 use App\Entity\Production\BuildStatus;
 use App\Entity\Production\ProjectPosition;
 use App\Entity\Production\SystemTemplateSlot;
+use App\Helpers\Production\ManufacturingSlot;
 
 /**
  * Validates and performs one direct assignment between a configured project
@@ -23,7 +24,7 @@ final readonly class BuildConfigurationCompatibility
             || null !== $instance->getParent()
             || !$instance->getChildren()->isEmpty()
             || !$position->getBuildInstances()->isEmpty()
-            || !in_array($instance->getStatus(), [BuildStatus::InProgress, BuildStatus::Paused, BuildStatus::Completed], true)
+            || !in_array($instance->getStatus(), [BuildStatus::InProgress, BuildStatus::Completed], true)
             || !$this->contentMatches($instance, $position)) {
             return false;
         }
@@ -35,7 +36,7 @@ final readonly class BuildConfigurationCompatibility
 
         $builtParent = $plannedParent->getBuildInstances()->first();
         $slot = $position->getSourceSlot();
-        if (!$slot instanceof SystemTemplateSlot) {
+        if (!$slot instanceof SystemTemplateSlot && !$slot instanceof ManufacturingSlot) {
             return false;
         }
 
@@ -50,7 +51,7 @@ final readonly class BuildConfigurationCompatibility
         }
 
         foreach ($builtParent->getChildren() as $child) {
-            if ($child->getInstalledSlot() === $slot && $child->getInstalledSlotIndex() === $slotIndex) {
+            if (ManufacturingSlot::matches($child->getInstalledSlot(), $slot) && $child->getInstalledSlotIndex() === $slotIndex) {
                 return false;
             }
         }
@@ -130,7 +131,7 @@ final readonly class BuildConfigurationCompatibility
         }
 
         $slot = $position->getSourceSlot();
-        if (!$slot instanceof SystemTemplateSlot) {
+        if (!$slot instanceof SystemTemplateSlot && !$slot instanceof ManufacturingSlot) {
             return false;
         }
         $siblings = $plannedParent->getAssignmentsForSlot($slot);
@@ -147,7 +148,7 @@ final readonly class BuildConfigurationCompatibility
             return false;
         }
         foreach ($builtParent->getChildren() as $child) {
-            if ($child !== $instance && $child->getInstalledSlot() === $slot && $child->getInstalledSlotIndex() === $slotIndex) {
+            if ($child !== $instance && ManufacturingSlot::matches($child->getInstalledSlot(), $slot) && $child->getInstalledSlotIndex() === $slotIndex) {
                 return false;
             }
         }

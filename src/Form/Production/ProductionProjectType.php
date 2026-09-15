@@ -19,7 +19,7 @@ final class ProductionProjectType extends AbstractType
     {
         $builder
             ->add('projectNumber', TextType::class, ['label' => 'production.project.number'])
-            ->add('name', TextType::class, ['label' => 'production.common.name'])
+            ->add('name', TextType::class, ['label' => 'production.common.name', 'required' => false, 'empty_data' => ''])
             ->add('description', TextareaType::class, [
                 'label' => 'production.common.description',
                 'required' => false,

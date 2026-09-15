@@ -1,0 +1,8 @@
+<div class="border rounded p-3 mb-3" data-note-row>
+    <div class="d-flex gap-2 align-items-start">
+        <div class="flex-grow-1"><label class="form-label">English heading</label><input class="form-control" type="text" data-field="title" maxlength="255" value="{{ note.title }}"{% if note_index is not null %} name="additional_notes[{{ note_index }}][title]"{% endif %}></div>
+        <button class="btn btn-outline-danger mt-4" type="button" title="Remove note" {{ stimulus_action('production/datasheet-additional-notes', 'remove') }}><i class="fa-solid fa-trash fa-fw"></i></button>
+    </div>
+    <label class="form-label mt-2">English note</label><textarea class="form-control" data-field="text" rows="4" maxlength="10000"{% if note_index is not null %} name="additional_notes[{{ note_index }}][text]"{% endif %}>{{ note.text }}</textarea>
+    <label class="form-label mt-2">Width</label><select class="form-select" data-field="width"{% if note_index is not null %} name="additional_notes[{{ note_index }}][width]"{% endif %}>{% for width in [3, 6, 9, 12] %}<option value="{{ width }}"{{ note.width == width ? ' selected' : '' }}>{{ width * 100 / 12 }} %</option>{% endfor %}</select>
+</div>

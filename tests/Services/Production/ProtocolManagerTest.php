@@ -31,6 +31,10 @@ final class ProtocolManagerTest extends KernelTestCase
         $section = $manager->addSection($original)->setName('Measurements');
         $field = $manager->addField($section)->setLabel('Result')->setType(ProtocolFieldType::Text);
         $instance = (new BuildInstance())->setSerialNumber('REV-'.bin2hex(random_bytes(6)));
+        $system = (new \App\Entity\Production\SystemTemplate())->setName('Revision test system');
+        $instance->setSystemTemplate($system);
+        $template->addSystemTemplate($system);
+        $entityManager->persist($system);
         $entityManager->persist($template);
         $entityManager->persist($instance);
         $manager->publish($original, null);
@@ -152,6 +156,10 @@ final class ProtocolManagerTest extends KernelTestCase
             ->addField($result)
             ->addField($note);
         $buildInstance = (new BuildInstance())->setSerialNumber('TEST-'.bin2hex(random_bytes(6)));
+        $system = (new \App\Entity\Production\SystemTemplate())->setName('Measurement test system');
+        $buildInstance->setSystemTemplate($system);
+        $template->addSystemTemplate($system);
+        $entityManager->persist($system);
         $entityManager->persist($template);
         $entityManager->persist($buildInstance);
         $manager->publish($revision, null);
@@ -167,10 +175,10 @@ final class ProtocolManagerTest extends KernelTestCase
             'protocol_run' => $firstRun,
             'csrf_protection' => false,
         ]);
-        $submitted = [];
+        $submitted = ['protocol_date' => '2026-09-10', 'edit_version' => (string) $firstRun->getVersion()];
         foreach ($firstRun->getRows() as $row) {
             foreach ($row->getAnswers() as $answer) {
-                $submitted['answer_'.$answer->getId()] = ProtocolFieldType::Decimal === $answer->getField()?->getType() ? '12.345' : 'pass';
+                $submitted['answer_'.$answer->getId()] = ProtocolFieldType::Decimal === $answer->getField()?->getType() ? '12,345000000012300' : 'pass';
             }
         }
         $form->submit($submitted);
@@ -185,5 +193,8 @@ final class ProtocolManagerTest extends KernelTestCase
         $secondRun = $manager->createRun($buildInstance, $revision, null);
         self::assertSame(2, $secondRun->getRunNumber());
         self::assertSame(ProtocolRunStatus::Draft, $secondRun->getStatus());
+        $answerId = $firstRun->getRowForSection($section)->getAnswerForField($measurement)->getId();
+        $entityManager->clear();
+        self::assertSame('12.345000000012300', $entityManager->find(\App\Entity\Production\ProtocolAnswer::class, $answerId)->getValue());
     }
 }

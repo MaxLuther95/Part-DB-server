@@ -1,5 +1,33 @@
 production:
+  import_line:
+    pending: Offen
+    note: Notiz
+    pending_help: Noch zuzuordnen; verhindert den Auftragsabschluss.
+    note_help: Nur Information; verhindert den Auftragsabschluss nicht.
+    assign: Zuordnen
+    mark_note: Als Notiz führen
+    mark_pending: Als offen führen
+  required_parts:
+    site: Fertigungsstandort
+    all_sites: Alle Standorte
+    supplier: Distributor
+    all_suppliers: Alle Distributoren
+    display: Anzeigen
+    only_missing: Nur zu bestellen
+    all_required: Alle benötigten Teile
+    filter: Filtern
+    reset: Filter zurücksetzen
+    help: Berücksichtigt werden beauftragte und in Produktion befindliche Aufträge. Der Standortfilter wählt deren Fertigungsstandort; Distributoren entsprechen den nicht abgekündigten Bezugsquellen der Bauteile.
+    stock_help: Bei gewähltem Standort zählen nur dessen Lager und Unterlager. Freier Bestand wird einmalig angerechnet; Reservierungen für andere Aufträge bleiben geschützt. Ohne Standortfilter wird standortübergreifend gerechnet. Die Anzeige erzeugt noch keine Bestellung.
+    empty: Für diese Filter bestehen keine Bedarfe.
   datasheet:
+    assignment:
+      systems: Zugeordnete Systemvorlagen / Produkte
+      systems_help: Diese Datenblattvorlage für ausgewählte Systemtypen anbieten. Mehrere Vorlagen pro System sind möglich; verwendet wird jeweils die aktuelle veröffentlichte Revision. Keine Vererbung an Unterbaugruppen.
+      projects: Zugeordnete Bauprojekte
+      projects_help: Für Geräte aus diesen Part-DB-Bauprojekten anbieten. Gemeint sind Bautypen, nicht Kundenprojekte oder Aufträge. Mehrere Vorlagen pro Bauprojekt sind möglich.
+      none: Keine Zuordnung
+      unavailable: Für diesen Bautyp ist keine aktive, veröffentlichte Datenblattvorlage zugeordnet.
     action:
       save_draft: Entwurf speichern
   dashboard:
@@ -34,6 +62,10 @@ production:
     customers_projects: Aufträge und Projekte
     orders_projects: Aufträge und Projekte
     management: Verwaltung
+    workflow: Fertigungsablauf
+    template_group: Vorlagen
+    master_data: Stammdaten
+    serial_number_ranges: Seriennummernkreise
     build: Bauen
     templates: Systemvorlagen
     protocol_templates: Laufzettelvorlagen
@@ -74,6 +106,7 @@ production:
     my_projects: Meine Aufträge
     number: Auftragsnummer
     order_date: Datum der Auftragsbestätigung
+    customer_reference: Kundenreferenz
     planned_delivery_date: Geplantes Lieferdatum
     delivery_date_unset: Noch nicht geplant
     project_placeholder: Bitte ein Projekt auswählen
@@ -122,6 +155,8 @@ production:
     cancelled_hint: Dieser Auftrag wurde storniert.
     build_instances: Geräte und Baugruppen im Auftrag
   project_position:
+    fixed_definition: Fester Fertigungsstand vom Anlegen dieser Position. Neue Vorlagenstände erfordern Löschen und Neuanlegen.
+    selection_fixed_help: Der Fertigungsstand ist fest gespeichert. Für einen neuen Vorlagenstand die Position löschen und neu anlegen.
     detached_from_template: Von Vorlage gelöst
     label: Auftragsposition
     plural: Auftragspositionen
@@ -327,11 +362,14 @@ production:
     status:
       planned: Geplant
       in_progress: In Bau
-      paused: Pausiert
       completed: Fertig
       installed: Eingebaut
       scrapped: Ausgesondert
   protocol:
+    selection:
+      none: Diesem Bautyp ist keine aktive, veröffentlichte Laufzettelvorlage zugeordnet.
+    decimal:
+      invalid: Bitte eine Dezimalzahl ohne Tausendertrennzeichen oder Exponenten eingeben (höchstens 128 Zeichen).
     revision_status:
       draft: Entwurf
       published: Veröffentlicht
@@ -346,16 +384,48 @@ production:
       not_applicable: Nicht verwendet
     field_type:
       text: Text
-      long_text: Mehrzeiliger Text
       integer: Ganzzahl
       decimal: Messwert / Dezimalzahl
       boolean: Ja / Nein
       test_result: Prüfstatus (✓ / – / ✕)
       choice: Auswahl
-      date: Datum
-      datetime: Datum und Uhrzeit
       static_note: Hinweis / Zwischenüberschrift
+    import:
+      title: Laufzettelvorlagen importieren
+      file: JSON-Export (maximal 2 MiB)
+      explanation: Importiert ausschließlich Vorlagendefinitionen. Bestehende Vorlagen und ausgefüllte Messprotokolle bleiben unverändert. Die gesamte Datei wird geprüft, bevor etwas gespeichert wird.
+      preview_help: Wähle pro Vorlage einen Quellstand oder lasse sie aus. Jede Auswahl wird eine NEUE Vorlage mit Entwurfsrevision 1, niemals eine veröffentlichte Revision. Die Namen dürfen noch nicht vorhanden sein. Prüfe die Zielnamen vor dem Bestätigen. Diese Vorschau läuft nach 30 Minuten ab.
+      source_revision: Quellrevision
+      target_name: Name der neuen Vorlage
+      skip: Diese Vorlage nicht importieren
+      validate: Datei prüfen und Vorschau anzeigen
+      confirm: Auswahl als neue Vorlagenentwürfe importieren
+      invalid_file: Die Importdatei ist ungültig.
+      database_error: Die Datenbank konnte den Import nicht bestätigen. Deine Vorschau bleibt erhalten. Prüfe vor einem erneuten Versuch die Vorlagenübersicht.
+      select_one: Wähle mindestens eine Quellrevision aus.
+      invalid_selection: Prüfe die ausgewählten Revisionen und gib gültige Vorlagennamen ein.
+      name_conflict: Ein ausgewählter Name ist bereits vorhanden oder wurde mehrfach vergeben. Wähle einen anderen Namen oder lasse die Vorlage aus. Es wurde nichts importiert.
+      expired: Die Importvorschau ist abgelaufen oder wurde bereits abgeschlossen. Lade die Datei erneut hoch.
+      success: '%count% Vorlage(n) als neue Entwürfe importiert.'
+    export:
+      title: Laufzettelvorlagen exportieren
+      download: JSON herunterladen
+      selection: Laufzettelvorlagen
+      selection_help: Wähle die gewünschten Laufzettel. Bei mehreren Revisionen klappe die Vorlage auf und wähle darunter die Versionen aus. Insgesamt sind 1 bis 100 Revisionen möglich. Entwürfe und zurückgezogene Revisionen werden nur bei ausdrücklicher Auswahl aufgenommen; ihr Status bleibt erhalten.
+      explanation: Lädt die ausgewählten Vorlagendefinitionen einschließlich Feldern, Notizen und Layout herunter. Ausgefüllte Laufzettel, Messwerte, Geräte, Aufträge und Benutzerkonten sind nicht enthalten. Texte aus den Vorlagen werden unverändert übernommen. Die JSON-Datei kann als neue Vorlagenentwürfe importiert werden.
+      revisions_for: 'Revisionen für %name%'
     template:
+      delete_confirm: 'Laufzettelvorlage „%name%“ einschließlich aller Revisionen und Vorlagenzuordnungen löschen? Vorhandene Laufzettel an Geräten verhindern das Löschen.'
+      delete_in_use: Die Vorlage wird bereits von Laufzetteln an Geräten oder Baugruppen verwendet und kann nicht gelöscht werden. Du kannst sie in den Einstellungen deaktivieren.
+      deleted: Die Laufzettelvorlage einschließlich ihrer Revisionen und Vorlagenzuordnungen wurde gelöscht.
+      systems: Zugeordnete Systemvorlagen
+      systems_help: Ein oder mehrere Systeme auswählen. Pro System ist genau eine Laufzettelvorlage möglich; neue Laufzettel verwenden deren aktuelle veröffentlichte Revision. Keine Vererbung an Baugruppen. Lokale Zuordnungen werden nicht exportiert.
+      projects: Zugeordnete Bauprojekte
+      projects_help: PartDB-Bauprojekte auswählen, deren gebaute Instanzen diese Vorlage verwenden dürfen. Pro Bauprojekt höchstens eine Vorlage. Keine Vererbung an übergeordnete Systeme. Mehrfachauswahl mit Strg/Cmd. Lokale Zuordnungen werden nicht exportiert.
+      projects_none: Keine Bauprojekte zugeordnet
+      assignment_settings: Zuordnung & Einstellungen
+      systems_none: Keine Standardzuordnung
+      notes_hint: Jeder neue Laufzettel erhält automatisch ein leeres, freiwilliges Notizfeld am Ende. Notizen gehören nur zu diesem Laufzettel und werden nicht mit der Vorlage exportiert.
       plural: Laufzettelvorlagen
       name: Name der Vorlage
       new: Laufzettelvorlage anlegen
@@ -408,6 +478,12 @@ production:
       none: Dieser Abschnitt enthält noch keine Felder.
       delete_confirm: Dieses Feld aus dem Vorlagenentwurf entfernen?
     run:
+      notes: Notizen (freiwillig)
+      notes_help: Interne Notizen nur für diesen Laufzettel. Bis zum Fertigstellen bearbeitbar; keine automatische Übernahme ins Kundendatenblatt.
+      notes_empty: Keine Notizen
+      date: Laufzetteldatum
+      last_edited_by: Zuletzt bearbeitet von
+      not_recorded: Nicht erfasst
       save: Entwurf speichern
       complete: Fertigstellen
       complete_confirm: Laufzettel wirklich fertigstellen? Danach sind Aufbau und Werte unveränderlich. Eine spätere Prüfung wird als neuer Laufzettel angelegt.

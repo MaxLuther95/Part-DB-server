@@ -150,16 +150,16 @@ final readonly class SystemTemplateSlotPositioner
             ]);
 
             foreach ($linkedPositions as $position) {
-                $position->setSourceSlot(null);
+                $position->setSourceSlot($position->getDefinition() ? $position->getSourceSlot() : null);
             }
 
             foreach ($linkedAccessories as $accessory) {
-                $accessory->setSourceSlot(null);
+                $accessory->setSourceSlot($accessory->getProjectPosition()?->getDefinition() ? $accessory->getSourceSlot() : null);
             }
             foreach ($installedInstances as $instance) {
                 // Keep the physical parent/child relation, but remove the
                 // reference and index belonging to the deleted slot.
-                $instance->setInstalledSlot(null);
+                $instance->setInstalledSlot($instance->getParent()?->getDefinition() ? $instance->getInstalledSlot() : null);
             }
             foreach ($materialUsages as $usage) {
                 $usage->setSourceSlot(null);

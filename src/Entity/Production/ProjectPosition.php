@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Entity\Production;
 
 use App\Entity\ProjectSystem\Project;
+use App\Helpers\Production\{ManufacturingDefinition, ManufacturingSlot};
 use App\Repository\Production\ProjectPositionRepository;
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
@@ -18,6 +19,35 @@ use Symfony\Component\Validator\Constraints as Assert;
 #[ORM\Index(name: 'IDX_PROD_POSITION_SOURCE_SLOT', columns: ['source_slot_id'])]
 class ProjectPosition extends AbstractProductionEntity
 {
+    #[ORM\ManyToOne(targetEntity: ManufacturingSnapshot::class, cascade: ['persist'])]
+    #[ORM\JoinColumn(nullable: true, onDelete: 'RESTRICT')]
+    private ?ManufacturingSnapshot $manufacturingSnapshot = null;
+
+    #[ORM\Column(type: Types::STRING, length: 64, nullable: true)]
+    private ?string $definitionKey = null;
+
+    #[ORM\Column(type: Types::INTEGER, nullable: true)]
+    private ?int $sourceSlotKey = null;
+
+    public function getManufacturingSnapshot(): ?ManufacturingSnapshot { return $this->manufacturingSnapshot; }
+    public function getDefinitionKey(): ?string { return $this->definitionKey; }
+    public function getDefinition(): ?ManufacturingDefinition
+    {
+        return null === $this->definitionKey ? null : $this->manufacturingSnapshot?->getDefinition($this->definitionKey);
+    }
+    public function setManufacturingSnapshot(ManufacturingSnapshot $snapshot, string $key): self
+    {
+        $snapshot->getDefinition($key);
+        if (null !== $this->manufacturingSnapshot && ($this->manufacturingSnapshot !== $snapshot || $this->definitionKey !== $key)) {
+            throw new \DomainException('Der Fertigungsstand einer bestehenden Position ist fest. Bitte die Position löschen und neu anlegen.');
+        }
+        $this->manufacturingSnapshot = $snapshot;
+        $this->definitionKey = $key;
+        return $this;
+    }
+    /** @return iterable<SystemTemplateSlot|ManufacturingSlot> */
+    public function getSlots(): iterable { return $this->getDefinition()?->getSlots() ?? $this->systemTemplate?->getSlots() ?? []; }
+
     #[ORM\ManyToOne(targetEntity: CustomerProject::class, inversedBy: 'positions')]
     #[ORM\JoinColumn(name: 'customer_project_id', nullable: false, onDelete: 'CASCADE')]
     private ?CustomerProject $customerProject = null;
@@ -118,6 +148,9 @@ class ProjectPosition extends AbstractProductionEntity
 
     public function setTemplateProject(?Project $templateProject): self
     {
+        if (null !== $templateProject && null !== $this->definitionKey && $this->definitionKey !== 'project_'.$templateProject->getId()) {
+            throw new \DomainException('Für einen anderen Fertigungsstand muss die Position neu angelegt werden.');
+        }
         $this->templateProject = $templateProject;
         if (null !== $templateProject) {
             $this->systemTemplate = null;
@@ -131,12 +164,13 @@ class ProjectPosition extends AbstractProductionEntity
 
     public function getBuildProject(): ?Project
     {
-        return $this->templateProject ?? $this->systemTemplate?->getBaseProject();
+        return $this->getBuildProjects()[0] ?? null;
     }
 
     /** @return list<Project> */
     public function getBuildProjects(): array
     {
+        if (null !== $this->getDefinition()) { return $this->getDefinition()->getBuildProjects(); }
         if (null !== $this->templateProject) {
             return [$this->templateProject];
         }
@@ -151,6 +185,9 @@ class ProjectPosition extends AbstractProductionEntity
 
     public function setSystemTemplate(?SystemTemplate $systemTemplate): self
     {
+        if (null !== $systemTemplate && null !== $this->definitionKey && $this->definitionKey !== 'system_'.$systemTemplate->getId()) {
+            throw new \DomainException('Für einen anderen Fertigungsstand muss die Position neu angelegt werden.');
+        }
         $this->systemTemplate = $systemTemplate;
         if (null !== $systemTemplate) {
             $this->templateProject = null;
@@ -164,7 +201,7 @@ class ProjectPosition extends AbstractProductionEntity
 
     public function getContentName(): ?string
     {
-        return $this->systemTemplate?->getName() ?? $this->templateProject?->getName() ?? $this->contentName;
+        return $this->getDefinition()?->getName() ?? $this->systemTemplate?->getName() ?? $this->templateProject?->getName() ?? $this->contentName;
     }
 
     public function getContentReferenceType(): ?string
@@ -177,14 +214,16 @@ class ProjectPosition extends AbstractProductionEntity
         return $this->systemTemplate?->getId() ?? $this->templateProject?->getId() ?? $this->contentReferenceId;
     }
 
-    public function getSourceSlot(): ?SystemTemplateSlot
+    public function getSourceSlot(): SystemTemplateSlot|ManufacturingSlot|null
     {
-        return $this->sourceSlot;
+        $key = $this->sourceSlotKey ?? $this->sourceSlot?->getId();
+        return (null === $key ? null : $this->parent?->getDefinition()?->getSlot($key)) ?? $this->sourceSlot;
     }
 
-    public function setSourceSlot(?SystemTemplateSlot $sourceSlot): self
+    public function setSourceSlot(SystemTemplateSlot|ManufacturingSlot|null $sourceSlot): self
     {
-        $this->sourceSlot = $sourceSlot;
+        $this->sourceSlotKey = $sourceSlot?->getId();
+        $this->sourceSlot = $sourceSlot instanceof SystemTemplateSlot ? $sourceSlot : null;
 
         return $this;
     }
@@ -230,23 +269,23 @@ class ProjectPosition extends AbstractProductionEntity
     }
 
     /** @return list<self> */
-    public function getAssignmentsForSlot(SystemTemplateSlot $slot): array
+    public function getAssignmentsForSlot(SystemTemplateSlot|ManufacturingSlot $slot): array
     {
         return array_values($this->children->filter(
-            static fn(self $child): bool => $child->getSourceSlot() === $slot,
+            static fn(self $child): bool => ManufacturingSlot::matches($child->getSourceSlot(), $slot),
         )->toArray());
     }
 
-    public function getAssignmentForSlot(SystemTemplateSlot $slot): ?self
+    public function getAssignmentForSlot(SystemTemplateSlot|ManufacturingSlot $slot): ?self
     {
         return $this->getAssignmentsForSlot($slot)[0] ?? null;
     }
 
-    public function getDisplayOffsetForSlot(SystemTemplateSlot $slot): int
+    public function getDisplayOffsetForSlot(SystemTemplateSlot|ManufacturingSlot $slot): int
     {
         $offset = 0;
-        foreach ($this->systemTemplate?->getSlots() ?? [] as $templateSlot) {
-            if ($templateSlot === $slot) {
+        foreach ($this->getSlots() as $templateSlot) {
+            if (ManufacturingSlot::matches($templateSlot, $slot)) {
                 return $offset;
             }
 
@@ -259,17 +298,17 @@ class ProjectPosition extends AbstractProductionEntity
     public function getNextDisplayOffset(): int
     {
         $offset = 0;
-        foreach ($this->systemTemplate?->getSlots() ?? [] as $templateSlot) {
+        foreach ($this->getSlots() as $templateSlot) {
             $offset += max(1, count($this->getAssignmentsForSlot($templateSlot)));
         }
 
         return $offset;
     }
 
-    public function getPartAssignmentForSlot(SystemTemplateSlot $slot): ?ProjectAccessory
+    public function getPartAssignmentForSlot(SystemTemplateSlot|ManufacturingSlot $slot): ?ProjectAccessory
     {
         foreach ($this->partAssignments as $assignment) {
-            if ($assignment->getSourceSlot() === $slot) {
+            if (ManufacturingSlot::matches($assignment->getSourceSlot(), $slot)) {
                 return $assignment;
             }
         }

@@ -64,7 +64,7 @@ final class ProjectPositionInitializerTest extends TestCase
             ->setName('System')
             ->setSystemTemplate($system);
 
-        $initializer = new ProjectPositionInitializer($entityManager);
+        $initializer = $this->initializer($entityManager, $position);
         $initializer->initializeRequiredDefaults($position);
 
         self::assertCount(4, $position->getChildren());
@@ -105,7 +105,7 @@ final class ProjectPositionInitializerTest extends TestCase
             ->setName('System')
             ->setSystemTemplate($template);
 
-        (new ProjectPositionInitializer($entityManager))->initializeRequiredDefaults($position);
+        ($this->initializer($entityManager, $position))->initializeRequiredDefaults($position);
 
         $assignment = $position->getPartAssignmentForSlot($slot);
         self::assertInstanceOf(ProjectAccessory::class, $assignment);
@@ -140,7 +140,7 @@ final class ProjectPositionInitializerTest extends TestCase
             ->setName('System')
             ->setSystemTemplate($template);
 
-        (new ProjectPositionInitializer($entityManager))->initializeRequiredDefaults($position);
+        ($this->initializer($entityManager, $position))->initializeRequiredDefaults($position);
 
         self::assertTrue($position->getChildren()->isEmpty());
         self::assertTrue($position->getPartAssignments()->isEmpty());
@@ -169,10 +169,31 @@ final class ProjectPositionInitializerTest extends TestCase
             ->setName('Root')
             ->setSystemTemplate($root);
 
-        (new ProjectPositionInitializer($entityManager))->initializeRequiredDefaults($position);
+        ($this->initializer($entityManager, $position))->initializeRequiredDefaults($position);
 
         $nestedPosition = $position->getAssignmentForSlot($rootSlot);
         self::assertInstanceOf(ProjectPosition::class, $nestedPosition);
         self::assertSame($module, $nestedPosition->getAssignmentForSlot($nestedSlot)?->getTemplateProject());
     }
+    /** Provide stable source identities and lookups for the isolated initializer tests. */
+    private function initializer(EntityManagerInterface $em, ProjectPosition $position): ProjectPositionInitializer
+    {
+        $entities = [];
+        $visit = function (object $entity) use (&$visit, &$entities): void {
+            $id = spl_object_id($entity);
+            if (isset($entities[$id])) { return; }
+            (new \ReflectionProperty($entity, 'id'))->setValue($entity, $id);
+            $entities[$id] = $entity;
+            if ($entity instanceof SystemTemplate) {
+                foreach ($entity->getSlots() as $slot) {
+                    (new \ReflectionProperty($slot, 'id'))->setValue($slot, spl_object_id($slot));
+                    foreach ([...$slot->getAllowedSystemTemplates(), ...$slot->getAllowedProjects(), ...$slot->getAllowedParts()] as $choice) { $visit($choice); }
+                }
+            }
+        };
+        $visit($position->getSystemTemplate());
+        $em->method('find')->willReturnCallback(static fn(string $class, mixed $id): ?object => $entities[$id] ?? null);
+        return new ProjectPositionInitializer($em, new \App\Services\Production\ManufacturingSnapshotFactory($em));
+    }
+
 }

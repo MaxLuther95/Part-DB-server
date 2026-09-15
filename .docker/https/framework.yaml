@@ -1,0 +1,16 @@
+# Deployment-only override, mounted by compose.mariadb.yaml.
+# Apache is reachable through the trusted HTTPS proxy, not a host HTTP port.
+framework:
+    trusted_headers: ['x-forwarded-for', 'x-forwarded-host', 'x-forwarded-proto']
+    session:
+        cookie_secure: true
+
+security:
+    firewalls:
+        main:
+            remember_me:
+                secure: true
+
+scheb_two_factor:
+    trusted_device:
+        cookie_secure: true

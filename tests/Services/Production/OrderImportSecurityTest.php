@@ -96,6 +96,52 @@ final class OrderImportSecurityTest extends TestCase
         self::assertSame([['number' => 1, 'description' => 'DEMO-SYSTEM-6/1', 'quantity' => 1, 'unit' => 'set']], $result['lines']);
     }
 
+    public function testGermanColumnsKeepVatOutOfQuantityAndFooterOutOfNotes(): void
+    {
+        $rows = [
+            [1200, 2700, 'Dokument-Nr.: DEMO-DE-01'],
+            [1200, 2640, 'Kunden-Nr.:'],
+            [1200, 2580, 'Projekt-Nr.: PROJECT-DEMO-DE'],
+            [1200, 2520, 'Datum: 15.09.2026'],
+            [200, 2300, 'Ihre Referenz-Nr.: REF DEMO 01 von 14.09.2026'],
+            [300, 2000, 'Bezeichnung'], [1200, 2000, 'Menge'],
+            [1300, 2000, 'Einh.'], [1450, 2000, 'MwSt.'], [1740, 2000, 'Einzelpreis'],
+            [200, 1900, '1'], [300, 1900, 'Synthetische Dienstleistung'],
+            [1260, 1900, '1 '], [1300, 1900, 'psch'], [1520, 1900, '2'], [1680, 1900, '100,00 EUR'],
+            [200, 1800, '2'], [300, 1800, 'Synthetisches Bauteil'],
+            [1260, 1800, '3 '], [1300, 1800, 'Stk.'], [1520, 1800, '2'],
+            [1600, 1600, 'Gesamtbetrag'], [1900, 1600, '119,00 EUR'],
+            [200, 1500, 'Zahlbar nach Lieferung.'],
+            [200, 1400, 'Weitere synthetische Lieferbedingung.'],
+            [200, 200, 'Beispielunternehmen '], [1700, 200, 'Sitz: Beispielstadt'],
+            [200, 150, 'Diese Fusszeile ist keine Notiz.'],
+        ];
+        $stream = implode("\n", array_map(static fn(array $row): string => sprintf('BT 1 0 0 1 %d %d Tm (%s) Tj ET', ...$row), $rows));
+        $result = $this->createParser()->parseFile($this->writeTemporaryPdf($stream));
+        self::assertSame('DEMO-DE-01', $result['order_number']);
+        self::assertSame('', $result['customer_number']);
+        self::assertSame('PROJECT-DEMO-DE', $result['project_number']);
+        self::assertSame('2026-09-15', $result['order_date']);
+        self::assertSame('REF DEMO 01', $result['reference']);
+        self::assertSame([1, 3], array_column($result['lines'], 'quantity'));
+        self::assertSame(['psch', 'pcs.'], array_column($result['lines'], 'unit'));
+        self::assertSame("Zahlbar nach Lieferung.\nWeitere synthetische Lieferbedingung.", $result['notes']);
+    }
+
+    public function testGermanTextAndMultiwordReferencesUseSharedHeaderRules(): void
+    {
+        $result = $this->createParser()->parseText("Dokument-Nr.: DEMO-DE-02\nKunden-Nr.: DEMO-C\nKundenname: Beispielkunde\nProjekt-Nr.: DEMO-P\nDatum: 15.09.2026\nIhre Referenz-Nr.: REF ZWEI WORTE vom 01.09.2026\n1 Synthetisches Geraet 2 Stu\u{0308}ck\n2 Dienstleistung 1 pauschal\nGesamtbetrag 120,00 EUR\nEine Liefernotiz.\nUStID.: SYNTHETISCH");
+        self::assertSame('DEMO-C', $result['customer_number']);
+        self::assertSame('Beispielkunde', $result['customer_name']);
+        self::assertSame('REF ZWEI WORTE', $result['reference']);
+        self::assertSame('2026-09-15', $result['order_date']);
+        self::assertSame(['pcs.', 'psch'], array_column($result['lines'], 'unit'));
+        self::assertSame('Eine Liefernotiz.', $result['notes']);
+        self::assertSame('', $this->createParser()->parseText("Customer #:\nProject #: SYNTHETIC-P\nDate: 2026-09-15")['customer_number']);
+        self::assertSame('', $this->createParser()->parseText('Datum: 31.02.2026')['order_date']);
+        self::assertSame('REF TWO WORDS', $this->createParser()->parseText('Your Reference #: REF TWO WORDS from 2026-09-15')['reference']);
+    }
+
     public function testExecutableExtensionAndIncompletePdfAreRejected(): void
     {
         $path = $this->temporaryPath('.pdf');
@@ -110,6 +156,43 @@ final class OrderImportSecurityTest extends TestCase
                 self::addToAssertionCount(1);
             }
         }
+    }
+
+    public function testNotesStartAfterTotalAndContinueOnNextPageWithoutFooter(): void
+    {
+        $path = $this->writeTemporaryPdf(implode("\n", [
+            'BT 1 0 0 1 10 500 Tm (Document #: ORDER-NOTES) Tj ET',
+            'BT 1 0 0 1 10 450 Tm (Your Reference #: REF-NOTES from 2026-09-15) Tj ET',
+            'BT 1 0 0 1 10 300 Tm (total amount) Tj ET',
+            'BT 1 0 0 1 200 300 Tm (100.00 EUR) Tj ET',
+            'BT 1 0 0 1 10 200 Tm (First delivery condition.) Tj ET',
+            'BT 1 0 0 1 10 170 Tm (Payment in thirty days.) Tj ET',
+            'BT 1 0 0 1 10 70 Tm (Example company) Tj ET',
+            'BT 1 0 0 1 200 70 Tm (Bank name: Example bank) Tj ET',
+            'BT 1 0 0 1 10 50 Tm (IBAN: SYNTHETIC) Tj ET',
+        ])."\nendstream\nendobj\n2 0 obj <<>>\nstream\n".implode("\n", [
+            'BT 1 0 0 1 10 700 Tm (page 2 regarding ORDER-NOTES) Tj ET',
+            'BT 1 0 0 1 10 600 Tm (Delivery follows approval.) Tj ET',
+            'BT 1 0 0 1 10 560 Tm (Thank you for your order.) Tj ET',
+        ]));
+
+        $result = $this->createParser()->parseFile($path);
+
+        self::assertSame('REF-NOTES', $result['reference']);
+        self::assertSame("First delivery condition.\nPayment in thirty days.\nDelivery follows approval.\nThank you for your order.", $result['notes']);
+    }
+
+    public function testPlainTextNotesAndMissingTotal(): void
+    {
+        $parser = $this->createParser();
+        self::assertSame('', $parser->parseText("Document #: DEMO\nNo total or notes here.")['notes']);
+        self::assertSame("Deliver in two batches.\nHandle with care.", $parser->parseText("Gesamtbetrag\n100,00 EUR\nDeliver in two batches.\nHandle with care.\nIBAN: SYNTHETIC")['notes']);
+    }
+
+    public function testExcessiveNotesAreRejected(): void
+    {
+        $this->expectException(\RuntimeException::class);
+        $this->createParser()->parseText("total amount 10 EUR\n".str_repeat('A', 50001));
     }
 
     public function testCompressedStreamAboveLimitIsRejected(): void

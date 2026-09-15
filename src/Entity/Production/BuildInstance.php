@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Entity\Production;
 
 use App\Entity\ProjectSystem\Project;
+use App\Helpers\Production\{ManufacturingDefinition, ManufacturingSlot};
 use App\Repository\Production\BuildInstanceRepository;
 use Doctrine\DBAL\Types\Types;
 use Doctrine\Common\Collections\ArrayCollection;
@@ -15,6 +16,7 @@ use Symfony\Component\Validator\Constraints as Assert;
 
 #[ORM\Entity(repositoryClass: BuildInstanceRepository::class)]
 #[ORM\Table(name: 'production_build_instances')]
+#[ORM\UniqueConstraint(name: 'UNIQ_BUILD_RANGE_ORDINAL', columns: ['serial_number_range_id', 'serial_ordinal'])]
 #[ORM\Index(name: 'IDX_PROD_BUILD_SYSTEM_TEMPLATE', columns: ['system_template_id'])]
 #[ORM\Index(name: 'IDX_PROD_BUILD_PARENT', columns: ['parent_id'])]
 #[ORM\Index(name: 'IDX_PROD_BUILD_INSTALLED_SLOT', columns: ['installed_slot_id'])]
@@ -26,6 +28,43 @@ use Symfony\Component\Validator\Constraints as Assert;
 #[UniqueEntity(fields: ['projectPosition'], message: 'production.build_instance.project_position.unique')]
 class BuildInstance extends AbstractProductionEntity
 {
+    #[ORM\ManyToOne(targetEntity: ManufacturingSnapshot::class)]
+    #[ORM\JoinColumn(nullable: true, onDelete: 'RESTRICT')]
+    private ?ManufacturingSnapshot $manufacturingSnapshot = null;
+
+    #[ORM\Column(type: Types::STRING, length: 64, nullable: true)]
+    private ?string $definitionKey = null;
+
+    #[ORM\Column(type: Types::INTEGER, nullable: true)]
+    private ?int $installedSlotKey = null;
+
+    public function getDefinition(): ?ManufacturingDefinition
+    {
+        return null === $this->definitionKey ? null : $this->manufacturingSnapshot?->getDefinition($this->definitionKey);
+    }
+    public function setManufacturingDefinition(ManufacturingDefinition $definition): self
+    {
+        if (null !== $this->manufacturingSnapshot) {
+            throw new \DomainException('Der dokumentierte Fertigungsstand eines Geräts bleibt erhalten.');
+        }
+        $this->manufacturingSnapshot = $definition->getSnapshot();
+        $this->definitionKey = $definition->getKey();
+        return $this;
+    }
+
+    #[ORM\ManyToOne(targetEntity: SerialNumberRange::class)]
+    #[ORM\JoinColumn(nullable: true, onDelete: 'RESTRICT')]
+    private ?SerialNumberRange $serialNumberRange = null;
+
+    #[ORM\Column(type: Types::INTEGER, nullable: true)]
+    private ?int $serialOrdinal = null;
+
+    public function getSerialOrdinal(): ?int { return $this->serialOrdinal; }
+    public function setSerialOrdinal(?int $number): self { $this->serialOrdinal = $number; return $this; }
+
+    public function getSerialNumberRange(): ?SerialNumberRange { return $this->serialNumberRange; }
+    public function setSerialNumberRange(?SerialNumberRange $range): self { $this->serialNumberRange = $range; return $this; }
+
     #[ORM\Column(name: 'serial_number', type: Types::STRING, length: 128, unique: true, nullable: true)]
     #[Assert\Length(max: 128)]
     private ?string $serialNumber = null;
@@ -176,7 +215,7 @@ class BuildInstance extends AbstractProductionEntity
 
     public function getContentName(): ?string
     {
-        return $this->systemTemplate?->getName() ?? $this->templateProject?->getName() ?? $this->contentName;
+        return $this->getDefinition()?->getName() ?? $this->systemTemplate?->getName() ?? $this->templateProject?->getName() ?? $this->contentName;
     }
 
     public function getContentReferenceType(): ?string
@@ -191,12 +230,13 @@ class BuildInstance extends AbstractProductionEntity
 
     public function getBuildProject(): ?Project
     {
-        return $this->templateProject ?? $this->systemTemplate?->getBaseProject();
+        return $this->getBuildProjects()[0] ?? null;
     }
 
     /** @return list<Project> */
     public function getBuildProjects(): array
     {
+        if (null !== $this->getDefinition()) { return $this->getDefinition()->getBuildProjects(); }
         if (null !== $this->templateProject) {
             return [$this->templateProject];
         }
@@ -290,14 +330,16 @@ class BuildInstance extends AbstractProductionEntity
         return $this;
     }
 
-    public function getInstalledSlot(): ?SystemTemplateSlot
+    public function getInstalledSlot(): SystemTemplateSlot|ManufacturingSlot|null
     {
-        return $this->installedSlot;
+        $key = $this->installedSlotKey ?? $this->installedSlot?->getId();
+        return (null === $key ? null : ($this->parent?->getDefinition() ?? $this->parent?->getProjectPosition()?->getDefinition())?->getSlot($key)) ?? $this->installedSlot;
     }
 
-    public function setInstalledSlot(?SystemTemplateSlot $installedSlot): self
+    public function setInstalledSlot(SystemTemplateSlot|ManufacturingSlot|null $installedSlot): self
     {
-        $this->installedSlot = $installedSlot;
+        $this->installedSlotKey = $installedSlot?->getId();
+        $this->installedSlot = $installedSlot instanceof SystemTemplateSlot ? $installedSlot : null;
         if (null === $installedSlot) {
             $this->installedSlotIndex = null;
         }
@@ -433,6 +475,14 @@ class BuildInstance extends AbstractProductionEntity
             $context->buildViolation('production.build_instance.serial_required_for_completed_project')
                 ->atPath('serialNumber')
                 ->addViolation();
+        }
+        $frozenSlot = $this->getInstalledSlot();
+        if ($frozenSlot instanceof ManufacturingSlot) {
+            $key = (null !== $this->systemTemplate ? 'system_' : 'project_').$this->getContentReferenceId();
+            if (!$frozenSlot->allows($key)) {
+                $context->buildViolation('Der Inhalt gehört nicht zum gespeicherten Steckplatz.')->atPath('installedSlot')->addViolation();
+            }
+            return;
         }
         if (null !== $this->installedSlot) {
             if (null === $this->parent || $this->parent->getSystemTemplate() !== $this->installedSlot->getSystemTemplate()) {

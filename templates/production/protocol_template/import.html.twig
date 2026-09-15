@@ -1,0 +1,29 @@
+{% extends 'main_card.html.twig' %}
+{% trans_default_domain 'production' %}
+
+{% block title %}{{ 'production.protocol.import.title'|trans }}{% endblock %}
+{% block card_title %}<i class="fa-solid fa-file-import fa-fw"></i> {{ 'production.protocol.import.title'|trans }}{% endblock %}
+
+{% block card_content %}
+    <p>{{ 'production.protocol.import.explanation'|trans }}</p>
+    {% if document %}
+        <div class="alert alert-info">{{ 'production.protocol.import.preview_help'|trans }}</div>
+    {% endif %}
+    {{ form_start(form) }}
+        {{ form_widget(form) }}
+        <div class="d-flex flex-wrap gap-2 mt-3">
+            <button class="btn {{ document ? 'btn-success' : 'btn-primary' }}" type="submit"><i class="fa-solid {{ document ? 'fa-file-import' : 'fa-magnifying-glass' }} fa-fw"></i> {{ (document ? 'production.protocol.import.confirm' : 'production.protocol.import.validate')|trans }}</button>
+            {% if document %}
+                <button class="btn btn-outline-secondary" type="submit" form="cancel-import">{{ 'production.action.cancel'|trans }}</button>
+            {% else %}
+                <a class="btn btn-outline-secondary" href="{{ path('production_protocol_template_index') }}">{{ 'production.action.back'|trans }}</a>
+            {% endif %}
+        </div>
+    {{ form_end(form) }}
+    {% if document %}
+        <form id="cancel-import" method="post" action="{{ path('production_protocol_template_import_cancel') }}">
+            <input type="hidden" name="_token" value="{{ csrf_token('protocol_import_cancel') }}">
+            <input type="hidden" name="stage_id" value="{{ form.stage_id.vars.value }}">
+        </form>
+    {% endif %}
+{% endblock %}

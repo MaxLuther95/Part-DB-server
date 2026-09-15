@@ -28,7 +28,6 @@ final class BuildInstanceRepository extends ServiceEntityRepository
             ->andWhere('buildInstance.status IN (:assignableStatuses)')
             ->setParameter('assignableStatuses', [
                 BuildStatus::InProgress->value,
-                BuildStatus::Paused->value,
                 BuildStatus::Completed->value,
             ])
             ->orderBy('buildInstance.serialNumber', 'ASC');

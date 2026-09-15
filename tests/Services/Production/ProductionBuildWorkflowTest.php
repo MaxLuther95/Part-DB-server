@@ -116,6 +116,7 @@ final class ProductionBuildWorkflowTest extends TestCase
             $this->inert(BuildConfigurationCompatibility::class),
             $this->inert(ProjectMaterialReservationRepository::class),
             $this->inert(ProductionReservationManager::class),
+            $this->inert(\App\Services\Production\SerialNumberManager::class),
         );
     }
 

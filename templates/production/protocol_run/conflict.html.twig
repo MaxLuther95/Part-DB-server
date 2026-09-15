@@ -1,0 +1,28 @@
+{% extends 'main_card.html.twig' %}
+{% trans_default_domain 'production' %}
+
+{% block title %}Laufzettel zwischenzeitlich geändert{% endblock %}
+{% block card_title %}Laufzettel zwischenzeitlich geändert{% endblock %}
+
+{% block card_content %}
+    <div class="alert alert-warning" data-protocol-conflict>
+        <strong>Es wurde nichts gespeichert.</strong>
+        {{ run_title }} wurde seit dem Öffnen dieses Formulars geändert oder abgeschlossen.
+        Bitte öffne den aktuellen Stand und vergleiche ihn mit deinen Eingaben, bevor du weiterarbeitest.
+    </div>
+    <a class="btn btn-primary mb-3" target="_blank" rel="noopener" href="{{ path('production_protocol_run_show', {id: run_id}) }}">Aktuellen Stand in neuem Tab öffnen</a>
+    {% if form %}
+        <h2 class="h5">Deine nicht gespeicherten Eingaben</h2>
+        <p>Diese Ansicht bleibt zum Vergleichen und Kopieren geöffnet. Änderungen sind nur über ein neu geöffnetes Formular möglich.</p>
+        <fieldset disabled data-submitted-protocol>
+            {% for field in form %}
+                {% if field.vars.name not in ['edit_version', '_token'] %}
+                    {{ form_row(field) }}
+                {% endif %}
+            {% endfor %}
+        </fieldset>
+    {% elseif reason is not null %}
+        <h2 class="h5">Dein nicht gespeicherter Ungültigkeitsgrund</h2>
+        <div class="text-break" data-submitted-reason>{{ reason|nl2br }}</div>
+    {% endif %}
+{% endblock %}

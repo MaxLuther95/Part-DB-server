@@ -62,7 +62,6 @@ final readonly class ProductionBuildInstanceDataTable implements DataTableTypeIn
                     $class = match ($instance->getStatus()) {
                         BuildStatus::Planned => 'bg-secondary',
                         BuildStatus::InProgress => 'bg-primary',
-                        BuildStatus::Paused => 'bg-warning text-dark',
                         BuildStatus::Completed => 'bg-success',
                         BuildStatus::Installed => 'bg-info text-dark',
                         BuildStatus::Scrapped => 'bg-danger',
@@ -116,7 +115,7 @@ final readonly class ProductionBuildInstanceDataTable implements DataTableTypeIn
         $dataTable->addOrderBy('serialNumber', DataTable::SORT_DESCENDING);
         $dataTable->createAdapter(ORMAdapter::class, [
             'entity' => BuildInstance::class,
-            'query' => static function (QueryBuilder $builder): void {
+            'query' => function (QueryBuilder $builder): void {
                 $builder
                     ->select('build_instance')
                     ->addSelect('customer_project')
@@ -126,13 +125,27 @@ final readonly class ProductionBuildInstanceDataTable implements DataTableTypeIn
                     ->leftJoin('build_instance.projectPosition', 'project_position')
                     ->leftJoin('build_instance.systemTemplate', 'system_template')
                     ->leftJoin('build_instance.templateProject', 'template_project');
+                // The current project/system permissions are module-wide. Only
+                // restricted accounts need tree-by-tree checks; filtering the
+                // base query also protects DataTables totals and search results.
+                if (!$this->security->isGranted('@projects.read') || !$this->security->isGranted('@production_system_templates.read')) {
+                    $blocked = [];
+                    foreach ($builder->getEntityManager()->getRepository(BuildInstance::class)->findAll() as $instance) {
+                        if (!$this->security->isGranted('read', $instance)) {
+                            $blocked[] = $instance->getId();
+                        }
+                    }
+                    if ([] !== $blocked) {
+                        $builder->andWhere('build_instance.id NOT IN (:blockedInstances)')->setParameter('blockedInstances', $blocked);
+                    }
+                }
             },
             'criteria' => [
                 function (QueryBuilder $builder) use ($options): void {
                     if (null !== $options['status']) {
                         $builder->andWhere('build_instance.status = :status')->setParameter('status', $options['status']);
                     } elseif ($options['active_only']) {
-                        $builder->andWhere('build_instance.status IN (:activeStatuses)')->setParameter('activeStatuses', [BuildStatus::Planned->value, BuildStatus::InProgress->value, BuildStatus::Paused->value]);
+                        $builder->andWhere('build_instance.status IN (:activeStatuses)')->setParameter('activeStatuses', [BuildStatus::Planned->value, BuildStatus::InProgress->value]);
                     }
                     if (null !== $options['customer_id']) {
                         $builder

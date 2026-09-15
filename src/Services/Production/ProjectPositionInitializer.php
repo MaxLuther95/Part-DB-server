@@ -11,6 +11,7 @@ use App\Entity\Production\ProjectPosition;
 use App\Entity\Production\SystemTemplate;
 use App\Entity\Production\SystemTemplateSlot;
 use App\Entity\ProjectSystem\Project;
+use App\Helpers\Production\ManufacturingSlot;
 use Doctrine\ORM\EntityManagerInterface;
 
 /**
@@ -20,7 +21,7 @@ use Doctrine\ORM\EntityManagerInterface;
  */
 final readonly class ProjectPositionInitializer
 {
-    public function __construct(private EntityManagerInterface $entityManager)
+    public function __construct(private EntityManagerInterface $entityManager, private ManufacturingSnapshotFactory $snapshots)
     {
     }
 
@@ -29,27 +30,10 @@ final readonly class ProjectPositionInitializer
         $this->initialize($position, []);
     }
 
-    /**
-     * Applies newly added unambiguous required slots to all existing positions
-     * which use the changed template. Existing assignments are never replaced.
-     */
-    public function synchronizeTemplatePositions(SystemTemplate $template): void
-    {
-        /** @var list<ProjectPosition> $positions */
-        $positions = $this->entityManager->getRepository(ProjectPosition::class)->findBy([
-            'systemTemplate' => $template,
-        ]);
-
-        foreach ($positions as $position) {
-            $this->initializeRequiredDefaults($position);
-        }
-
-        $this->entityManager->flush();
-    }
-
     /** @param array<int, true> $templatePath */
     private function initialize(ProjectPosition $position, array $templatePath): void
     {
+        $this->snapshots->initialize($position);
         $template = $position->getSystemTemplate();
         $project = $position->getCustomerProject();
         if (!$template instanceof SystemTemplate || !$project instanceof CustomerProject) {
@@ -62,7 +46,7 @@ final readonly class ProjectPositionInitializer
         }
         $templatePath[$templateObjectId] = true;
 
-        foreach ($template->getSlots() as $slot) {
+        foreach ($position->getSlots() as $slot) {
             if (!$slot->isRequired()
                 || [] !== $position->getAssignmentsForSlot($slot)
                 || null !== $position->getPartAssignmentForSlot($slot)) {
@@ -109,8 +93,12 @@ final readonly class ProjectPositionInitializer
         }
     }
 
-    private function getSingleAllowedContent(SystemTemplateSlot $slot): SystemTemplate|Project|Part|null
+    private function getSingleAllowedContent(SystemTemplateSlot|ManufacturingSlot $slot): SystemTemplate|Project|Part|null
     {
+        if ($slot instanceof ManufacturingSlot) {
+            $choices = $this->snapshots->choices($slot);
+            return 1 === count($slot->getChoices()) && 1 === count($choices) ? $choices[0] : null;
+        }
         $choices = [
             ...$slot->getAllowedSystemTemplates()->toArray(),
             ...$slot->getAllowedProjects()->toArray(),

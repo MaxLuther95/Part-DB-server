@@ -1,0 +1,41 @@
+{
+	admin off
+	auto_https disable_redirects
+	skip_install_trust
+	# IP-address clients do not send TLS SNI; select the LAN certificate.
+	default_sni {$PARTDB_HTTPS_DEFAULT_SNI}
+	servers {
+		protocols h1 h2
+	}
+	pki {
+		ca local {
+			name "PartDB Local Development CA"
+		}
+	}
+}
+
+https://{$PARTDB_HTTPS_HOST}, https://localhost {$PARTDB_HTTPS_EXTRA_SITES} {
+	tls internal
+	encode zstd gzip
+	header -Server
+	reverse_proxy partdb:80 {
+		header_up -Forwarded
+		header_up -X-Forwarded-Port
+		header_up -X-Forwarded-Prefix
+	}
+}
+
+# Do not forward unknown Host values to the application.
+https:// {
+	header -Server
+	respond "Misdirected Request" 421
+}
+
+# Existing bookmarks remain useful, but plaintext writes never reach PartDB.
+:8080 {
+	@navigation method GET HEAD
+	handle @navigation {
+		redir https://{$PARTDB_HTTPS_HOST}:{$PARTDB_HTTPS_PORT}{uri} 308
+	}
+	respond "Use the HTTPS address before submitting data." 400
+}

@@ -58,27 +58,12 @@ class TreeController extends AbstractController
     #[Route(path: '/production', name: 'tree_production')]
     public function production(ProductionTreeBuilder $builder): JsonResponse
     {
-        $permissions = [
-            '@production_orders.read',
-            '@production_projects.read',
-            '@production_customers.read',
-            '@production_system_templates.read',
-            '@production_build_instances.read',
-            '@production_material.read',
-            '@production_import_mappings.read',
-        ];
-        $hasAccess = false;
-        foreach ($permissions as $permission) {
-            if ($this->isGranted($permission)) {
-                $hasAccess = true;
-                break;
-            }
-        }
-        if (!$hasAccess) {
+        $tree = $builder->getTree();
+        if ([] === $tree) {
             return new JsonResponse('Access denied', Response::HTTP_FORBIDDEN);
         }
 
-        return new JsonResponse($builder->getTree());
+        return new JsonResponse($tree);
     }
 
     #[Route(path: '/category/{id}', name: 'tree_category')]

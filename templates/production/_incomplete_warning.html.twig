@@ -1,0 +1,12 @@
+{% if incomplete_warnings|default([]) is not empty %}
+    <div class="alert alert-warning" data-incomplete-warning>
+        <strong>Es fehlen Angaben. Es wurde noch nichts gespeichert.</strong>
+        <ul class="mb-2">{% for warning in incomplete_warnings %}<li>{{ warning }}</li>{% endfor %}</ul>
+        <p>Bitte ergänze die Angaben. Falls sie in diesem Fall bewusst fehlen dürfen, bestätige die Ausnahme und schließe den Vorgang erneut ab.</p>
+        <input type="hidden" name="_incomplete_token" value="{{ csrf_token(incomplete_confirmation) }}">
+        <div class="form-check">
+            <input class="form-check-input" type="checkbox" name="_accept_incomplete" id="accept-incomplete" value="1">
+            <label class="form-check-label" for="accept-incomplete">Ich akzeptiere die aufgeführten fehlenden Angaben und möchte trotzdem abschließen.</label>
+        </div>
+    </div>
+{% endif %}

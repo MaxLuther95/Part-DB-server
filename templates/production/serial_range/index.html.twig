@@ -1,0 +1,17 @@
+{% extends 'main_card.html.twig' %}
+{% block title %}Seriennummernkreise{% endblock %}
+{% block card_title %}<i class="fa-solid fa-barcode fa-fw"></i> Seriennummernkreise{% endblock %}
+{% block card_content %}
+    <a class="btn btn-success mb-3" href="{{ path('production_serial_range_new') }}">+ Nummernkreis anlegen</a>
+    <p class="text-muted">Mehrere Bautypen können denselben Nummernkreis verwenden. Jeder Bautyp darf genau einem Kreis zugeordnet sein. Die Zuordnung gilt direkt, nicht für untergeordnete Baugruppen.</p>
+    <div class="table-responsive"><table class="table align-middle">
+        <thead><tr><th>Name / Präfix</th><th>Nächste Nummer</th><th>Zugeordnete Systemvorlagen</th><th>Zugeordnete Bauprojekt-Vorlagen</th><th></th></tr></thead>
+        <tbody>{% for range in ranges %}<tr>
+            <td>{{ range.name }} <span class="badge text-bg-secondary">{{ range.prefix }}</span></td>
+            <td>{{ range.nextNumber }}</td>
+            <td>{% for system in range.systems %}<div>{{ system.name }}</div>{% else %}—{% endfor %}</td>
+            <td>{% for project in range.projects %}<div>{{ project.fullPath }}</div>{% else %}—{% endfor %}</td>
+            <td><a class="btn btn-outline-primary" href="{{ path('production_serial_range_edit', {id: range.id}) }}">Bearbeiten / Zuordnen</a></td>
+        </tr>{% else %}<tr><td colspan="5">Noch keine Nummernkreise vorhanden. Lege z. B. BID für Boards und CID für komplette Geräte an.</td></tr>{% endfor %}</tbody>
+    </table></div>
+{% endblock %}

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Entity\Production;
 
+use App\Helpers\Production\DecimalInput;
 use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
 
@@ -28,17 +29,11 @@ class ProtocolAnswer extends AbstractProductionEntity
     #[ORM\Column(name: 'integer_value', type: Types::INTEGER, nullable: true)]
     private ?int $integerValue = null;
 
-    #[ORM\Column(name: 'decimal_value', type: Types::DECIMAL, precision: 24, scale: 9, nullable: true)]
+    #[ORM\Column(name: 'decimal_value', type: Types::STRING, length: 128, nullable: true)]
     private ?string $decimalValue = null;
 
     #[ORM\Column(name: 'boolean_value', type: Types::BOOLEAN, nullable: true)]
     private ?bool $booleanValue = null;
-
-    #[ORM\Column(name: 'date_value', type: Types::DATE_IMMUTABLE, nullable: true)]
-    private ?\DateTimeImmutable $dateValue = null;
-
-    #[ORM\Column(name: 'datetime_value', type: Types::DATETIME_IMMUTABLE, nullable: true)]
-    private ?\DateTimeImmutable $dateTimeValue = null;
 
     public function getRow(): ?ProtocolRunSectionRow
     {
@@ -72,14 +67,12 @@ class ProtocolAnswer extends AbstractProductionEntity
         return $this;
     }
 
-    public function getValue(): string|int|bool|\DateTimeImmutable|null
+    public function getValue(): string|int|bool|null
     {
         return match ($this->field?->getType()) {
             ProtocolFieldType::Integer => $this->integerValue,
             ProtocolFieldType::Decimal => $this->decimalValue,
             ProtocolFieldType::Boolean => $this->booleanValue,
-            ProtocolFieldType::Date => $this->dateValue,
-            ProtocolFieldType::DateTime => $this->dateTimeValue,
             default => $this->textValue,
         };
     }
@@ -96,11 +89,9 @@ class ProtocolAnswer extends AbstractProductionEntity
         $this->integerValue = null;
         $this->decimalValue = null;
         $this->booleanValue = null;
-        $this->dateValue = null;
-        $this->dateTimeValue = null;
     }
 
-    public function setValue(string|int|bool|\DateTimeImmutable|null $value): void
+    public function setValue(string|int|bool|null $value): void
     {
         if (ProtocolFieldType::TestResult === $this->field?->getType()
             && null !== $value
@@ -109,6 +100,9 @@ class ProtocolAnswer extends AbstractProductionEntity
             throw new \InvalidArgumentException('Unknown test result.');
         }
 
+        if (ProtocolFieldType::Decimal === $this->field?->getType() && null !== $value && '' !== $value) {
+            $value = DecimalInput::normalize((string) $value);
+        }
         $this->clearValue();
         if (null === $value || '' === $value) {
             return;
@@ -118,8 +112,6 @@ class ProtocolAnswer extends AbstractProductionEntity
             ProtocolFieldType::Integer => $this->integerValue = (int) $value,
             ProtocolFieldType::Decimal => $this->decimalValue = (string) $value,
             ProtocolFieldType::Boolean => $this->booleanValue = (bool) $value,
-            ProtocolFieldType::Date => $this->dateValue = $value instanceof \DateTimeImmutable ? $value->setTime(0, 0) : throw new \InvalidArgumentException('Expected a date.'),
-            ProtocolFieldType::DateTime => $this->dateTimeValue = $value instanceof \DateTimeImmutable ? $value : throw new \InvalidArgumentException('Expected a date and time.'),
             ProtocolFieldType::TestResult => $this->textValue = (string) $value,
             default => $this->textValue = (string) $value,
         };
@@ -127,6 +119,10 @@ class ProtocolAnswer extends AbstractProductionEntity
 
     private function assertEditable(): void
     {
-        $this->row?->getRun()?->assertEditable();
+        $run = $this->row?->getRun();
+        $run?->assertEditable();
+        // Answer writes and lifecycle changes must share the run's optimistic lock.
+        // Flush rolls back all answer changes if another writer changed the run.
+        $run?->updateTimestamps();
     }
 }

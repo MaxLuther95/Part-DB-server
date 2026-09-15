@@ -1,5 +1,33 @@
 production:
+  import_line:
+    pending: Open
+    note: Note
+    pending_help: Assignment pending; prevents order completion.
+    note_help: Information only; does not prevent order completion.
+    assign: Assign
+    mark_note: Mark as note
+    mark_pending: Mark as open
+  required_parts:
+    site: Manufacturing site
+    all_sites: All sites
+    supplier: Distributor
+    all_suppliers: All distributors
+    display: Display
+    only_missing: Only parts to order
+    all_required: All required parts
+    filter: Filter
+    reset: Reset filters
+    help: Includes commissioned and in-production orders. The site filter selects their manufacturing site; distributors refer to non-obsolete purchasing sources of the parts.
+    stock_help: Selecting a site includes only its storage locations and descendants. Free stock is counted once; reservations for other orders remain protected. Without a site filter stock is pooled across locations. This view does not create a purchase order.
+    empty: No requirements match these filters.
   datasheet:
+    assignment:
+      systems: Assigned system templates / products
+      systems_help: Offer this datasheet template for the selected system types. Multiple templates per system are supported; each uses its current published revision. Assignments are not inherited by components.
+      projects: Assigned build projects
+      projects_help: Offer for devices built from these Part-DB build projects, not customer projects or orders. Multiple templates per build project are supported.
+      none: No assignment
+      unavailable: No active, published datasheet template is assigned to this build type.
     action:
       save_draft: Save draft
   dashboard:
@@ -34,6 +62,10 @@ production:
     customers_projects: Orders & projects
     orders_projects: Orders & projects
     management: Management
+    workflow: Production workflow
+    template_group: Templates
+    master_data: Master data
+    serial_number_ranges: Serial number ranges
     build: Build
     templates: System templates
     protocol_templates: Protocol templates
@@ -74,6 +106,7 @@ production:
     my_projects: My orders
     number: Order number
     order_date: Order confirmation date
+    customer_reference: Customer reference
     planned_delivery_date: Planned delivery date
     delivery_date_unset: Not scheduled yet
     project_placeholder: Select a project
@@ -122,6 +155,8 @@ production:
     cancelled_hint: This order has been cancelled.
     build_instances: Devices and assemblies in order
   project_position:
+    fixed_definition: Manufacturing definition fixed when this position was created. Delete and recreate it to use a newer template.
+    selection_fixed_help: The manufacturing definition is fixed. Delete and recreate the position to use a newer template definition.
     detached_from_template: Detached from template
     label: Order position
     plural: Order positions
@@ -327,11 +362,14 @@ production:
     status:
       planned: Planned
       in_progress: In progress
-      paused: Paused
       completed: Completed
       installed: Installed
       scrapped: Scrapped
   protocol:
+    selection:
+      none: No active, published protocol template is assigned to this build type.
+    decimal:
+      invalid: Enter a decimal number without thousands separators or an exponent (maximum 128 characters).
     revision_status:
       draft: Draft
       published: Published
@@ -346,16 +384,48 @@ production:
       not_applicable: Not used
     field_type:
       text: Text
-      long_text: Multi-line text
       integer: Integer
       decimal: Measurement / decimal
       boolean: Yes / no
       test_result: Test status (✓ / – / ✕)
       choice: Choice
-      date: Date
-      datetime: Date and time
       static_note: Note / subheading
+    import:
+      title: Import protocol templates
+      file: JSON export (maximum 2 MiB)
+      explanation: Import template definitions only. Existing templates and completed measurements remain unchanged. The entire file is checked before anything is saved.
+      preview_help: Select one source revision per template, or skip it. Each selection becomes a NEW template with draft revision 1, never a published revision. Names must not already exist. Review the target names before confirming. This preview expires after 30 minutes.
+      source_revision: Source revision
+      target_name: New template name
+      skip: Do not import this template
+      validate: Check file and show preview
+      confirm: Import selected templates as new drafts
+      invalid_file: The import file is invalid.
+      database_error: The database could not confirm the import. Your preview is retained. Check the template list before retrying.
+      select_one: Select at least one source revision.
+      invalid_selection: Check the selected revisions and enter valid template names.
+      name_conflict: A selected name already exists or occurs more than once. Choose a different name or skip the template. Nothing was imported.
+      expired: The import preview has expired or was already completed. Upload the file again.
+      success: '%count% template(s) imported as new drafts.'
+    export:
+      title: Export protocol templates
+      download: Download JSON
+      selection: Protocol templates
+      selection_help: Select the required templates. Expand templates with multiple revisions and choose the versions below. Select between 1 and 100 revisions in total. Drafts and retired revisions are included only when you explicitly select them; their status is preserved.
+      explanation: Downloads the selected template definitions, including fields, notes and layout. Completed protocols, measurements, devices, orders and user accounts are not included. Text entered in the templates is included unchanged. The JSON file can be imported as new template drafts.
+      revisions_for: 'Revisions for %name%'
     template:
+      delete_confirm: 'Delete protocol template “%name%”, including all revisions and template assignments? Existing device protocols prevent deletion.'
+      delete_in_use: This template is already used by device or assembly protocols and cannot be deleted. You can deactivate it in its settings.
+      deleted: The protocol template, its revisions and template assignments were deleted.
+      systems: Assigned system templates
+      systems_help: Select one or more systems. Each system can use one protocol template; new runs use its current published revision. Assignments are not inherited by components and are not exported.
+      projects: Assigned build projects
+      projects_help: Select the PartDB build projects whose built instances may use this template. At most one template per project; no inheritance by parent systems. Use Ctrl/Cmd for multiple selection. Local assignments are not exported.
+      projects_none: No build projects assigned
+      assignment_settings: Assignment & settings
+      systems_none: No default system assignment
+      notes_hint: Every new run automatically has an empty, optional notes field at the bottom. Notes belong only to that run and are not included in template exports.
       plural: Protocol templates
       name: Template name
       new: Create protocol template
@@ -408,6 +478,12 @@ production:
       none: This section has no fields yet.
       delete_confirm: Remove this field from the template draft?
     run:
+      notes: Notes (optional)
+      notes_help: Internal notes for this run only. Editable until completion; not automatically included in customer datasheets.
+      notes_empty: No notes
+      date: Protocol date
+      last_edited_by: Last edited by
+      not_recorded: Not recorded
       save: Save draft
       complete: Complete
       complete_confirm: Really complete this protocol run? Its structure and values will become immutable. A later test is recorded as a new run.

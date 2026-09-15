@@ -179,7 +179,7 @@ final class DatasheetTemplateManagerTest extends KernelTestCase
 
         $view = $this->renderer->createView($revision, $parent);
         $matrix = $view['blocks'][0];
-        self::assertSame(['Position 1', 'Position 2'], array_column($matrix['columns'], 'label'));
+        self::assertSame(['SEL · 1249', 'SEL · 1255'], array_column($matrix['columns'], 'label'));
         self::assertSame(['Board #', 'Type'], array_map(static fn (array $row): string => $row['definition']->getLabel(), $matrix['rows']));
         self::assertSame(['1249', '1255'], array_column($matrix['rows'][0]['cells'], 'value'));
         self::assertSame(['SEL', 'SEL'], array_column($matrix['rows'][1]['cells'], 'value'));

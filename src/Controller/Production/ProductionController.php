@@ -69,8 +69,10 @@ final class ProductionController extends AbstractController
         private readonly TranslatorInterface $translator,
         private readonly ProductionReservationManager $reservationManager,
         private readonly ProjectPositionInitializer $positionInitializer,
+        private readonly \App\Services\Production\ManufacturingSnapshotFactory $snapshots,
         private readonly ProjectPositionPositioner $projectPositioner,
         private readonly SystemTemplateSlotPositioner $slotPositioner,
+        private readonly \App\Services\Production\SerialNumberManager $serialNumbers,
     )
     {
     }
@@ -101,10 +103,10 @@ final class ProductionController extends AbstractController
     {
         $this->denyAccessUnlessGranted('@production_build_instances.read');
 
-        $activeStatuses = [BuildStatus::Planned, BuildStatus::InProgress, BuildStatus::Paused];
+        $activeStatuses = [BuildStatus::Planned, BuildStatus::InProgress];
         $activeBuilds = array_values(array_filter(
             $repository->findBy([], ['lastModified' => 'DESC']),
-            static fn(BuildInstance $instance): bool => in_array($instance->getStatus(), $activeStatuses, true),
+            fn(BuildInstance $instance): bool => $this->isGranted('read', $instance) && in_array($instance->getStatus(), $activeStatuses, true),
         ));
 
         return $this->render('production/build.html.twig', ['build_instances' => $activeBuilds]);
@@ -583,6 +585,7 @@ final class ProductionController extends AbstractController
     {
         $this->denyAccessUnlessGranted('@production_orders.edit');
         $template = $position->getSystemTemplate();
+        $this->snapshots->initialize($position);
         if (!$template instanceof SystemTemplate) {
             throw $this->createNotFoundException('This position has no system template.');
         }
@@ -591,23 +594,15 @@ final class ProductionController extends AbstractController
             'translation_domain' => 'production',
             'method' => 'POST',
         ]);
-        foreach ($template->getSlots() as $slot) {
+        foreach ($position->getSlots() as $slot) {
             $assignments = $position->getAssignmentsForSlot($slot);
             $assignment = $assignments[0] ?? null;
             $partAssignment = $position->getPartAssignmentForSlot($slot);
-            $choices = [
-                ...$slot->getAllowedSystemTemplates()->toArray(),
-                ...$slot->getAllowedProjects()->toArray(),
-                ...$slot->getAllowedParts()->toArray(),
-            ];
+            $choices = $this->snapshots->choices($slot);
             $builder->add('content_'.$slot->getId(), ChoiceType::class, [
                 'label' => $slot->getName(),
                 'choices' => $choices,
-                'choice_label' => static fn(SystemTemplate|Project|Part $item): string => match (true) {
-                    $item instanceof SystemTemplate => 'System: '.$item->getName(),
-                    $item instanceof Project => 'Bauprojekt: '.$item->getFullPath(),
-                    default => sprintf('Lagerteil: %s (#%d)', $item->getName(), $item->getId()),
-                },
+                'choice_label' => static fn(SystemTemplate|Project|Part $item): string => $position->getManufacturingSnapshot()->getDefinition(\App\Services\Production\ManufacturingSnapshotFactory::key($item))->getName(),
                 'choice_value' => static fn(SystemTemplate|Project|Part|null $item): string => match (true) {
                     $item instanceof SystemTemplate => 'system_'.$item->getId(),
                     $item instanceof Project => 'project_'.$item->getId(),
@@ -646,7 +641,7 @@ final class ProductionController extends AbstractController
         $form = $builder->getForm();
         $form->handleRequest($request);
         if ($form->isSubmitted()) {
-            foreach ($template->getSlots() as $slot) {
+            foreach ($position->getSlots() as $slot) {
                 $selected = $form->get('content_'.$slot->getId())->getData();
                 $quantity = (int) $form->get('quantity_'.$slot->getId())->getData();
                 $assignments = $position->getAssignmentsForSlot($slot);
@@ -677,7 +672,7 @@ final class ProductionController extends AbstractController
         }
 
         if ($form->isSubmitted() && $form->isValid()) {
-            foreach ($template->getSlots() as $slot) {
+            foreach ($position->getSlots() as $slot) {
                 $selected = $form->get('content_'.$slot->getId())->getData();
                 $assignments = $position->getAssignmentsForSlot($slot);
                 $partAssignment = $position->getPartAssignmentForSlot($slot);
@@ -696,6 +691,15 @@ final class ProductionController extends AbstractController
                     if (null !== $partAssignment) {
                         $entityManager->remove($partAssignment);
                     }
+
+                    foreach ($assignments as $index => $assignment) {
+                        if ($assignment->getSystemTemplate() !== $selected && $assignment->getTemplateProject() !== $selected) {
+                            $position->removeChild($assignment);
+                            $this->removePositionTree($assignment, $entityManager);
+                            unset($assignments[$index]);
+                        }
+                    }
+                    $assignments = array_values($assignments);
 
                     $legacyGroupedAssignment = 1 === count($assignments) && $assignments[0]->getQuantity() > 1
                         ? $assignments[0]
@@ -872,7 +876,6 @@ final class ProductionController extends AbstractController
             ->add('quantity', IntegerType::class, [
                 'label' => 'production.material_plan.allocate_quantity',
                 'data' => 1,
-                'html5' => true,
                 'attr' => ['min' => 1, 'max' => $serialRequired ? 1 : $remainingQuantity, 'step' => 1],
             ])
             ->add('serialNumber', TextType::class, [
@@ -989,15 +992,12 @@ final class ProductionController extends AbstractController
     #[Route(path: '/build-instances/{id}', name: 'production_build_instance_show', requirements: ['id' => '\d+'], methods: ['GET'])]
     public function buildInstanceShow(BuildInstance $buildInstance, ProtocolTemplateRepository $protocolTemplateRepository, DatasheetTemplateRepository $datasheetTemplateRepository): Response
     {
-        $this->denyAccessUnlessGranted('@production_build_instances.read');
-        foreach ($buildInstance->getBuildProjects() as $buildProject) {
-            $this->denyAccessUnlessGranted('read', $buildProject);
-        }
+        $this->denyAccessUnlessGranted('read', $buildInstance);
 
         return $this->render('production/build_instance/show.html.twig', [
             'build_instance' => $buildInstance,
-            'protocol_templates' => $this->isGranted('@production_protocols.create') ? $protocolTemplateRepository->findActiveWithPublishedRevision() : [],
-            'datasheet_templates' => $this->isGranted('@production_datasheets.create') ? $datasheetTemplateRepository->findActiveWithPublishedRevision() : [],
+            'protocol_template' => $this->isGranted('@production_protocols.read') ? $protocolTemplateRepository->findForInstance($buildInstance) : null,
+            'datasheet_templates' => $this->isGranted('@production_datasheets.read') ? $datasheetTemplateRepository->findForInstance($buildInstance) : [],
         ]);
     }
 
@@ -1005,6 +1005,7 @@ final class ProductionController extends AbstractController
     public function buildInstanceEdit(BuildInstance $buildInstance, Request $request, EntityManagerInterface $entityManager): Response
     {
         $this->denyAccessUnlessGranted('@production_build_instances.edit');
+        $this->denyAccessUnlessGranted('read', $buildInstance);
 
         return $this->handleBuildInstanceForm($buildInstance, $request, $entityManager);
     }
@@ -1013,6 +1014,7 @@ final class ProductionController extends AbstractController
     public function buildInstanceDelete(BuildInstance $buildInstance, Request $request, EntityManagerInterface $entityManager): Response
     {
         $this->denyAccessUnlessGranted('@production_build_instances.delete');
+        $this->denyAccessUnlessGranted('read', $buildInstance);
         if (!$this->isCsrfTokenValid('delete_build_instance_'.$buildInstance->getId(), $request->request->getString('_token'))) {
             throw $this->createAccessDeniedException('Invalid CSRF token.');
         }
@@ -1067,7 +1069,7 @@ final class ProductionController extends AbstractController
 
         $assignableInstances = array_values(array_filter(
             $repository->findAssignmentCandidates($position),
-            static fn(BuildInstance $instance): bool => $compatibility->isCompatible($instance, $position),
+            fn(BuildInstance $instance): bool => $this->isGranted('read', $instance) && $compatibility->isCompatible($instance, $position),
         ));
         $builder = $this->createFormBuilder(null, [
             'translation_domain' => 'production',
@@ -1120,6 +1122,7 @@ final class ProductionController extends AbstractController
     {
         $this->denyAccessUnlessGranted('@production_orders.edit');
         $this->denyAccessUnlessGranted('@production_build_instances.assign');
+        $this->denyAccessUnlessGranted('read', $buildInstance);
         if (!$this->isCsrfTokenValid('unassign_build_instance_'.$buildInstance->getId(), $request->request->getString('_token'))) {
             throw $this->createAccessDeniedException('Invalid CSRF token.');
         }
@@ -1248,8 +1251,14 @@ final class ProductionController extends AbstractController
                 $this->denyAccessUnlessGranted('read', $buildProject);
             }
             if ($isNew) {
-                $this->positionInitializer->initializeRequiredDefaults($position);
+                try {
+                    $this->positionInitializer->initializeRequiredDefaults($position);
+                } catch (\DomainException $exception) {
+                    $form->addError(new FormError($exception->getMessage()));
+                }
             }
+        }
+        if ($form->isSubmitted() && $form->isValid()) {
             $project = $position->getCustomerProject();
             if ($project instanceof CustomerProject) {
                 $this->historyRecorder->record(
@@ -1315,10 +1324,6 @@ final class ProductionController extends AbstractController
                 $this->denyAccessUnlessGranted('read', $project);
             }
             $this->slotPositioner->save($slot, $previousPosition);
-            $template = $slot->getSystemTemplate();
-            if ($template instanceof SystemTemplate) {
-                $this->positionInitializer->synchronizeTemplatePositions($template);
-            }
             $this->addFlash('success', 'production.flash.saved');
 
             return $this->redirectToRoute('production_template_show', ['id' => $slot->getSystemTemplate()?->getId()]);
@@ -1379,6 +1384,7 @@ final class ProductionController extends AbstractController
     {
         $isNew = null === $buildInstance->getId();
         $previousProject = $buildInstance->getCustomerProject();
+        $previousSerial = $buildInstance->getSerialNumber();
         $form = $this->createForm(BuildInstanceType::class, $buildInstance, [
             'default_status' => $registerExisting ? BuildStatus::Completed : null,
         ]);
@@ -1387,28 +1393,44 @@ final class ProductionController extends AbstractController
             foreach ($buildInstance->getBuildProjects() as $buildProject) {
                 $this->denyAccessUnlessGranted('read', $buildProject);
             }
-            $entityManager->persist($buildInstance);
-            $project = $buildInstance->getCustomerProject();
-            if ($project instanceof CustomerProject) {
-                $this->historyRecorder->record(
-                    $project,
-                    $isNew ? 'build_created' : 'build_updated',
-                    $buildInstance->getDisplayIdentifier(),
-                    $buildInstance,
-                );
-            }
-            if ($previousProject instanceof CustomerProject && $previousProject !== $project) {
-                $this->historyRecorder->record(
-                    $previousProject,
-                    'build_unassigned',
-                    $buildInstance->getDisplayIdentifier(),
-                    $buildInstance,
-                );
-            }
-            $entityManager->flush();
-            $this->addFlash('success', 'production.flash.saved');
+            $this->denyAccessUnlessGranted('read', $buildInstance);
+            $connection = $entityManager->getConnection();
+            $connection->beginTransaction();
+            try {
+                $this->serialNumbers->claim($buildInstance, true === $form->get('serialNumber')->get('confirmed')->getData(), $previousSerial);
+                $entityManager->persist($buildInstance);
+                $project = $buildInstance->getCustomerProject();
+                if ($project instanceof CustomerProject) {
+                    $this->historyRecorder->record(
+                        $project,
+                        $isNew ? 'build_created' : 'build_updated',
+                        $buildInstance->getDisplayIdentifier(),
+                        $buildInstance,
+                    );
+                }
+                if ($previousProject instanceof CustomerProject && $previousProject !== $project) {
+                    $this->historyRecorder->record(
+                        $previousProject,
+                        'build_unassigned',
+                        $buildInstance->getDisplayIdentifier(),
+                        $buildInstance,
+                    );
+                }
+                $entityManager->flush();
+                $connection->commit();
+                $this->addFlash('success', 'production.flash.saved');
 
-            return $this->redirectToRoute('production_build_instance_show', ['id' => $buildInstance->getId()]);
+                return $this->redirectToRoute('production_build_instance_show', ['id' => $buildInstance->getId()]);
+            } catch (\Doctrine\DBAL\Exception\UniqueConstraintViolationException) {
+                $connection->rollBack();
+                $form->addError(new \Symfony\Component\Form\FormError('Die Seriennummer wurde inzwischen vergeben. Bitte eine andere Nummer prüfen und bestätigen.'));
+            } catch (\RuntimeException $error) {
+                $connection->rollBack();
+                $form->addError(new \Symfony\Component\Form\FormError($error->getMessage()));
+            } catch (\Throwable $error) {
+                $connection->rollBack();
+                throw $error;
+            }
         }
 
         return $this->render('production/form.html.twig', [

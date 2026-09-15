@@ -9,12 +9,14 @@ enum OrderPositionUnit: string
 {
     case Piece = 'pcs.';
     case Set = 'set';
+    case LumpSum = 'psch';
 
     public function getLabel(): string
     {
         return match ($this) {
             self::Piece => 'Stück (pcs.)',
             self::Set => 'Set (set)',
+            self::LumpSum => 'Pauschal (psch)',
         };
     }
 
@@ -23,8 +25,9 @@ enum OrderPositionUnit: string
         $value = mb_strtolower(trim($value));
 
         return match ($value) {
-            'pc', 'pc.', 'pcs', 'pcs.', 'piece', 'pieces', 'stk', 'stk.', 'stück' => self::Piece,
+            'pc', 'pc.', 'pcs', 'pcs.', 'piece', 'pieces', 'stk', 'stk.', 'stück', 'stueck' => self::Piece,
             'set', 'sets' => self::Set,
+            'psch', 'psch.', 'pauschal' => self::LumpSum,
             default => null,
         };
     }

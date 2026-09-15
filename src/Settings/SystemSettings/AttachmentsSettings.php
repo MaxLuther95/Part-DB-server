@@ -54,6 +54,14 @@ class AttachmentsSettings
     public bool $allowDownloads = false;
 
     #[SettingsParameter(
+        label: 'Require private attachment storage',
+        description: 'Store local uploads outside the public web directory. Existing files must be migrated separately.',
+        envVar: 'bool:FORCE_PRIVATE_ATTACHMENTS',
+        envVarMode: EnvVarMode::OVERWRITE,
+    )]
+    public bool $forcePrivateAttachments = false;
+
+    #[SettingsParameter(
         label: new TM("settings.system.attachments.downloadByDefault"),
         envVar: "bool:ATTACHMENT_DOWNLOAD_BY_DEFAULT", envVarMode: EnvVarMode::OVERWRITE
     )]

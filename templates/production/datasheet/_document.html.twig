@@ -1,16 +1,20 @@
 {% set width_percent = {3: 25, 6: 50, 9: 75, 12: 100} %}
-<article class="datasheet-page">
+{% if not pdf_layout|default(false) %}<article class="datasheet-page">{% endif %}
+    {# Fixed elements must precede flowing content so Dompdf repeats them from page one. #}
+    <footer class="datasheet-footer">
+        <img class="datasheet-logo" src="{{ logo_uri|default(asset('img/magnicon-logo.jpg')) }}" alt="Magnicon GmbH">
+        <div>Data sheet · {{ revision.template.productTitle }} · Revision {{ revision.revisionNumber }}</div>
+    </footer>
     <header class="datasheet-header">
         <div class="datasheet-kicker">DATA SHEET</div>
         <h1>{{ revision.template.productTitle }}</h1>
-        <div class="datasheet-revision">Revision {{ revision.revisionNumber }}</div>
     </header>
 
     <section class="datasheet-fixed-fields" aria-label="Document identification">
         {% for field in fixed_fields %}
             <div class="datasheet-fixed-field">
                 <div class="datasheet-value-label">{{ field.label }}</div>
-                <div class="datasheet-fixed-value">{{ field.value ?: '—' }}</div>
+                <div class="datasheet-fixed-value">{{ field.value|default('—') }}</div>
             </div>
         {% endfor %}
     </section>
@@ -25,7 +29,7 @@
             {% if block.type.value == 'page_break' %}
                 <div class="datasheet-page-break"><span>Page break</span></div>
             {% else %}
-                <section class="datasheet-block datasheet-block-{{ block.type.value }} datasheet-text-size-{{ block.textSize.value }} datasheet-font-{{ block.fontFamily.value }} datasheet-align-{{ block.textAlignment.value }}{% if block.textBold %} datasheet-text-bold{% endif %}{% if block.textItalic %} datasheet-text-italic{% endif %}{% if block.textUnderlined %} datasheet-text-underlined{% endif %}" style="width: {{ width_percent[block.layoutColumns]|default(100) }}%">
+                <section class="datasheet-block{% if block.layoutColumns == 12 %} datasheet-block-full{% endif %} datasheet-block-{{ block.type.value }} datasheet-text-size-{{ block.textSize.value }} datasheet-font-{{ block.fontFamily.value }} datasheet-align-{{ block.textAlignment.value }}{% if block.textBold %} datasheet-text-bold{% endif %}{% if block.textItalic %} datasheet-text-italic{% endif %}{% if block.textUnderlined %} datasheet-text-underlined{% endif %}" style="width: {{ width_percent[block.layoutColumns]|default(100) }}%">
                     <div class="datasheet-block-inner">
                         {% if block.type.value == 'heading' %}
                             <h2>{{ block.label ?: block.text }}</h2>
@@ -34,20 +38,20 @@
                             <div class="datasheet-text">{{ block.text|default('')|nl2br }}</div>
                         {% elseif block.type.value == 'editable_note' %}
                             {% if block.label %}<h3>{{ block.label }}</h3>{% endif %}
-                            <div class="datasheet-note">{{ item.value ?: 'This note can be completed when the data sheet is generated.' }}</div>
+                            <div class="datasheet-note">{{ item.value|default('This note can be completed when the data sheet is generated.') }}</div>
                         {% elseif block.type.value == 'value' %}
                             <div class="datasheet-value-label">{{ block.label }}</div>
-                            <div class="datasheet-value">{{ item.value ?: '—' }}</div>
+                            <div class="datasheet-value">{{ item.value|default('—') }}</div>
                         {% elseif block.type.value == 'child_table' %}
                             {% if block.label %}<h3>{{ block.label }}</h3>{% endif %}
                             <table class="datasheet-table">
-                                <thead><tr><th></th>{% for column in item.columns %}<th>{{ column.label }}</th>{% endfor %}</tr></thead>
+                                <thead><tr><th></th>{% for column in item.columns %}<th>{{ column.label }}{% if draft and column.warning %}<div class="datasheet-header-warning">Warning: {{ column.warning }}</div>{% endif %}</th>{% endfor %}</tr></thead>
                                 <tbody>
                                 {% if item.columns|length == 0 %}
                                     <tr><td>No installed components found.</td></tr>
                                 {% else %}
                                     {% for row in item.rows %}
-                                        <tr><th>{{ row.definition.label }}{% if row.definition.unit %} [{{ row.definition.unit }}]{% endif %}</th>{% for cell in row.cells %}<td>{{ cell.value ?: '—' }}</td>{% endfor %}</tr>
+                                        <tr><th>{{ row.definition.label }}{% if row.definition.unit %} [{{ row.definition.unit }}]{% endif %}</th>{% for cell in row.cells %}<td>{{ cell.value|default('—') }}</td>{% endfor %}</tr>
                                     {% else %}
                                         <tr><td colspan="{{ item.columns|length + 1 }}">No table rows configured.</td></tr>
                                     {% endfor %}
@@ -56,6 +60,8 @@
                             </table>
                         {% elseif block.type.value == 'separator' %}
                             <hr>
+                        {% elseif block.type.value == 'spacer' %}
+                            <div class="datasheet-spacer" aria-hidden="true"></div>
                         {% endif %}
                     </div>
                 </section>
@@ -63,7 +69,7 @@
             {% endif %}
         {% endfor %}
         {% for note in additional_notes %}
-            <section class="datasheet-block datasheet-block-editable_note" style="width: {{ width_percent[note.width]|default(100) }}%">
+            <section class="datasheet-block{% if note.width == 12 %} datasheet-block-full{% endif %} datasheet-block-editable_note" style="width: {{ width_percent[note.width]|default(100) }}%">
                 <div class="datasheet-block-inner">
                     <h3>{{ note.title }}</h3>
                     <div class="datasheet-note">{{ note.text }}</div>
@@ -73,8 +79,4 @@
         <div class="datasheet-clear"></div>
     </main>
 
-    <footer class="datasheet-footer">
-        <div class="datasheet-logo" aria-label="Magnicon">MAGNICON</div>
-        <div>Data sheet · {{ revision.template.productTitle }} · Revision {{ revision.revisionNumber }}</div>
-    </footer>
-</article>
+{% if not pdf_layout|default(false) %}</article>{% endif %}

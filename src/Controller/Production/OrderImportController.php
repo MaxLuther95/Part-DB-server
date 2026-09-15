@@ -14,7 +14,6 @@ use App\Entity\Production\OrderImportMapping;
 use App\Entity\Production\OrderPositionUnit;
 use App\Entity\Production\ProductionProject;
 use App\Entity\Production\ProductionProjectStatus;
-use App\Entity\Production\ProjectAccessory;
 use App\Entity\Production\ProjectPosition;
 use App\Entity\Production\SystemTemplate;
 use App\Entity\ProjectSystem\Project;
@@ -26,7 +25,7 @@ use App\Repository\Production\ProductionProjectRepository;
 use App\Services\Production\OrderAttachmentStorage;
 use App\Services\Production\PdfOrderConfirmationParser;
 use App\Services\Production\ProductionHistoryRecorder;
-use App\Services\Production\ProjectPositionInitializer;
+use App\Services\Production\OrderImportLineResolver;
 use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
 use Doctrine\ORM\EntityManagerInterface;
 use Psr\Log\LoggerInterface;
@@ -116,7 +115,7 @@ final class OrderImportController extends AbstractController
         ProductionProjectRepository $projects,
         CustomerProjectRepository $orders,
         OrderImportMappingRepository $mappings,
-        ProjectPositionInitializer $positionInitializer,
+        OrderImportLineResolver $lineResolver,
         ProductionHistoryRecorder $historyRecorder,
         OrderAttachmentStorage $attachmentStorage,
         LoggerInterface $logger,
@@ -143,7 +142,8 @@ final class OrderImportController extends AbstractController
             'project_id' => $suggestedProject?->getId() ?? 0,
             'project_number' => $suggestedProject?->getProjectNumber() ?? $data['project_number'],
             'project_name' => $suggestedProject?->getName() ?? '',
-            'notes' => '' !== $data['reference'] ? 'Kundenreferenz: '.$data['reference'] : '',
+            'customer_reference' => $data['reference'],
+            'notes' => $data['notes'] ?? '',
             'lines' => $data['lines'],
         ];
         $errors = [];
@@ -163,6 +163,7 @@ final class OrderImportController extends AbstractController
                 'project_id' => max(0, $request->request->getInt('project_id')),
                 'project_number' => trim($request->request->getString('project_number')),
                 'project_name' => trim($request->request->getString('project_name')),
+                'customer_reference' => trim($request->request->getString('customer_reference')),
                 'notes' => trim($request->request->getString('notes')),
                 'lines' => $this->sanitizeLines($submittedLines),
             ];
@@ -204,11 +205,11 @@ final class OrderImportController extends AbstractController
                         ->setProductionProject($productionProject)
                         ->setStatus(CustomerProjectStatus::Commissioned)
                         ->setDescription('Aus einer PDF-Auftragsbestätigung importiert.')
+                        ->setCustomerReference($values['customer_reference'])
                         ->setNotes($values['notes']);
                     $entityManager->persist($order);
                     $entityManager->flush();
 
-                    $positionNumber = 0;
                     foreach ($values['lines'] as $line) {
                         $mapping = $line['mapping_id'] > 0 ? $mappings->find($line['mapping_id']) : null;
                         $importLine = (new OrderImportLine())
@@ -223,30 +224,22 @@ final class OrderImportController extends AbstractController
                         if (!$mapping instanceof OrderImportMapping || !$mapping->isActive()) {
                             continue;
                         }
-                        if ($mapping->getPart() instanceof Part) {
-                            $entityManager->persist((new ProjectAccessory())
-                                ->setCustomerProject($order)
-                                ->setPart($mapping->getPart())
-                                ->setQuantity($line['quantity'])
-                                ->setNote(sprintf('PDF-Position %d: %s', $line['number'], $line['description'])));
-                            continue;
-                        }
-                        for ($index = 1; $index <= $line['quantity']; ++$index) {
-                            $position = (new ProjectPosition())
-                                ->setCustomerProject($order)
-                                ->setPosition($positionNumber++)
-                                ->setQuantity(1)
-                                ->setName($line['quantity'] > 1 ? sprintf('%s %d', $line['description'], $index) : $line['description']);
-                            if ($mapping->getSystemTemplate() instanceof SystemTemplate) {
-                                $position->setSystemTemplate($mapping->getSystemTemplate());
-                            } elseif ($mapping->getTemplateProject() instanceof Project) {
-                                $position->setTemplateProject($mapping->getTemplateProject());
+                        $target = $mapping->getPart() ?? $mapping->getSystemTemplate() ?? $mapping->getTemplateProject();
+                        if ($target instanceof Part) {
+                            $this->denyAccessUnlessGranted('read', $target);
+                        } else {
+                            $position = new ProjectPosition();
+                            if ($target instanceof SystemTemplate) {
+                                $position->setSystemTemplate($target);
+                            } elseif ($target instanceof Project) {
+                                $position->setTemplateProject($target);
                             }
                             foreach ($position->getBuildProjects() as $buildProject) {
                                 $this->denyAccessUnlessGranted('read', $buildProject);
                             }
-                            $entityManager->persist($position);
-                            $positionInitializer->initializeRequiredDefaults($position);
+                        }
+                        if (null !== $target) {
+                            $lineResolver->createAssignment($importLine, $target);
                         }
                     }
 
@@ -303,7 +296,7 @@ final class OrderImportController extends AbstractController
             ),
             'mapping_units' => $mappingUnits,
             'original_filename' => $state['original_filename'],
-        ]);
+        ], new Response(status: [] === $errors ? Response::HTTP_OK : Response::HTTP_UNPROCESSABLE_ENTITY));
     }
 
     #[Route(path: '/customer-projects/{id}/attachments', name: 'production_order_attachment_upload', requirements: ['id' => '\\d+'], methods: ['POST'])]
@@ -477,12 +470,12 @@ final class OrderImportController extends AbstractController
     private function validateReview(array $values, CustomerRepository $customers, ProductionProjectRepository $projects, CustomerProjectRepository $orders, OrderImportMappingRepository $mappings): array
     {
         $errors = [];
-        foreach (['order_number' => 'Auftragsnummer', 'order_name' => 'Auftragsbezeichnung', 'order_date' => 'Datum', 'customer_number' => 'Kundennummer', 'customer_name' => 'Kundenname', 'project_number' => 'Projektnummer', 'project_name' => 'Projektbezeichnung'] as $field => $label) {
+        foreach (['order_number' => 'Auftragsnummer', 'order_date' => 'Datum', 'customer_number' => 'Kundennummer', 'customer_name' => 'Kundenname', 'project_number' => 'Projektnummer'] as $field => $label) {
             if ('' === $values[$field]) {
                 $errors[] = $label.' muss geprüft und ausgefüllt werden.';
             }
         }
-        foreach (['order_number' => 64, 'customer_number' => 64, 'project_number' => 64, 'order_name' => 255, 'customer_name' => 255, 'project_name' => 255] as $field => $maximumLength) {
+        foreach (['order_number' => 64, 'customer_number' => 64, 'project_number' => 64, 'order_name' => 255, 'customer_name' => 255, 'project_name' => 255, 'customer_reference' => 255] as $field => $maximumLength) {
             if (mb_strlen($values[$field]) > $maximumLength) {
                 $errors[] = sprintf('%s darf höchstens %d Zeichen enthalten.', match ($field) {
                     'order_number' => 'Die Auftragsnummer',
@@ -490,6 +483,7 @@ final class OrderImportController extends AbstractController
                     'project_number' => 'Die Projektnummer',
                     'order_name' => 'Die Auftragsbezeichnung',
                     'customer_name' => 'Der Kundenname',
+                    'customer_reference' => 'Die Kundenreferenz',
                     default => 'Die Projektbezeichnung',
                 }, $maximumLength);
             }

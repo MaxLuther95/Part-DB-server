@@ -11,16 +11,18 @@ use App\Entity\ProjectSystem\Project;
 use Doctrine\Persistence\ManagerRegistry;
 use Symfony\Component\Form\AbstractType;
 use Symfony\Component\Form\Extension\Core\Type\ChoiceType;
+use Symfony\Component\Form\Extension\Core\Type\EnumType;
 use Symfony\Component\Form\Extension\Core\Type\TextareaType;
 use Symfony\Component\Form\Extension\Core\Type\TextType;
 use Symfony\Component\Form\FormBuilderInterface;
 use Symfony\Component\Form\FormEvent;
 use Symfony\Component\Form\FormEvents;
 use Symfony\Component\OptionsResolver\OptionsResolver;
+use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 
 final class BuildInstanceType extends AbstractType
 {
-    public function __construct(private readonly ManagerRegistry $registry)
+    public function __construct(private readonly ManagerRegistry $registry, private readonly UrlGeneratorInterface $urls)
     {
     }
 
@@ -31,13 +33,15 @@ final class BuildInstanceType extends AbstractType
         $projects = $this->registry->getRepository(Project::class)->findBy([], ['name' => 'ASC']);
 
         $builder
-            ->add('serialNumber', TextType::class, [
+            ->add('serialNumber', SerialNumberType::class, [
                 'label' => 'production.build_instance.serial_number',
+                'translation_domain' => 'production',
                 'required' => false,
-                'empty_data' => '',
                 'help' => 'production.build_instance.serial_number_optional_help',
             ])
             ->add('content', ChoiceType::class, [
+                'attr' => ['data-serial-content' => ''],
+                'choice_attr' => fn(SystemTemplate|Project $choice): array => ['data-serial-suggestion' => $this->urls->generate('production_serial_range_suggest', ['type' => $choice instanceof SystemTemplate ? 'system' : 'project', 'id' => $choice->getId()])],
                 'label' => 'production.build_instance.template',
                 'choices' => [...$templates, ...$projects],
                 'choice_label' => static fn(SystemTemplate|Project $choice): string => $choice instanceof SystemTemplate
@@ -56,16 +60,10 @@ final class BuildInstanceType extends AbstractType
                 'required' => null === $buildInstance->getContentName(),
                 'placeholder' => 'production.project_position.selection_placeholder',
             ])
-            ->add('status', ChoiceType::class, array_filter([
+            ->add('status', EnumType::class, array_filter([
                 'label' => 'production.common.status',
-                'choices' => [
-                    'production.build_instance.status.planned' => BuildStatus::Planned,
-                    'production.build_instance.status.in_progress' => BuildStatus::InProgress,
-                    'production.build_instance.status.paused' => BuildStatus::Paused,
-                    'production.build_instance.status.completed' => BuildStatus::Completed,
-                    'production.build_instance.status.installed' => BuildStatus::Installed,
-                    'production.build_instance.status.scrapped' => BuildStatus::Scrapped,
-                ],
+                'class' => BuildStatus::class,
+                'choice_label' => static fn(BuildStatus $status): string => 'production.build_instance.status.'.$status->value,
                 'data' => $options['default_status'],
             ], static fn(mixed $value): bool => null !== $value))
             ->add('location', TextType::class, [

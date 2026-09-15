@@ -11,12 +11,13 @@ use App\Entity\Production\CustomerProject;
 use App\Entity\Production\CustomerProjectStatus;
 use App\Entity\Production\ProjectMaterialReservation;
 use App\Entity\UserSystem\User;
+use App\Form\Production\RequiredPartsFilterType;
 use App\Repository\Production\CustomerProjectRepository;
-use App\Repository\Production\ProjectMaterialReservationRepository;
 use App\Services\Parts\PartLotWithdrawAddHelper;
 use App\Services\Production\ProductionHistoryRecorder;
 use App\Services\Production\ProductionMaterialPlanner;
 use App\Services\Production\ProductionReservationManager;
+use App\Services\Production\RequiredPartsPlanner;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
@@ -176,40 +177,28 @@ final class MaterialReservationController extends AbstractController
     public function requiredParts(
         Request $request,
         CustomerProjectRepository $projects,
-        ProjectMaterialReservationRepository $reservations,
-        ProductionMaterialPlanner $planner,
+        RequiredPartsPlanner $planner,
     ): Response {
         $this->denyAccessUnlessGranted('@production_material.read');
-        $committed = $projects->findBy(['status' => [CustomerProjectStatus::Commissioned, CustomerProjectStatus::InProduction]], ['projectNumber' => 'ASC']);
+        if ($request->query->has('site') && '' !== $request->query->getString('site')) {
+            $this->denyAccessUnlessGranted('@storelocations.read');
+        }
+        if ($request->query->has('supplier') && '' !== $request->query->getString('supplier')) {
+            $this->denyAccessUnlessGranted('@suppliers.read');
+        }
+        $form = $this->createForm(RequiredPartsFilterType::class, ['missing' => '1'], [
+            'allow_sites' => $this->isGranted('@storelocations.read'),
+            'allow_suppliers' => $this->isGranted('@suppliers.read'),
+            'action' => $this->generateUrl('production_required_parts'),
+        ]);
+        $form->handleRequest($request);
         $rows = [];
-        foreach ($committed as $project) {
-            foreach ($planner->createPlan($project)['items'] as $item) {
-                /** @var Part $part */
-                $part = $item['part'];
-                $partId = $part->getId();
-                if (null === $partId) { continue; }
-                $rows[$partId] ??= ['part' => $part, 'required' => 0, 'allocated' => 0, 'consumed' => 0, 'reserved' => 0, 'projects' => []];
-                $rows[$partId]['required'] += $item['required'];
-                $rows[$partId]['allocated'] += $item['allocated'];
-                $rows[$partId]['consumed'] += $item['consumed'];
-                $rows[$partId]['reserved'] += $item['reserved'];
-                $rows[$partId]['projects'][] = ['project' => $project, 'required' => $item['required'], 'reserved' => $item['reserved'], 'missing' => $item['missing']];
-            }
+        if (! $form->isSubmitted() || $form->isValid()) {
+            $filters = $form->getData();
+            $committed = $projects->findBy(['status' => [CustomerProjectStatus::Commissioned, CustomerProjectStatus::InProduction]], ['projectNumber' => 'ASC']);
+            $rows = $planner->createRows($committed, $filters['site'] ?? null, $filters['supplier'] ?? null, '0' !== ($filters['missing'] ?? '1'));
         }
-        $search = mb_strtolower(trim($request->query->getString('q')));
-        $missingOnly = '0' !== $request->query->getString('missing', '1');
-        foreach ($rows as $partId => &$row) {
-            $physical = (int) floor($row['part']->getAmountSum());
-            $row['reserved_total'] = $reservations->quantityForPart($row['part']);
-            $row['free'] = max(0, $physical - $row['reserved_total']);
-            $row['to_order'] = max(0, $row['required'] - $row['allocated'] - $row['consumed'] - $physical);
-            if (($missingOnly && 0 === $row['to_order']) || ('' !== $search && !str_contains(mb_strtolower($row['part']->getName()), $search))) {
-                unset($rows[$partId]);
-            }
-        }
-        unset($row);
-        uasort($rows, static fn(array $left, array $right): int => strcasecmp($left['part']->getName(), $right['part']->getName()));
 
-        return $this->render('production/required_parts.html.twig', ['rows' => array_values($rows), 'missing_only' => $missingOnly, 'search' => $search]);
+        return $this->render('production/required_parts.html.twig', ['rows' => $rows, 'filter_form' => $form]);
     }
 }

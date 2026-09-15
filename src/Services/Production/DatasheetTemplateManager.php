@@ -47,6 +47,8 @@ final readonly class DatasheetTemplateManager
                 ->setLabel($sourceBlock->getLabel())
                 ->setText($sourceBlock->getText())
                 ->setSourcePath($sourceBlock->getSourcePath())
+                ->setHeaderSourcePath($sourceBlock->getHeaderSourcePath())
+                ->setHeaderFormat($sourceBlock->getHeaderFormat())
                 ->setTextSize($sourceBlock->getTextSize())
                 ->setFontFamily($sourceBlock->getFontFamily())
                 ->setTextAlignment($sourceBlock->getTextAlignment())
@@ -102,6 +104,9 @@ final readonly class DatasheetTemplateManager
                 $errors[] = 'Ein Textbaustein ist vollständig leer.';
             }
             if (DatasheetBlockType::ChildTable === $block->getType()) {
+                if (null !== $block->getHeaderSourcePath() && ! $this->sourceCatalog->isKnownChildSource($block->getHeaderSourcePath())) {
+                    $errors[] = sprintf('Die Spaltenüberschrift der Tabelle „%s“ benötigt eine gültige Datenquelle.', $block->getLabel() ?? 'Ohne Bezeichnung');
+                }
                 if (0 > $block->getMinimumRows() || 100 < $block->getMinimumRows()) {
                     $errors[] = sprintf('Bei der Tabelle „%s“ muss die Mindestzahl der Komponentenspalten zwischen 0 und 100 liegen.', $block->getLabel() ?? 'Ohne Bezeichnung');
                 }

@@ -14,7 +14,7 @@
             {% else %}
                 <form method="post" action="{{ path('production_datasheet_template_draft', {id: template.id}) }}">
                     <input type="hidden" name="_token" value="{{ csrf_token('datasheet_template_draft_' ~ template.id) }}">
-                    <button class="btn btn-primary" type="submit"><i class="fa-solid fa-code-branch fa-fw"></i> Neue Revision</button>
+                    <button class="btn btn-success" type="submit"><i class="fa-solid fa-code-branch fa-fw"></i> Neue Revision</button>
                 </form>
             {% endif %}
         {% endif %}
@@ -24,6 +24,22 @@
         <dt class="col-sm-3">Beschreibung</dt><dd class="col-sm-9">{{ template.description ? template.description|nl2br : '–' }}</dd>
         <dt class="col-sm-3">Status</dt><dd class="col-sm-9">{{ template.active ? 'Aktiv' : 'Inaktiv' }}</dd>
     </dl>
+    {% if is_granted('@production_system_templates.read') %}
+        <div class="mb-3" data-datasheet-system-assignments>
+            <strong>{{ 'production.datasheet.assignment.systems'|trans }}:</strong>
+            {% for system in template.systemTemplates %}
+                <a class="badge text-bg-light border text-decoration-none" href="{{ path('production_template_show', {id: system.id}) }}">{{ system.name }}</a>
+            {% else %}<span class="text-muted">{{ 'production.datasheet.assignment.none'|trans }}</span>{% endfor %}
+        </div>
+    {% endif %}
+    {% if is_granted('@projects.read') %}
+        <div class="mb-3" data-datasheet-project-assignments>
+            <strong>{{ 'production.datasheet.assignment.projects'|trans }}:</strong>
+            {% for project in template.projects %}
+                <a class="badge text-bg-light border text-decoration-none" href="{{ path('project_info', {id: project.id}) }}">{{ project.fullPath }}</a>
+            {% else %}<span class="text-muted">{{ 'production.datasheet.assignment.none'|trans }}</span>{% endfor %}
+        </div>
+    {% endif %}
     <h5>Revisionen</h5>
     <div class="table-responsive"><table class="table table-sm align-middle">
         <thead><tr><th>Revision</th><th>Status</th><th>Veröffentlicht</th><th>Bausteine</th><th></th></tr></thead>

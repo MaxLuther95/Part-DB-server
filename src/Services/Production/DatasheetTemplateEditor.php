@@ -7,6 +7,7 @@ namespace App\Services\Production;
 use App\Entity\Production\DatasheetBlockType;
 use App\Entity\Production\DatasheetFontFamily;
 use App\Entity\Production\DatasheetTableColumn;
+use App\Entity\Production\DatasheetTemplate;
 use App\Entity\Production\DatasheetTemplateBlock;
 use App\Entity\Production\DatasheetTemplateRevision;
 use App\Entity\Production\DatasheetTextAlignment;
@@ -31,6 +32,8 @@ use Doctrine\ORM\EntityManagerInterface;
  *     label: string,
  *     text: string,
  *     sourcePath: ?string,
+ *     headerSourcePath: ?string,
+ *     headerFormat: string,
  *     textSize: string,
  *     fontFamily: string,
  *     textAlignment: string,
@@ -146,6 +149,34 @@ final readonly class DatasheetTemplateEditor
         });
     }
 
+    /** Build an entirely detached preview; never modify managed entities or flush. */
+    public function preview(DatasheetTemplateRevision $revision, string $json): DatasheetTemplateRevision
+    {
+        $revision->assertEditable();
+        $payload = $this->decode($json);
+        $this->assertKnownKeys($revision, $payload);
+        $template = (new DatasheetTemplate())
+            ->setName($revision->getTemplate()?->getName() ?? 'Preview')
+            ->setProductTitle($payload['productTitle']);
+        $preview = (new DatasheetTemplateRevision())
+            ->setTemplate($template)
+            ->setRevisionNumber($revision->getRevisionNumber())
+            ->setChangeNote($payload['changeNote']);
+        foreach ($payload['blocks'] as $position => $data) {
+            // Source keys were checked against the original revision above.
+            // The disposable copy has no persisted block or row identities.
+            foreach ($data['columns'] as &$row) {
+                $row['key'] = null;
+            }
+            unset($row);
+            $block = new DatasheetTemplateBlock();
+            $preview->addBlock($block);
+            $this->applyBlock($block, $data, $position);
+        }
+
+        return $preview;
+    }
+
     /**
      * @param EditorPayload $payload
      */
@@ -257,6 +288,15 @@ final readonly class DatasheetTemplateEditor
         }
         $key = $this->nullableString($data, 'key', 36);
         $sourcePath = $this->nullableString($data, 'sourcePath', 255);
+        $headerSource = $this->nullableString($data + ['headerSourcePath' => null], 'headerSourcePath', 255);
+        $headerFormat = $this->string($data + ['headerFormat' => '{value}'], 'headerFormat', 255);
+        if (DatasheetBlockType::ChildTable === $type) {
+            if (null !== $headerSource && ! $this->sourceCatalog->isKnownChildSource($headerSource)) {
+                throw new \DomainException(sprintf('Die Spaltenüberschrift in Baustein %d verwendet eine unbekannte Datenquelle.', $number));
+            }
+            // The entity shares this validation with all other entry points.
+            (new DatasheetTemplateBlock())->setHeaderFormat($headerFormat);
+        }
         if (DatasheetBlockType::Value === $type && null !== $sourcePath && ! $this->sourceCatalog->isKnownRootSource($sourcePath)) {
             throw new \DomainException(sprintf('Baustein %d verwendet eine unbekannte Datenquelle.', $number));
         }
@@ -307,16 +347,18 @@ final readonly class DatasheetTemplateEditor
             'label' => $this->string($data, 'label', 255),
             'text' => $this->string($data, 'text', 10000),
             'sourcePath' => DatasheetBlockType::Value === $type ? $sourcePath : null,
+            'headerSourcePath' => DatasheetBlockType::ChildTable === $type ? $headerSource : null,
+            'headerFormat' => DatasheetBlockType::ChildTable === $type ? $headerFormat : '{value}',
             'textSize' => $textSize,
             'fontFamily' => $fontFamily,
             'textAlignment' => $textAlignment,
             'textBold' => $this->boolean($data, 'textBold'),
             'textItalic' => $this->boolean($data, 'textItalic'),
             'textUnderlined' => $this->boolean($data, 'textUnderlined'),
-            'layoutColumns' => $layoutColumns,
-            'startNewRow' => $this->boolean($data, 'startNewRow'),
-            'required' => $this->boolean($data, 'required'),
-            'hideIfEmpty' => $this->boolean($data, 'hideIfEmpty'),
+            'layoutColumns' => DatasheetBlockType::Spacer === $type ? 12 : $layoutColumns,
+            'startNewRow' => $this->boolean($data, 'startNewRow') || DatasheetBlockType::Spacer === $type,
+            'required' => $this->boolean($data, 'required') && DatasheetBlockType::Spacer !== $type,
+            'hideIfEmpty' => $this->boolean($data, 'hideIfEmpty') && DatasheetBlockType::Spacer !== $type,
             'minimumRows' => $minimumRows,
             'maximumRows' => $maximumRows,
             'columns' => $rows,
@@ -354,6 +396,8 @@ final readonly class DatasheetTemplateEditor
             ->setLabel($data['label'])
             ->setText($data['text'])
             ->setSourcePath($data['sourcePath'])
+            ->setHeaderSourcePath($data['headerSourcePath'])
+            ->setHeaderFormat($data['headerFormat'])
             ->setTextSize(DatasheetTextSize::from($data['textSize']))
             ->setFontFamily(DatasheetFontFamily::from($data['fontFamily']))
             ->setTextAlignment(DatasheetTextAlignment::from($data['textAlignment']))
@@ -414,6 +458,8 @@ final readonly class DatasheetTemplateEditor
             'label' => $block->getLabel() ?? '',
             'text' => $block->getText() ?? '',
             'sourcePath' => $block->getSourcePath(),
+            'headerSourcePath' => $block->getHeaderSourcePath(),
+            'headerFormat' => $block->getHeaderFormat(),
             'textSize' => $block->getTextSize()
                 ->value,
             'fontFamily' => $block->getFontFamily()

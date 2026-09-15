@@ -1,20 +1,26 @@
 * { box-sizing: border-box; }
 .datasheet-page { color: #20252a; font-family: DejaVu Sans, Arial, sans-serif; font-size: 9.5pt; line-height: 1.35; position: relative; }
-.datasheet-header { border-bottom: 2px solid #24536f; margin-bottom: 7mm; padding-bottom: 3mm; position: relative; }
-.datasheet-header h1 { color: #173b50; font-size: 19pt; margin: 0; padding-right: 30mm; }
-.datasheet-kicker { color: #637783; font-size: 8pt; font-weight: bold; letter-spacing: 1.4pt; }
-.datasheet-revision { bottom: 4mm; color: #637783; font-size: 8pt; position: absolute; right: 0; }
-.datasheet-fixed-fields { border: 1px solid #aebbc3; display: table; margin-bottom: 6mm; table-layout: fixed; width: 100%; }
-.datasheet-fixed-field { border-right: 1px solid #aebbc3; display: table-cell; padding: 2mm 2.5mm; width: 33.333%; }
+.datasheet-header { border-bottom: 1.5px solid #9e3836; margin-bottom: 7mm; padding-bottom: 3mm; position: relative; }
+.datasheet-header h1 { color: #783331; font-size: 16pt; margin: 0; overflow-wrap: anywhere; }
+.datasheet-kicker { color: #775757; font-size: 8pt; font-weight: bold; letter-spacing: 1.4pt; }
+.datasheet-fixed-fields { border: 1px solid #dbc8c7; display: table; margin-bottom: 6mm; table-layout: fixed; width: 100%; }
+.datasheet-fixed-field { border-right: 1px solid #dbc8c7; display: table-cell; padding: 2mm 2.5mm; width: 33.333%; }
 .datasheet-fixed-field:last-child { border-right: 0; }
 .datasheet-fixed-value { font-size: 9pt; min-height: 4mm; overflow-wrap: anywhere; padding-top: .5mm; }
-.datasheet-watermark { color: rgba(190, 70, 40, .16); font-size: 56pt; font-weight: bold; left: 25mm; position: absolute; top: 105mm; transform: rotate(-32deg); z-index: 0; }
+.datasheet-watermark { color: rgba(158, 56, 54, .10); font-size: 56pt; font-weight: bold; left: 25mm; position: absolute; top: 105mm; transform: rotate(-32deg); z-index: 0; }
 .datasheet-body { font-size: 0; margin: 0 -2mm; position: relative; z-index: 1; }
-.datasheet-block { display: inline-block; font-size: 9.5pt; padding: 0 2mm 4mm; vertical-align: top; }
-.datasheet-block-inner { overflow-wrap: anywhere; }
+.datasheet-block { display: inline-block; font-size: 9.5pt; padding: 0; vertical-align: top; }
+.datasheet-block-full { display: block; }
+.datasheet-block-spacer { clear: both; display: block; page-break-inside: avoid; width: 100% !important; }
+.datasheet-block-spacer .datasheet-block-inner { padding: 0; }
+.datasheet-block-spacer .datasheet-spacer { height: 4mm; }
+.datasheet-block-spacer.datasheet-text-size-normal .datasheet-spacer { height: 8mm; }
+.datasheet-block-spacer.datasheet-text-size-large .datasheet-spacer { height: 12mm; }
+.datasheet-block-spacer.datasheet-text-size-extra_large .datasheet-spacer { height: 16mm; }
+.datasheet-block-inner { overflow-wrap: anywhere; padding: 0 2mm 4mm; }
 .datasheet-clear { clear: both; display: block; height: 0; width: 100%; }
-.datasheet-block h2 { border-bottom: 1px solid #8aa1af; color: #24536f; font-size: 13pt; font-weight: normal; margin: 2mm 0 3mm; padding-bottom: 1mm; }
-.datasheet-block h3 { color: #24536f; font-size: 10pt; margin: 0 0 1.5mm; }
+.datasheet-block h2 { border-bottom: 1px solid #dbc8c7; color: #873d3b; font-size: 13pt; font-weight: normal; margin: 2mm 0 3mm; padding-bottom: 1mm; page-break-after: avoid; }
+.datasheet-block h3 { color: #873d3b; font-size: 10pt; margin: 0 0 1.5mm; page-break-after: avoid; }
 .datasheet-text { font-size: 9.5pt; }
 .datasheet-block-heading.datasheet-text-size-small h2 { font-size: 10pt; }
 .datasheet-block-heading.datasheet-text-size-normal h2 { font-size: 13pt; }
@@ -39,15 +45,18 @@
 .datasheet-text-underlined, .datasheet-text-underlined h2, .datasheet-text-underlined h3 { text-decoration: underline; }
 .datasheet-align-center .datasheet-table th, .datasheet-align-center .datasheet-table td { text-align: center; }
 .datasheet-align-right .datasheet-table th, .datasheet-align-right .datasheet-table td { text-align: right; }
-.datasheet-value-label { color: #637783; font-size: 7.5pt; font-weight: bold; text-transform: uppercase; }
-.datasheet-value { border-bottom: 1px solid #aebbc3; min-height: 6mm; padding: 1mm 0; }
-.datasheet-note { background: #f4f7f8; border-left: 2px solid #8aa1af; min-height: 12mm; padding: 2mm; white-space: pre-wrap; }
+.datasheet-value-label { color: #775757; font-size: 7.5pt; font-weight: bold; text-transform: uppercase; }
+.datasheet-value { border-bottom: 1px solid #dbc8c7; min-height: 6mm; padding: 1mm 0; }
+.datasheet-note { background: #fbf7f7; border-left: 2px solid #c79e9c; min-height: 12mm; padding: 2mm; white-space: pre-wrap; }
 .datasheet-table { border-collapse: collapse; width: 100%; }
-.datasheet-table th { background: #24536f; color: white; font-size: 8pt; padding: 1.5mm; text-align: left; }
-.datasheet-table tbody th { background: transparent; border-bottom: 1px solid #aebbc3; color: #20252a; font-weight: normal; }
-.datasheet-table td { border: 1px solid #aebbc3; padding: 1.5mm; }
+.datasheet-table th, .datasheet-table td { border: .6pt solid #dbc8c7; padding: 1.5mm; overflow-wrap: anywhere; }
+.datasheet-table th { background: #f4e9e8; color: #783331; font-size: inherit; text-align: left; }
+.datasheet-table tbody th { background: #fcf9f9; color: #20252a; font-weight: normal; }
+.datasheet-table thead { display: table-header-group; }
+.datasheet-header-warning { color: #923e3b; font-size: 7pt; font-weight: normal; margin-top: 1mm; }
+.datasheet-table tr { page-break-inside: avoid; }
 .datasheet-block-separator { padding-bottom: 2mm; }
-.datasheet-block-separator hr { border: 0; border-top: 1px solid #8aa1af; }
+.datasheet-block-separator hr { border: 0; border-top: 1px solid #c79e9c; }
 .datasheet-page-break { page-break-after: always; }
-.datasheet-footer { color: #637783; font-size: 7pt; }
-.datasheet-logo { color: #24536f; font-size: 10pt; font-weight: bold; letter-spacing: 1pt; }
+.datasheet-footer { border-top: .6pt solid #dbc8c7; color: #775757; font-size: 6.5pt; padding-top: 2mm; text-align: center; }
+.datasheet-logo { display: block; height: auto; margin: 0 auto 1mm; width: 44mm; }

@@ -5,6 +5,10 @@ export default class extends Controller {
 
     connect() {
         this.nextIndex = 0
+        this.listTarget.querySelectorAll('[name]').forEach((field) => {
+            const match = field.name.match(/^additional_notes\[(\d+)\]/)
+            if (match) this.nextIndex = Math.max(this.nextIndex, Number(match[1]) + 1)
+        })
     }
 
     add() {

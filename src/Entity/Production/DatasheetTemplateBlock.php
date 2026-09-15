@@ -40,6 +40,46 @@ class DatasheetTemplateBlock extends AbstractProductionEntity
     #[Assert\Length(max: 255)]
     private ?string $sourcePath = null;
 
+    // Null selects the automatic installation-slot label. Sources are relative
+    // to each child, just like the data rows of a component table.
+    #[ORM\Column(name: 'header_source_path', type: Types::STRING, length: 255, nullable: true)]
+    #[Assert\Length(max: 255)]
+    private ?string $headerSourcePath = null;
+
+    #[ORM\Column(name: 'header_format', type: Types::STRING, length: 255, options: ['default' => '{value}'])]
+    private string $headerFormat = '{value}';
+
+    public function getHeaderSourcePath(): ?string
+    {
+        return $this->headerSourcePath;
+    }
+
+    public function setHeaderSourcePath(?string $source): self
+    {
+        $this->assertEditable();
+        $this->headerSourcePath = '' === trim((string) $source) ? null : trim((string) $source);
+
+        return $this;
+    }
+
+    public function getHeaderFormat(): string
+    {
+        return $this->headerFormat;
+    }
+
+    public function setHeaderFormat(string $format): self
+    {
+        $this->assertEditable();
+        $format = trim($format);
+        if (mb_strlen($format) > 255 || substr_count($format, '{value}') !== 1
+            || strpbrk(str_replace('{value}', '', $format), '{}') !== false) {
+            throw new \DomainException('Die Spaltenüberschrift muss genau einmal {value} enthalten; weitere Platzhalter sind nicht erlaubt (höchstens 255 Zeichen).');
+        }
+        $this->headerFormat = $format;
+
+        return $this;
+    }
+
     #[ORM\Column(name: 'text_size', type: Types::STRING, length: 16, enumType: DatasheetTextSize::class, options: [
         'default' => 'normal',
     ])]

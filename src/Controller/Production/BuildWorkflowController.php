@@ -10,6 +10,7 @@ use App\Entity\Production\BuildStatus;
 use App\Entity\Production\SystemTemplate;
 use App\Entity\UserSystem\User;
 use App\Services\Production\ProductionBuildWorkflow;
+use App\Services\Production\StaleBuildDraftException;
 use Doctrine\ORM\EntityManagerInterface;
 use Psr\Log\LoggerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -25,6 +26,9 @@ final class BuildWorkflowController extends AbstractController
     {
         $this->denyAccessUnlessGranted('@production_build_instances.build');
         $draft = $this->draft($request, $token);
+        if (null !== $changed = $this->changedDraftResponse($draft, $workflow)) {
+            return $changed;
+        }
         $next = $workflow->getNextUnconfiguredNode($draft);
 
         return null !== $next
@@ -37,6 +41,9 @@ final class BuildWorkflowController extends AbstractController
     {
         $this->denyAccessUnlessGranted('@production_build_instances.build');
         $draft = $this->draft($request, $token);
+        if (null !== $changed = $this->changedDraftResponse($draft, $workflow)) {
+            return $changed;
+        }
         $next = $workflow->getNextUnconfiguredNode($draft);
         if ($next !== $node) {
             return $this->redirectToRoute('production_build_workflow_next', ['token' => $token]);
@@ -65,10 +72,14 @@ final class BuildWorkflowController extends AbstractController
     }
 
     #[Route(path: '/details', name: 'production_build_workflow_details', methods: ['GET', 'POST'])]
-    public function details(string $token, Request $request, EntityManagerInterface $entityManager): Response
+    public function details(string $token, Request $request, EntityManagerInterface $entityManager, ProductionBuildWorkflow $workflow, \App\Services\Production\SerialNumberManager $numbers): Response
     {
         $this->denyAccessUnlessGranted('@production_build_instances.build');
         $draft = $this->draft($request, $token);
+        if (null !== $changed = $this->changedDraftResponse($draft, $workflow)) {
+            return $changed;
+        }
+        $errors = [];
         if ($request->isMethod('POST')) {
             if (!$this->isCsrfTokenValid('build_details_'.$token, $request->request->getString('_token'))) { throw $this->createAccessDeniedException('Invalid CSRF token.'); }
             $siteId = $request->request->getInt('site_id');
@@ -78,7 +89,19 @@ final class BuildWorkflowController extends AbstractController
             $selectedSite = $entityManager->find(StorageLocation::class, $siteId);
             if (!$selectedSite instanceof StorageLocation || null !== $selectedSite->getParent()) { $errors[] = 'Bitte einen gültigen Fertigungsstandort wählen.'; }
             foreach ($draft['nodes'] as $key => $node) {
-                $serial = trim((string) ($details[$key]['serial'] ?? ''));
+                $submitted = $details[$key] ?? null;
+                if (!is_array($submitted) || !is_string($submitted['prefix'] ?? '') || !is_string($submitted['number'] ?? '') || !is_string($submitted['notes'] ?? '')) {
+                    $errors[] = $node['name'].': Ungültige Geräteangaben.';
+                    continue;
+                }
+                $prefix = trim((string) ($details[$key]['prefix'] ?? ''));
+                $number = trim((string) ($details[$key]['number'] ?? ''));
+                try { $serial = $numbers->combine($prefix, $number) ?? ''; }
+                catch (\RuntimeException $error) { $errors[] = $node['name'].': '.$error->getMessage(); $serial = ''; }
+                $confirmed = '1' === ($details[$key]['confirmed'] ?? null);
+                if ('' !== $serial && !$confirmed) { $errors[] = $node['name'].': Bitte die Seriennummer prüfen und bestätigen.'; }
+                try { $numbers->validate($workflow->resolveNode($draft, (string) $key)['content'], '' === $serial ? null : $serial); }
+                catch (\RuntimeException $error) { $errors[] = $node['name'].': '.$error->getMessage(); }
                 $notes = trim((string) ($details[$key]['notes'] ?? ''));
                 if ('' === $serial && '' === $notes) { $errors[] = sprintf('%s: Ohne Seriennummer muss in den Notizen ein Grund stehen.', $node['name']); }
                 if ('' !== $serial) {
@@ -87,6 +110,9 @@ final class BuildWorkflowController extends AbstractController
                 }
                 $draft['details'][$key] = [
                     'serial' => $serial,
+                    'prefix' => $prefix,
+                    'number' => $number,
+                    'confirmed_serial' => $confirmed ? $serial : null,
                     'notes' => $notes,
                     'status' => $draft['details'][$key]['status'] ?? BuildStatus::InProgress->value,
                 ];
@@ -106,7 +132,18 @@ final class BuildWorkflowController extends AbstractController
         }
         usort($locations, static fn(StorageLocation $a, StorageLocation $b): int => strcasecmp($a->getFullPath(), $b->getFullPath()));
 
-        return $this->render('production/build_workflow/details.html.twig', ['token' => $token, 'draft' => $draft, 'locations' => $locations, 'errors' => $errors ?? []]);
+        $offsets = [];
+        foreach ($draft['nodes'] as $key => $node) {
+            if (isset($draft['details'][$key]['number'])) { continue; }
+            $content = $workflow->resolveNode($draft, (string) $key)['content'];
+            $range = $numbers->rangeFor($content);
+            $rangeId = $range?->getId() ?? 0;
+            try { $suggestion = $numbers->suggest($content, $offsets[$rangeId] ?? 0); }
+            catch (\RuntimeException $error) { $errors[] = $error->getMessage(); $suggestion = ['prefix' => '', 'number' => '']; }
+            $offsets[$rangeId] = ($offsets[$rangeId] ?? 0) + 1;
+            $draft['details'][$key] = [...($draft['details'][$key] ?? []), ...$suggestion];
+        }
+        return $this->render('production/build_workflow/details.html.twig', ['token' => $token, 'draft' => $draft, 'locations' => $locations, 'errors' => $errors]);
     }
 
     #[Route(path: '/materials', name: 'production_build_workflow_materials', methods: ['GET', 'POST'])]
@@ -116,6 +153,9 @@ final class BuildWorkflowController extends AbstractController
         $this->denyAccessUnlessGranted('@production_material.withdraw');
         $this->denyAccessUnlessGranted('@parts_stock.withdraw');
         $draft = $this->draft($request, $token);
+        if (null !== $changed = $this->changedDraftResponse($draft, $workflow)) {
+            return $changed;
+        }
         $site = $entityManager->find(StorageLocation::class, $draft['site_id']);
         if (!$site instanceof StorageLocation) { return $this->redirectToRoute('production_build_workflow_details', ['token' => $token]); }
         $plan = $workflow->createMaterialPlan($draft, $site);
@@ -157,6 +197,9 @@ final class BuildWorkflowController extends AbstractController
         $this->denyAccessUnlessGranted('@production_material.withdraw');
         $this->denyAccessUnlessGranted('@parts_stock.withdraw');
         $draft = $this->draft($request, $token);
+        if (null !== $changed = $this->changedDraftResponse($draft, $workflow)) {
+            return $changed;
+        }
         $site = $entityManager->find(StorageLocation::class, $draft['site_id']);
         if (!$site instanceof StorageLocation) { return $this->redirectToRoute('production_build_workflow_details', ['token' => $token]); }
         $plan = $workflow->createMaterialPlan($draft, $site);
@@ -186,6 +229,8 @@ final class BuildWorkflowController extends AbstractController
                     $request->getSession()->remove('production_build_'.$token);
                     $this->addFlash('success', 'Der Bau wurde gestartet und das gewählte Material verbindlich ausgebucht.');
                     return $this->redirectToRoute('production_build_instance_show', ['id' => $instance->getId()]);
+                } catch (StaleBuildDraftException $exception) {
+                    return $this->renderChangedDraft($draft, $exception);
                 } catch (\RuntimeException $exception) {
                     $errors[] = $exception->getMessage();
                 } catch (\Throwable $exception) {
@@ -195,7 +240,28 @@ final class BuildWorkflowController extends AbstractController
             }
         }
 
-        return $this->render('production/build_workflow/review.html.twig', ['token' => $token, 'draft' => $draft, 'site' => $site, 'plan' => $plan, 'errors' => $errors]);
+        return $this->render('production/build_workflow/review.html.twig', ['token' => $token, 'draft' => $draft, 'site' => $site, 'plan' => $plan, 'errors' => $errors, 'statuses' => BuildStatus::cases()]);
+    }
+
+    /** @param array<string, mixed> $draft */
+    private function changedDraftResponse(array $draft, ProductionBuildWorkflow $workflow): ?Response
+    {
+        try {
+            $workflow->assertCurrentDraft($draft);
+        } catch (StaleBuildDraftException $exception) {
+            return $this->renderChangedDraft($draft, $exception);
+        }
+
+        return null;
+    }
+
+    /** @param array<string, mixed> $draft */
+    private function renderChangedDraft(array $draft, StaleBuildDraftException $exception): Response
+    {
+        return $this->render('production/build_workflow/changed.html.twig', [
+            'draft' => $draft,
+            'reason' => $exception->getMessage(),
+        ], new Response(status: Response::HTTP_CONFLICT));
     }
 
     /** @return array<string, mixed> */
@@ -203,10 +269,6 @@ final class BuildWorkflowController extends AbstractController
     {
         $draft = $request->getSession()->get('production_build_'.$token);
         if (!is_array($draft)) { throw $this->createNotFoundException('Dieser Bauvorgang ist abgelaufen.'); }
-        if (ProductionBuildWorkflow::DRAFT_VERSION !== ($draft['version'] ?? null)) {
-            $request->getSession()->remove('production_build_'.$token);
-            throw $this->createNotFoundException('Dieser Bauvorgang verwendet noch den alten Ablauf. Bitte starten Sie ihn erneut.');
-        }
         return $draft;
     }
 

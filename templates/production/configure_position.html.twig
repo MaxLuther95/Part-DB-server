@@ -6,12 +6,12 @@
 {% block content %}
     <div class="mb-3">
         <h1 class="h2 mb-1">{{ 'production.project_position.configure'|trans }}: {{ position.name }}</h1>
-        <p class="text-muted mb-0">{{ template.name }} – {{ 'production.project_position.configure_intro'|trans }}</p>
+        <p class="text-muted mb-0">{{ position.contentName }} – {{ 'production.project_position.configure_intro'|trans }}</p>
     </div>
     <div class="card"><div class="card-body">
         {{ form_start(form) }}
         {{ form_errors(form) }}
-        {% for slot in template.slots %}
+        {% for slot in position.slots %}
             <div class="row g-3 align-items-start border-bottom pb-3 mb-3">
                 <div class="{{ slot.maxQuantity > 1 ? 'col-md-8' : 'col-12' }}">{{ form_row(attribute(form, 'content_' ~ slot.id)) }}</div>
                 {% if slot.maxQuantity > 1 %}
@@ -23,7 +23,7 @@
         {% else %}
             <div class="alert alert-info">{{ 'production.system_template.slot.empty'|trans }}</div>
         {% endfor %}
-        <button class="btn btn-success"><i class="fa-solid fa-floppy-disk fa-fw"></i> {{ 'production.action.save'|trans }}</button>
+        <button class="btn btn-primary"><i class="fa-solid fa-floppy-disk fa-fw"></i> {{ 'production.action.save'|trans }}</button>
         <a class="btn btn-outline-secondary" href="{{ path('production_customer_project_show', {id: position.customerProject.id}) }}">{{ 'production.action.cancel'|trans }}</a>
         {{ form_end(form) }}
     </div></div>

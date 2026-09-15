@@ -12,5 +12,6 @@ enum DatasheetBlockType: string
     case Value = 'value';
     case ChildTable = 'child_table';
     case Separator = 'separator';
+    case Spacer = 'spacer';
     case PageBreak = 'page_break';
 }

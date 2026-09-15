@@ -22,14 +22,21 @@ final readonly class ProductionMaterialPlanner
     {
         $requirements = [];
         foreach ($project->getPositions() as $position) {
-            foreach ($position->getBuildProjects() as $templateProject) {
-                foreach ($templateProject->getBomEntries() as $entry) {
-                    $part = $entry->getPart();
-                    if (!$part instanceof Part || null === $part->getId()) { continue; }
-                    $partId = $part->getId();
-                    $requirements[$partId] ??= ['part' => $part, 'required' => 0.0];
-                    $requirements[$partId]['required'] += $entry->getQuantity() * $position->getQuantity();
+            $rows = $position->getDefinition()?->getMaterialRows();
+            if (null === $rows) {
+                $rows = [];
+                foreach ($position->getBuildProjects() as $templateProject) {
+                    foreach ($templateProject->getBomEntries() as $entry) {
+                        if (null !== $entry->getPart()) { $rows[] = ['part' => $entry->getPart(), 'quantity' => $entry->getQuantity()]; }
+                    }
                 }
+            }
+            foreach ($rows as $row) {
+                $part = $row['part'];
+                $partId = $part->getId();
+                if (null === $partId) { continue; }
+                $requirements[$partId] ??= ['part' => $part, 'required' => 0.0];
+                $requirements[$partId]['required'] += $row['quantity'] * $position->getQuantity();
             }
         }
         foreach ($project->getAccessories() as $accessory) {
@@ -215,7 +222,7 @@ final readonly class ProductionMaterialPlanner
                 continue;
             }
 
-            foreach ($template->getSlots() as $slot) {
+            foreach ($position->getSlots() as $slot) {
                 if (!$slot->isRequired()) {
                     continue;
                 }

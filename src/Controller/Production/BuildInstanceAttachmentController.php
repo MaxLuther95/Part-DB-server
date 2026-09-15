@@ -28,6 +28,7 @@ final class BuildInstanceAttachmentController extends AbstractController
     {
         $this->denyAccessUnlessGranted('@production_build_instances.edit');
         $this->assertCsrf('build_instance_attachment_'.$buildInstance->getId(), $request);
+        $this->denyAccessUnlessGranted('read', $buildInstance);
         $file = $request->files->get('attachment');
         if (! $file instanceof UploadedFile) {
             $this->addFlash('error', 'Bitte eine gültige Datei auswählen.');
@@ -72,7 +73,7 @@ final class BuildInstanceAttachmentController extends AbstractController
     ], methods: ['GET'])]
     public function download(BuildInstanceAttachment $attachment, BuildInstanceAttachmentStorage $storage): Response
     {
-        $this->denyAccessUnlessGranted('@production_build_instances.read');
+        $this->denyAccessUnlessGranted('read', $attachment->getBuildInstance() ?? throw $this->createNotFoundException());
         try {
             $path = $storage->getAbsolutePath($attachment);
         } catch (\RuntimeException) {
@@ -98,6 +99,7 @@ final class BuildInstanceAttachmentController extends AbstractController
         $this->denyAccessUnlessGranted('@production_build_instances.edit');
         $this->assertCsrf('delete_build_instance_attachment_'.$attachment->getId(), $request);
         $buildInstance = $attachment->getBuildInstance() ?? throw $this->createNotFoundException();
+        $this->denyAccessUnlessGranted('read', $buildInstance);
         $entityManager->remove($attachment);
         $entityManager->flush();
         $storage->remove($attachment);

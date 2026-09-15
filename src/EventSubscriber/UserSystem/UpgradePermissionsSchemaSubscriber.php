@@ -39,12 +39,12 @@ use Symfony\Component\Security\Core\User\UserInterface;
 /**
  * The purpose of this event subscriber is to check if the permission schema of the current user is up-to-date and upgrade it automatically if needed.
  */
-class UpgradePermissionsSchemaSubscriber implements EventSubscriberInterface
+readonly class UpgradePermissionsSchemaSubscriber implements EventSubscriberInterface
 {
     public function __construct(
-        private readonly Security $security,
-        private readonly PermissionSchemaUpdater $permissionSchemaUpdater,
-        private readonly EntityManagerInterface $entityManager,
+        private Security $security,
+        private PermissionSchemaUpdater $permissionSchemaUpdater,
+        private EntityManagerInterface $entityManager,
     ) {
     }
 

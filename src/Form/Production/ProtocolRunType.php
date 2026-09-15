@@ -7,18 +7,20 @@ namespace App\Form\Production;
 use App\Entity\Production\ProtocolAnswer;
 use App\Entity\Production\ProtocolFieldType;
 use App\Entity\Production\ProtocolRun;
+use App\Entity\Production\ProtocolRunStatus;
 use Symfony\Component\Form\AbstractType;
 use Symfony\Component\Form\Extension\Core\Type\ChoiceType;
-use Symfony\Component\Form\Extension\Core\Type\DateTimeType;
 use Symfony\Component\Form\Extension\Core\Type\DateType;
 use Symfony\Component\Form\Extension\Core\Type\IntegerType;
-use Symfony\Component\Form\Extension\Core\Type\NumberType;
+use Symfony\Component\Form\Extension\Core\Type\HiddenType;
 use Symfony\Component\Form\Extension\Core\Type\TextareaType;
 use Symfony\Component\Form\Extension\Core\Type\TextType;
 use Symfony\Component\Form\FormBuilderInterface;
 use Symfony\Component\Form\FormEvent;
 use Symfony\Component\Form\FormEvents;
+use Symfony\Component\Form\FormError;
 use Symfony\Component\OptionsResolver\OptionsResolver;
+use Symfony\Component\Validator\Constraints\Length;
 
 final class ProtocolRunType extends AbstractType
 {
@@ -26,6 +28,29 @@ final class ProtocolRunType extends AbstractType
     {
         /** @var ProtocolRun $run */
         $run = $options['protocol_run'];
+        $builder->add('edit_version', HiddenType::class, [
+            'mapped' => false,
+            'data' => (string) $run->getVersion(),
+        ]);
+        $builder->add('notes', TextareaType::class, [
+            'mapped' => false,
+            'required' => false,
+            'label' => 'production.protocol.run.notes',
+            'help' => 'production.protocol.run.notes_help',
+            'data' => $run->getNotes(),
+            'constraints' => [new Length(max: 10000)],
+            'attr' => ['rows' => 4, 'maxlength' => 10000],
+        ]);
+        $builder->add('protocol_date', DateType::class, [
+            'mapped' => false,
+            'label' => 'production.protocol.run.date',
+            'widget' => 'single_text',
+            'input' => 'datetime_immutable',
+            'required' => false,
+            // A calendar date must not move when an editor uses a different timezone.
+            'data' => null === $run->getProtocolDate() ? null : new \DateTimeImmutable($run->getProtocolDate()->format('Y-m-d')),
+            'attr' => ['class' => 'form-control-sm'],
+        ]);
         foreach ($run->getRows() as $row) {
             foreach ($row->getAnswers() as $answer) {
                 $field = $answer->getField();
@@ -43,6 +68,20 @@ final class ProtocolRunType extends AbstractType
         }
         $builder->addEventListener(FormEvents::POST_SUBMIT, static function (FormEvent $event) use ($run): void {
             $form = $event->getForm();
+            if (ProtocolRunStatus::Draft !== $run->getStatus()
+                || $form->get('edit_version')->getData() !== (string) $run->getVersion()) {
+                $form->addError(new FormError('Der Laufzettel wurde zwischenzeitlich geändert. Es wurde nichts gespeichert.'));
+
+                return;
+            }
+            $notes = $form->get('notes');
+            if ($notes->isSynchronized() && (null === $notes->getData() || is_string($notes->getData())) && mb_strlen($notes->getData() ?? '') <= 10000) {
+                $run->setNotes($notes->getData());
+            }
+            $date = $form->get('protocol_date');
+            if ($date->isSynchronized() && (null === $date->getData() || $date->getData() instanceof \DateTimeImmutable)) {
+                $run->setProtocolDate($date->getData());
+            }
             foreach ($run->getRows() as $row) {
                 foreach ($row->getAnswers() as $answer) {
                     $name = 'answer_'.$answer->getId();
@@ -72,13 +111,6 @@ final class ProtocolRunType extends AbstractType
         $field = $answer->getField() ?? throw new \LogicException('Answer has no field.');
 
         return match ($field->getType()) {
-            ProtocolFieldType::LongText => [
-                TextareaType::class, [
-                    'attr' => [
-                        'rows' => 3,
-                        'class' => 'form-control-sm',
-                    ],
-                ]],
             ProtocolFieldType::Integer => [
                 IntegerType::class, [
                     'attr' => [
@@ -86,14 +118,7 @@ final class ProtocolRunType extends AbstractType
                     ],
                 ]],
             ProtocolFieldType::Decimal => [
-                NumberType::class, [
-                    'input' => 'string',
-                    'scale' => 9,
-                    'html5' => true,
-                    'attr' => [
-                        'class' => 'form-control-sm',
-                    ],
-                ]],
+                ExactDecimalType::class, []],
             ProtocolFieldType::Boolean => [
                 ChoiceType::class, [
                     'placeholder' => '–',
@@ -125,22 +150,6 @@ final class ProtocolRunType extends AbstractType
                         'class' => 'form-select-sm',
                     ],
                     'choices' => array_combine($field->getOptions() ?? [], $field->getOptions() ?? []),
-                ]],
-            ProtocolFieldType::Date => [
-                DateType::class, [
-                    'widget' => 'single_text',
-                    'input' => 'datetime_immutable',
-                    'attr' => [
-                        'class' => 'form-control-sm',
-                    ],
-                ]],
-            ProtocolFieldType::DateTime => [
-                DateTimeType::class, [
-                    'widget' => 'single_text',
-                    'input' => 'datetime_immutable',
-                    'attr' => [
-                        'class' => 'form-control-sm',
-                    ],
                 ]],
             default => [
                 TextType::class, [

@@ -26,8 +26,6 @@ use App\Form\Type\AttachmentTypeType;
 use App\Settings\SystemSettings\AttachmentsSettings;
 use Symfony\Bundle\SecurityBundle\Security;
 use App\Entity\Attachments\Attachment;
-use App\Entity\Attachments\AttachmentType;
-use App\Form\Type\StructuralEntityType;
 use App\Services\Attachments\AttachmentManager;
 use App\Services\Attachments\AttachmentSubmitHandler;
 use App\Validator\Constraints\UrlOrBuiltin;
@@ -84,7 +82,7 @@ class AttachmentFormType extends AbstractType
             'required' => false,
             'label' => 'attachment.edit.secure_file',
             'mapped' => false,
-            'disabled' => !$this->security->isGranted('@attachments.show_private'),
+            'disabled' => $this->settings->forcePrivateAttachments || !$this->security->isGranted('@attachments.show_private'),
             'help' => 'attachment.edit.secure_file.help',
         ]);
 
@@ -165,10 +163,10 @@ class AttachmentFormType extends AbstractType
         //Check the secure file checkbox, if file is in securefile location
         $builder->get('secureFile')->addEventListener(
             FormEvents::PRE_SET_DATA,
-            static function (FormEvent $event): void {
+            function (FormEvent $event): void {
                 $attachment = $event->getForm()->getParent()->getData();
                 if ($attachment instanceof Attachment) {
-                    $event->setData($attachment->isSecure());
+                    $event->setData($this->settings->forcePrivateAttachments || $attachment->isSecure());
                 }
             }
         );

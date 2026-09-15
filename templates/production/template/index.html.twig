@@ -1,4 +1,4 @@
-{% extends 'base.html.twig' %}
+{% extends 'main_card.html.twig' %}
 {% trans_default_domain 'production' %}
 
 {% macro template_row(template, depth, node_key, parent_key, children_by_parent) %}
@@ -40,18 +40,17 @@
     </style>
 {% endblock %}
 
-{% block content %}
-    <div class="d-flex justify-content-between align-items-center mb-3">
-        <div>
-            <h1 class="h2 mb-1"><i class="fa-solid fa-diagram-project fa-fw"></i> {{ 'production.system_template.plural'|trans }}</h1>
-            <p class="text-muted mb-0">{{ 'production.system_template.intro'|trans }}</p>
-        </div>
+{% block card_title %}<i class="fa-solid fa-box-archive fa-fw"></i> {{ 'production.system_template.plural'|trans }}{% endblock %}
+
+{% block card_content %}
+    <div class="d-flex justify-content-end mb-3">
         {% if (is_granted('@users.edit_permissions') or is_granted('@groups.edit_permissions')) and is_granted('@production_system_templates.create') %}
             <a class="btn btn-success" href="{{ path('production_template_new') }}"><i class="fa-solid fa-plus fa-fw"></i> {{ 'production.system_template.new'|trans }}</a>
         {% endif %}
     </div>
+    <p class="text-muted">{{ 'production.system_template.intro'|trans }}</p>
 
-    <div class="card" data-system-template-tree><div class="table-responsive"><table class="table table-hover align-middle mb-0">
+    <div data-system-template-tree><div class="table-responsive"><table class="table table-hover align-middle">
         <thead><tr><th>{{ 'production.system_template.name'|trans }}</th><th>{{ 'production.system_template.base_project'|trans }}</th><th>{{ 'production.system_template.slot.plural'|trans }}</th><th>{{ 'production.system_template.active'|trans }}</th><th></th></tr></thead>
         <tbody>
         {% for template in root_templates %}

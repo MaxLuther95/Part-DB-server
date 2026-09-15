@@ -17,6 +17,7 @@ use App\Repository\Production\DatasheetDocumentRepository;
 use App\Repository\Production\DatasheetTemplateRepository;
 use App\Services\Production\DatasheetDocumentStorage;
 use App\Services\Production\DatasheetRenderer;
+use App\Services\Production\IncompleteReleaseConfirmation;
 use App\Services\Production\DatasheetSourceCatalog;
 use App\Services\Production\DatasheetTemplateEditor;
 use App\Services\Production\DatasheetTemplateManager;
@@ -50,7 +51,10 @@ final class DatasheetTemplateController extends AbstractController
         $this->denyTemplateAdministration();
         $template = (new DatasheetTemplate())->setName('New data sheet')
             ->setProductTitle('Product Data Sheet');
-        $form = $this->createForm(DatasheetTemplateType::class, $template);
+        $form = $this->createForm(DatasheetTemplateType::class, $template, [
+            'allow_system_assignment' => $this->isGranted('@production_system_templates.read'),
+            'allow_project_assignment' => $this->isGranted('@projects.read'),
+        ]);
         $form->handleRequest($request);
         if ($form->isSubmitted() && $form->isValid()) {
             $revision = $manager->createInitialDraft($template);
@@ -90,7 +94,10 @@ final class DatasheetTemplateController extends AbstractController
     {
         $this->denyAccessUnlessGranted('@production_datasheet_templates.edit');
         $this->denyTemplateAdministration();
-        $form = $this->createForm(DatasheetTemplateType::class, $template);
+        $form = $this->createForm(DatasheetTemplateType::class, $template, [
+            'allow_system_assignment' => $this->isGranted('@production_system_templates.read'),
+            'allow_project_assignment' => $this->isGranted('@projects.read'),
+        ]);
         $form->handleRequest($request);
         if ($form->isSubmitted() && $form->isValid()) {
             $entityManager->flush();
@@ -194,6 +201,27 @@ final class DatasheetTemplateController extends AbstractController
         }
     }
 
+    #[Route(path: '/datasheet-revisions/{id}/editor-preview.pdf', name: 'production_datasheet_editor_pdf', requirements: ['id' => '\\d+'], methods: ['POST'])]
+    public function editorPreviewPdf(DatasheetTemplateRevision $revision, Request $request, DatasheetTemplateEditor $editor, DatasheetRenderer $renderer): Response
+    {
+        $this->denyAccessUnlessGranted('@production_datasheet_templates.edit');
+        $this->denyTemplateAdministration();
+        $this->assertDraft($revision);
+        $this->assertCsrf('datasheet_revision_edit_'.$revision->getId(), $request);
+        try {
+            $preview = $editor->preview($revision, $request->request->getString('editor_payload'));
+        } catch (\DomainException $exception) {
+            return $this->json(['error' => $exception->getMessage()], Response::HTTP_UNPROCESSABLE_ENTITY, ['Cache-Control' => 'private, no-store']);
+        }
+
+        return new Response($renderer->renderPdf($preview), Response::HTTP_OK, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'inline; filename="datasheet-editor-preview.pdf"',
+            'Cache-Control' => 'private, no-store, max-age=0',
+            'X-Content-Type-Options' => 'nosniff',
+        ]);
+    }
+
     #[Route(path: '/datasheet-revisions/{id}/preview.pdf', name: 'production_datasheet_revision_pdf', requirements: [
         'id' => '\\d+',
     ], methods: ['GET'])]
@@ -206,7 +234,7 @@ final class DatasheetTemplateController extends AbstractController
         $instanceId = $request->query->getInt('build_instance');
         $instance = 0 < $instanceId ? $buildInstances->find($instanceId) : null;
         if (null !== $instance) {
-            $this->denyAccessUnlessGranted('@production_build_instances.read');
+            $this->denyAccessUnlessGranted('read', $instance);
         }
         $pdf = $renderer->renderPdf($revision, $instance, true);
         $filename = sprintf('datasheet-%d-v%d-preview.pdf', $revision->getTemplate()?->getId(), $revision->getRevisionNumber());
@@ -226,8 +254,8 @@ final class DatasheetTemplateController extends AbstractController
     public function prepare(BuildInstance $instance, DatasheetTemplate $template, DatasheetRenderer $renderer): Response
     {
         $this->denyAccessUnlessGranted('@production_datasheets.create');
-        $this->denyAccessUnlessGranted('@production_build_instances.read');
-        $revision = $this->usablePublishedRevision($template);
+        $this->denyAccessUnlessGranted('read', $instance);
+        $revision = $this->usablePublishedRevision($template, $instance);
 
         return $this->render('production/datasheet/prepare.html.twig', [
             'instance' => $instance,
@@ -245,9 +273,9 @@ final class DatasheetTemplateController extends AbstractController
     public function instancePreviewPdf(BuildInstance $instance, DatasheetTemplate $template, Request $request, DatasheetRenderer $renderer): Response
     {
         $this->denyAccessUnlessGranted('@production_datasheets.create');
-        $this->denyAccessUnlessGranted('@production_build_instances.read');
+        $this->denyAccessUnlessGranted('read', $instance);
         $this->assertCsrf('datasheet_preview_'.$instance->getId().'_'.$template->getId(), $request);
-        $revision = $this->usablePublishedRevision($template);
+        $revision = $this->usablePublishedRevision($template, $instance);
         $notes = $this->submittedNotes($revision, $request);
         $runSelections = $this->submittedRunSelections($request);
         $additionalNotes = $this->submittedAdditionalNotes($request);
@@ -274,29 +302,42 @@ final class DatasheetTemplateController extends AbstractController
         DatasheetDocumentRepository $documentRepository,
         DatasheetRenderer $renderer,
         DatasheetDocumentStorage $storage,
+        IncompleteReleaseConfirmation $confirmation,
     ): Response {
         $this->denyAccessUnlessGranted('@production_datasheets.create');
-        $this->denyAccessUnlessGranted('@production_build_instances.read');
+        $this->denyAccessUnlessGranted('read', $instance);
         $this->assertCsrf('datasheet_preview_'.$instance->getId().'_'.$template->getId(), $request);
-        $revision = $this->usablePublishedRevision($template);
+        $revision = $this->usablePublishedRevision($template, $instance);
         $notes = $this->submittedNotes($revision, $request);
         $runSelections = $this->submittedRunSelections($request);
         $additionalNotes = $this->submittedAdditionalNotes($request);
         $view = $renderer->createView($revision, $instance, false, $notes, $runSelections, $additionalNotes);
-        $errors = $renderer->validateForRelease($view);
-        if ([] !== $errors) {
-            foreach ($errors as $error) {
-                $this->addFlash('error', $error);
-            }
-
-            return $this->redirectToRoute('production_datasheet_prepare', [
-                'instance' => $instance->getId(),
-                'template' => $template->getId(),
-            ]);
+        $issues = $renderer->releaseIssues($view);
+        $errors = $issues['errors'];
+        $warnings = $issues['warnings'];
+        $snapshot = $renderer->createSourceSnapshot($view, $runSelections);
+        $confirmationState = $snapshot;
+        unset($confirmationState['generated_at']);
+        $confirmationState['warnings'] = $warnings;
+        $tokenId = $confirmation->tokenId('datasheet_'.$instance->getId().'_'.$template->getId(), $confirmationState);
+        if ([] !== $errors || ([] !== $warnings && ! $confirmation->isAccepted($request, $tokenId))) {
+            return $this->render('production/datasheet/prepare.html.twig', [
+                'instance' => $instance,
+                'template' => $template,
+                'revision' => $revision,
+                'datasheet_view' => $view,
+                'run_choices' => $renderer->collectRunChoices($revision, $instance),
+                'submitted_notes' => $notes,
+                'selected_runs' => $runSelections,
+                'additional_notes' => $additionalNotes,
+                'release_errors' => $errors,
+                'incomplete_warnings' => $warnings,
+                'incomplete_confirmation' => $tokenId,
+            ], new Response(status: Response::HTTP_UNPROCESSABLE_ENTITY));
         }
 
         $pdf = $renderer->renderPdf($revision, $instance, false, $notes, $runSelections, $additionalNotes);
-        $snapshot = $renderer->createSourceSnapshot($view, $runSelections);
+        $snapshot['accepted_incomplete_fields'] = $warnings;
         $document = null;
         try {
             $document = $entityManager->wrapInTransaction(function () use ($entityManager, $documentRepository, $storage, $pdf, $snapshot, $instance, $template, $revision, &$document): DatasheetDocument {
@@ -335,6 +376,7 @@ final class DatasheetTemplateController extends AbstractController
     public function download(DatasheetDocument $document, DatasheetDocumentStorage $storage): Response
     {
         $this->denyAccessUnlessGranted('@production_datasheets.read');
+        $this->denyAccessUnlessGranted('read', $document->getBuildInstance() ?? throw $this->createNotFoundException());
 
         return $storage->createDownloadResponse($document);
     }
@@ -367,11 +409,11 @@ final class DatasheetTemplateController extends AbstractController
         return $user instanceof User ? $user : null;
     }
 
-    private function usablePublishedRevision(DatasheetTemplate $template): DatasheetTemplateRevision
+    private function usablePublishedRevision(DatasheetTemplate $template, BuildInstance $instance): DatasheetTemplateRevision
     {
         $revision = $template->getPublishedRevision();
-        if (! $template->isActive() || ! $revision instanceof DatasheetTemplateRevision) {
-            throw $this->createNotFoundException('The datasheet template is not active or has no published revision.');
+        if (! $template->isActive() || ! $revision instanceof DatasheetTemplateRevision || ! $template->appliesTo($instance)) {
+            throw $this->createNotFoundException('No active published datasheet template is assigned to this build type.');
         }
 
         return $revision;

@@ -15,7 +15,7 @@
             border: 1px solid var(--bs-border-color);
             border-radius: .5rem;
             display: grid;
-            grid-template-columns: 15rem minmax(39rem, 1fr) 23rem;
+            grid-template-columns: 15rem minmax(0, 1fr) 23rem;
             height: calc(100vh - 12.5rem);
             min-height: 45rem;
             overflow: hidden;
@@ -69,13 +69,17 @@
             box-shadow: 0 .3rem 1.4rem rgba(0, 0, 0, .2);
             margin: 0 auto;
             min-height: 297mm;
-            padding: 24mm 14mm 20mm;
+            padding: 9mm 14mm 30mm;
             width: 210mm;
         }
-        .datasheet-designer-page .datasheet-footer { bottom: 7mm; display: flex; justify-content: space-between; left: 14mm; position: absolute; right: 14mm; }
+        .datasheet-designer-page .datasheet-footer { bottom: 11mm; left: 14mm; position: absolute; right: 14mm; }
+        .datasheet-designer-pdf-frame { background: #ddd; border: 0; height: 78vh; min-height: 35rem; width: 100%; }
+        .datasheet-designer-workspace[hidden] { display: none; }
         .datasheet-designer-page .datasheet-body { min-height: 170mm; }
         .datasheet-designer-page .datasheet-text { white-space: pre-line; }
         .datasheet-designer-canvas-block { cursor: pointer; min-height: 8mm; position: relative; }
+        .datasheet-designer-canvas-block.datasheet-block-spacer { min-height: 0; }
+        .datasheet-designer-page .datasheet-spacer { outline: 1px dashed #dbc8c7; outline-offset: -1px; color: #775757; font-size: 7pt; line-height: 4mm; text-align: center; }
         .datasheet-designer-canvas-block::after {
             border: 2px solid transparent;
             border-radius: .2rem;
@@ -131,7 +135,7 @@
         .datasheet-designer-status.is-dirty { color: var(--bs-warning-text-emphasis); }
         .datasheet-designer-status.is-clean { color: var(--bs-success-text-emphasis); }
         @media (max-width: 1399.98px) {
-            .datasheet-designer-workspace { grid-template-columns: 13rem minmax(39rem, 1fr) 20rem; }
+            .datasheet-designer-workspace { grid-template-columns: 13rem minmax(0, 1fr) 20rem; }
         }
         @media (max-width: 1099.98px) {
             .datasheet-designer-workspace { display: block; height: auto; min-height: 0; overflow: visible; }
@@ -146,6 +150,7 @@
     <form method="post"
           class="datasheet-designer-shell"
           data-controller="production--datasheet-designer"
+          data-production--datasheet-designer-preview-url-value="{{ path('production_datasheet_editor_pdf', {id: revision.id}) }}"
           data-action="submit->production--datasheet-designer#prepareSubmit">
         <input type="hidden" name="_token" value="{{ csrf_token('datasheet_revision_edit_' ~ revision.id) }}">
         <textarea name="editor_payload" hidden data-production--datasheet-designer-target="payload">{{ editor_state|json_encode }}</textarea>
@@ -160,33 +165,48 @@
                 <span class="text-muted">· Entwurf v{{ revision.revisionNumber }}</span>
                 <div class="datasheet-designer-status is-clean" data-production--datasheet-designer-target="status">Alle Änderungen gespeichert</div>
             </div>
-            <button class="btn btn-outline-secondary" type="button" data-action="production--datasheet-designer#selectDocument">
-                <i class="fa-solid fa-file-lines fa-fw"></i> Dokument
-            </button>
+            <div class="d-flex flex-wrap justify-content-end gap-2 ms-auto">
             <a class="btn btn-outline-secondary" target="_blank" rel="noopener" href="{{ path('production_datasheet_revision_pdf', {id: revision.id}) }}">
                 <i class="fa-solid fa-file-pdf fa-fw"></i> Gespeicherte PDF-Vorschau
             </a>
+            <button class="btn btn-outline-primary" type="button" data-production--datasheet-designer-target="previewButton" data-action="production--datasheet-designer#previewPdf">
+                <i class="fa-solid fa-file-pdf fa-fw"></i> Aktuelle Seitenvorschau
+            </button>
             <button class="btn btn-primary" type="submit">
                 <i class="fa-solid fa-floppy-disk fa-fw"></i> Entwurf speichern
             </button>
+            {% if is_granted('@production_datasheet_templates.publish') %}
+                <button class="btn btn-success" type="submit" form="datasheet-publish" data-action="production--datasheet-designer#beforePublish"><i class="fa-solid fa-check fa-fw"></i> Revision veröffentlichen</button>
+            {% endif %}
+            </div>
         </div>
 
-        <div class="datasheet-designer-workspace">
+        <section hidden data-production--datasheet-designer-target="previewPanel" aria-label="Mehrseitige PDF-Vorschau">
+            <div class="d-flex flex-wrap align-items-center gap-3 p-2 border rounded-top">
+                <button class="btn btn-outline-secondary" type="button" data-action="production--datasheet-designer#closePreview">Zurück zum Bearbeiten</button>
+                <span>Originale PDF-Seiten · einschließlich ungespeicherter Änderungen · keine Speicherung oder Freigabe</span>
+                <a target="_blank" rel="noopener" data-turbo="false" data-production--datasheet-designer-target="previewLink">PDF separat öffnen</a>
+            </div>
+            <iframe class="datasheet-designer-pdf-frame" title="Aktuelle mehrseitige Datenblattvorschau" data-production--datasheet-designer-target="previewFrame"></iframe>
+        </section>
+
+        <div class="datasheet-designer-workspace" data-production--datasheet-designer-target="workspace">
             <aside class="datasheet-designer-sidebar datasheet-designer-sidebar-left" aria-label="Bausteine und Reihenfolge">
                 <div class="datasheet-designer-panel-heading">Bausteine</div>
                 <div class="datasheet-designer-palette">
-                    <button class="btn btn-outline-primary" type="button" data-action="production--datasheet-designer#addBlock" data-block-type="heading"><i class="fa-solid fa-heading"></i><span>Überschrift</span></button>
-                    <button class="btn btn-outline-primary" type="button" data-action="production--datasheet-designer#addBlock" data-block-type="static_text"><i class="fa-solid fa-align-left"></i><span>Fester Text</span></button>
-                    <button class="btn btn-outline-primary" type="button" data-action="production--datasheet-designer#addBlock" data-block-type="editable_note"><i class="fa-solid fa-note-sticky"></i><span>Freie Notiz</span></button>
-                    <button class="btn btn-outline-primary" type="button" data-action="production--datasheet-designer#addBlock" data-block-type="value"><i class="fa-solid fa-database"></i><span>Zugeordneter Wert</span></button>
-                    <button class="btn btn-outline-primary" type="button" data-action="production--datasheet-designer#addBlock" data-block-type="child_table"><i class="fa-solid fa-table"></i><span>Komponententabelle</span></button>
-                    <button class="btn btn-outline-primary" type="button" data-action="production--datasheet-designer#addBlock" data-block-type="separator"><i class="fa-solid fa-minus"></i><span>Trennlinie</span></button>
-                    <button class="btn btn-outline-primary" type="button" data-action="production--datasheet-designer#addBlock" data-block-type="page_break"><i class="fa-solid fa-file-arrow-down"></i><span>Seitenumbruch</span></button>
+                    <button class="btn btn-outline-success" type="button" data-action="production--datasheet-designer#addBlock" data-block-type="heading"><i class="fa-solid fa-heading"></i><span>Überschrift</span></button>
+                    <button class="btn btn-outline-success" type="button" data-action="production--datasheet-designer#addBlock" data-block-type="static_text"><i class="fa-solid fa-align-left"></i><span>Fester Text</span></button>
+                    <button class="btn btn-outline-success" type="button" data-action="production--datasheet-designer#addBlock" data-block-type="editable_note"><i class="fa-solid fa-note-sticky"></i><span>Freie Notiz</span></button>
+                    <button class="btn btn-outline-success" type="button" data-action="production--datasheet-designer#addBlock" data-block-type="value"><i class="fa-solid fa-database"></i><span>Zugeordneter Wert</span></button>
+                    <button class="btn btn-outline-success" type="button" data-action="production--datasheet-designer#addBlock" data-block-type="child_table"><i class="fa-solid fa-table"></i><span>Komponententabelle</span></button>
+                    <button class="btn btn-outline-success" type="button" data-action="production--datasheet-designer#addBlock" data-block-type="separator"><i class="fa-solid fa-minus"></i><span>Trennlinie</span></button>
+                    <button class="btn btn-outline-success" type="button" data-action="production--datasheet-designer#addBlock" data-block-type="spacer"><i class="fa-solid fa-arrows-up-down"></i><span>Leerraum</span></button>
+                    <button class="btn btn-outline-success" type="button" data-action="production--datasheet-designer#addBlock" data-block-type="page_break"><i class="fa-solid fa-file-arrow-down"></i><span>Seitenumbruch</span></button>
                 </div>
 
                 <div class="datasheet-designer-panel-heading border-top">Reihenfolge</div>
                 <button class="btn btn-light datasheet-designer-document-button px-3 py-2" type="button" data-action="production--datasheet-designer#selectDocument" data-production--datasheet-designer-target="documentLayer">
-                    <i class="fa-solid fa-file-lines fa-fw text-primary"></i> Dokumentrahmen
+                    <i class="fa-solid fa-file-lines fa-fw text-primary"></i> Dokumenteinstellungen
                 </button>
                 <ol class="datasheet-designer-layer-list" data-production--datasheet-designer-target="layers"></ol>
             </aside>
@@ -196,7 +216,6 @@
                     <header class="datasheet-header" data-action="click->production--datasheet-designer#selectDocument">
                         <div class="datasheet-kicker">DATA SHEET</div>
                         <h1 data-production--datasheet-designer-target="pageTitle"></h1>
-                        <div class="datasheet-revision">Revision {{ revision.revisionNumber }}</div>
                     </header>
                     <section class="datasheet-fixed-fields" aria-label="Document identification" data-action="click->production--datasheet-designer#selectDocument">
                         <div class="datasheet-fixed-field"><div class="datasheet-value-label">Customer</div><div class="datasheet-fixed-value">—</div></div>
@@ -206,7 +225,7 @@
                     <div class="datasheet-watermark">DRAFT</div>
                     <main class="datasheet-body" data-production--datasheet-designer-target="canvas"></main>
                     <footer class="datasheet-footer" data-action="click->production--datasheet-designer#selectDocument">
-                        <div class="datasheet-logo" aria-label="Magnicon">MAGNICON</div>
+                        <img class="datasheet-logo" src="{{ asset('img/magnicon-logo.jpg') }}" alt="Magnicon GmbH">
                         <div>Data sheet · <span data-production--datasheet-designer-target="footerTitle"></span> · Revision {{ revision.revisionNumber }}</div>
                     </footer>
                 </article>
@@ -248,6 +267,7 @@
                                 <option value="value">Zugeordneter Einzelwert</option>
                                 <option value="child_table">Komponententabelle</option>
                                 <option value="separator">Trennlinie</option>
+                                <option value="spacer">Leerraum</option>
                                 <option value="page_break">Seitenumbruch</option>
                             </select>
                         </div>
@@ -275,6 +295,20 @@
                             </div>
                         </div>
 
+                        <section class="datasheet-designer-section" data-designer-setting="table">
+                            <div class="datasheet-designer-section-title">Spaltenüberschriften</div>
+                            <div class="datasheet-designer-field">
+                                <label class="form-label" for="datasheet-header-source">Quelle je eingebauter Instanz</label>
+                                <select class="form-select" id="datasheet-header-source" data-production--datasheet-designer-target="headerSource" data-block-property="headerSourcePath" data-action="change->production--datasheet-designer#blockChanged"></select>
+                                <div class="form-text">Automatisch: Name des Einbauplatzes, bei mehrfacher Belegung mit Nummer. Alternativ einen Instanzwert oder ein Laufzettelfeld auswählen.</div>
+                            </div>
+                            <div class="datasheet-designer-field">
+                                <label class="form-label" for="datasheet-header-format">Beschriftung mit Textzusatz</label>
+                                <input class="form-control" id="datasheet-header-format" type="text" maxlength="255" data-block-property="headerFormat" data-action="input->production--datasheet-designer#blockChanged">
+                                <div class="form-text">Genau einmal <code>{value}</code> verwenden, z. B. <code>Board {value}</code> oder <code>Channel {value}</code>. Reiner Text, kein HTML oder Programmcode.</div>
+                            </div>
+                            <p class="small text-muted">Ohne konkrete Instanz zeigt die Vorschau Platzhalter. Fehlende oder doppelte Überschriften werden in der Geräte-PDF-Vorschau markiert, ohne sie automatisch umzunummerieren.</p>
+                        </section>
                         <section class="datasheet-designer-section" data-designer-setting="typography">
                             <div class="datasheet-designer-section-title">Schrift</div>
                             <div class="row g-2">
@@ -307,6 +341,16 @@
                                     <button class="btn btn-outline-secondary" type="button" title="Rechtsbündig" data-choice-property="textAlignment" data-choice-value="right" data-action="production--datasheet-designer#chooseBlockProperty"><i class="fa-solid fa-align-right"></i></button>
                                 </div>
                             </div>
+                        </section>
+
+                        <section class="datasheet-designer-section" data-designer-setting="spacing">
+                            <div class="datasheet-designer-section-title">Leerzeilen</div>
+                            <div class="datasheet-designer-segmented" role="group" aria-label="Höhe des Leerraums">
+                                {% for size, lines in {small: 1, normal: 2, large: 3, extra_large: 4} %}
+                                    <button class="btn btn-sm btn-outline-primary" type="button" data-choice-property="textSize" data-choice-value="{{ size }}" data-action="production--datasheet-designer#chooseBlockProperty">{{ lines }} {{ lines == 1 ? 'Zeile' : 'Zeilen' }}</button>
+                                {% endfor %}
+                            </div>
+                            <div class="form-text">Eine Leerzeile entspricht 4 mm. Der Abstand gilt über die gesamte Breite; die Markierung erscheint nur im Editor, nicht im PDF.</div>
                         </section>
 
                         <section class="datasheet-designer-section" data-designer-setting="layout">
@@ -344,7 +388,7 @@
                                     <div class="datasheet-designer-section-title mb-0">Tabellenzeilen (Y-Achse)</div>
                                     <div class="small text-muted">Eingebaute Instanzen bilden die Spalten (X-Achse).</div>
                                 </div>
-                                <button class="btn btn-sm btn-primary ms-auto" type="button" data-action="production--datasheet-designer#addTableRow"><i class="fa-solid fa-plus fa-fw"></i> Zeile</button>
+                                <button class="btn btn-sm btn-success ms-auto" type="button" data-action="production--datasheet-designer#addTableRow"><i class="fa-solid fa-plus fa-fw"></i> Zeile</button>
                             </div>
                             <div data-production--datasheet-designer-target="tableRows"></div>
                             <div class="row g-2">
@@ -365,14 +409,8 @@
     </form>
 
     {% if is_granted('@production_datasheet_templates.publish') %}
-        <div class="card border-success mt-3">
-            <div class="card-body d-flex flex-wrap align-items-center gap-3">
-                <div class="flex-grow-1"><strong>Revision veröffentlichen</strong><br><span class="text-muted">Speichere und prüfe den Entwurf zuerst. Eine veröffentlichte Revision bleibt anschließend unveränderlich.</span></div>
-                <form method="post" action="{{ path('production_datasheet_revision_publish', {id: revision.id}) }}" {{ stimulus_controller('elements/delete_btn') }} {{ stimulus_action('elements/delete_btn', 'submit', 'submit') }} data-delete-title="Datenblattrevision veröffentlichen" data-delete-message="Nach der Veröffentlichung kann diese Revision nicht mehr verändert werden." data-delete-message-text>
+                <form id="datasheet-publish" method="post" action="{{ path('production_datasheet_revision_publish', {id: revision.id}) }}" {{ stimulus_controller('elements/delete_btn') }} {{ stimulus_action('elements/delete_btn', 'submit', 'submit') }} data-delete-title="Datenblattrevision veröffentlichen" data-delete-message="Die gespeicherte Revision veröffentlichen? Nach der Veröffentlichung kann diese Revision nicht mehr verändert werden." data-delete-message-text>
                     <input type="hidden" name="_token" value="{{ csrf_token('datasheet_revision_publish_' ~ revision.id) }}">
-                    <button class="btn btn-success" type="submit"><i class="fa-solid fa-check fa-fw"></i> Revision veröffentlichen</button>
                 </form>
-            </div>
-        </div>
     {% endif %}
 {% endblock %}

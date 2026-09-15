@@ -3,7 +3,39 @@
 {% block title %}Benötigte Teile{% endblock %}
 {% block card_title %}<i class="fa-solid fa-cart-flatbed fa-fw"></i> Benötigte Teile aus beauftragten Aufträgen{% endblock %}
 {% block card_content %}
-    <div class="alert alert-info">Berücksichtigt werden ausschließlich Aufträge mit dem Status „Beauftragt“ oder „In Produktion“. Aufträge in Planung erzeugen keinen Bestellbedarf.</div>
-    <form class="row g-2 mb-3" method="get"><input type="hidden" name="missing" value="{{ missing_only ? 1 : 0 }}"><div class="col"><input class="form-control" name="q" value="{{ search }}" placeholder="Bauteil suchen"></div><div class="col-auto"><div class="btn-group"><a class="btn {{ missing_only ? 'btn-primary' : 'btn-outline-primary' }}" href="{{ path('production_required_parts', {missing: 1, q: search}) }}">Nur zu bestellen</a><a class="btn {{ not missing_only ? 'btn-primary' : 'btn-outline-primary' }}" href="{{ path('production_required_parts', {missing: 0, q: search}) }}">Alle benötigten</a></div></div><div class="col-auto"><button class="btn btn-secondary"><i class="fa-solid fa-search fa-fw"></i> Filtern</button></div></form>
-    <div class="table-responsive"><table class="table table-hover align-middle"><thead><tr><th>Bauteil</th><th>Bedarf</th><th>Reserviert</th><th>Auftragsbestand</th><th>Verbraucht</th><th>Frei</th><th>Zu bestellen</th></tr></thead><tbody>{% for row in rows %}<tr><td><a href="{{ path('part_info', {id: row.part.id}) }}"><strong>{{ row.part.name }}</strong></a><details class="small mt-1"><summary class="text-muted">{{ row.projects|length }} Auftragszuordnungen</summary>{% for detail in row.projects %}<div><a href="{{ path('production_customer_project_show', {id: detail.project.id}) }}">{{ detail.project.projectNumber }}</a>: {{ detail.required }} benötigt, {{ detail.reserved }} reserviert{% if detail.missing > 0 %}, <span class="text-danger">{{ detail.missing }} fehlt</span>{% endif %}</div>{% endfor %}</details></td><td>{{ row.required }}</td><td>{{ row.reserved }}</td><td>{{ row.allocated }}</td><td>{{ row.consumed }}</td><td>{{ row.free }}</td><td>{% if row.to_order > 0 %}<span class="badge bg-danger fs-6">{{ row.to_order }}</span>{% else %}<span class="badge bg-success">0</span>{% endif %}</td></tr>{% else %}<tr><td colspan="7" class="text-muted text-center py-4">Für den gewählten Filter bestehen keine Bedarfe.</td></tr>{% endfor %}</tbody></table></div>
+    <p class="text-muted">{{ 'production.required_parts.help'|trans }}</p>
+    {{ form_start(filter_form, {attr: {class: 'row g-3 align-items-end mb-3', 'data-required-parts-filter': ''}}) }}
+        {{ form_errors(filter_form) }}
+        {% if filter_form.site is defined %}<div class="col-md-4">{{ form_label(filter_form.site, null, {label_attr: {class: 'w-100 text-start'}}) }}{{ form_widget(filter_form.site) }}{{ form_errors(filter_form.site) }}</div>{% endif %}
+        {% if filter_form.supplier is defined %}<div class="col-md-4">{{ form_label(filter_form.supplier, null, {label_attr: {class: 'w-100 text-start'}}) }}{{ form_widget(filter_form.supplier) }}{{ form_errors(filter_form.supplier) }}</div>{% endif %}
+        <div class="col-md-4">{{ form_label(filter_form.missing, null, {label_attr: {class: 'w-100 text-start'}}) }}{{ form_widget(filter_form.missing) }}{{ form_errors(filter_form.missing) }}</div>
+        <div class="col-12 d-flex flex-wrap gap-2">
+            <button class="btn btn-primary" type="submit"><i class="fa-solid fa-filter fa-fw"></i> {{ 'production.required_parts.filter'|trans }}</button>
+            <a class="btn btn-outline-secondary" href="{{ path('production_required_parts') }}">{{ 'production.required_parts.reset'|trans }}</a>
+        </div>
+    {{ form_end(filter_form) }}
+    <p class="small text-muted">{{ 'production.required_parts.stock_help'|trans }}</p>
+    <div class="table-responsive">
+        <table class="table table-hover align-middle" data-required-parts-table>
+            <thead><tr><th>Bauteil</th>{% if is_granted('@suppliers.read') %}<th>{{ 'production.required_parts.supplier'|trans }}</th>{% endif %}<th>Bedarf</th><th>Reserviert</th><th>Auftragsbestand</th><th>Verbraucht</th><th>Frei</th><th>Zu bestellen</th></tr></thead>
+            <tbody>
+            {% for row in rows %}
+                <tr data-part-id="{{ row.part.id }}">
+                    <td><a href="{{ path('part_info', {id: row.part.id}) }}"><strong>{{ row.part.name }}</strong></a>
+                        <details class="small mt-1"><summary class="text-muted">{{ row.projects|length }} Auftragszuordnungen</summary>
+                            {% for detail in row.projects %}<div>{% if is_granted('@production_orders.read') %}<a href="{{ path('production_customer_project_show', {id: detail.project.id}) }}">{{ detail.project.projectNumber }}</a>{% else %}{{ detail.project.projectNumber }}{% endif %}: {{ detail.required }} benötigt, {{ detail.reserved }} reserviert</div>{% endfor %}
+                        </details>
+                    </td>
+                    {% if is_granted('@suppliers.read') %}<td>{% for supplier in row.suppliers %}<div>{{ supplier.fullPath }}</div>{% else %}<span class="text-muted">–</span>{% endfor %}</td>{% endif %}
+                    <td data-quantity="required">{{ row.required }}</td>
+                    <td data-quantity="reserved">{{ row.reserved }}</td>
+                    <td data-quantity="allocated">{{ row.allocated }}</td>
+                    <td data-quantity="consumed">{{ row.consumed }}</td>
+                    <td data-quantity="free">{{ row.free }}</td>
+                    <td data-quantity="to-order"><span class="badge {{ row.to_order > 0 ? 'bg-danger' : 'bg-success' }}">{{ row.to_order }}</span></td>
+                </tr>
+            {% else %}<tr><td colspan="{{ is_granted('@suppliers.read') ? 8 : 7 }}" class="text-muted text-center py-4">{{ 'production.required_parts.empty'|trans }}</td></tr>{% endfor %}
+            </tbody>
+        </table>
+    </div>
 {% endblock %}

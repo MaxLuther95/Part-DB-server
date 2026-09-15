@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Entity\Production;
 
 use App\Entity\Parts\Part;
+use App\Helpers\Production\ManufacturingSlot;
 use App\Repository\Production\ProjectAccessoryRepository;
 use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
@@ -18,6 +19,9 @@ use Symfony\Component\Validator\Constraints as Assert;
 #[ORM\Index(name: 'IDX_PROD_ACCESSORY_PART', columns: ['part_id'])]
 class ProjectAccessory extends AbstractProductionEntity
 {
+    #[ORM\Column(type: Types::INTEGER, nullable: true)]
+    private ?int $sourceSlotKey = null;
+
     #[ORM\ManyToOne(targetEntity: CustomerProject::class, inversedBy: 'accessories')]
     #[ORM\JoinColumn(name: 'customer_project_id', nullable: false, onDelete: 'CASCADE')]
     private ?CustomerProject $customerProject = null;
@@ -96,14 +100,16 @@ class ProjectAccessory extends AbstractProductionEntity
         return $this;
     }
 
-    public function getSourceSlot(): ?SystemTemplateSlot
+    public function getSourceSlot(): SystemTemplateSlot|ManufacturingSlot|null
     {
-        return $this->sourceSlot;
+        $key = $this->sourceSlotKey ?? $this->sourceSlot?->getId();
+        return (null === $key ? null : $this->projectPosition?->getDefinition()?->getSlot($key)) ?? $this->sourceSlot;
     }
 
-    public function setSourceSlot(?SystemTemplateSlot $sourceSlot): self
+    public function setSourceSlot(SystemTemplateSlot|ManufacturingSlot|null $sourceSlot): self
     {
-        $this->sourceSlot = $sourceSlot;
+        $this->sourceSlotKey = $sourceSlot?->getId();
+        $this->sourceSlot = $sourceSlot instanceof SystemTemplateSlot ? $sourceSlot : null;
 
         return $this;
     }

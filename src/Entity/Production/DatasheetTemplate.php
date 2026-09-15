@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Entity\Production;
 
 use App\Repository\Production\DatasheetTemplateRepository;
+use App\Entity\ProjectSystem\Project;
 use Doctrine\Common\Collections\ArrayCollection;
 use Doctrine\Common\Collections\Collection;
 use Doctrine\DBAL\Types\Types;
@@ -33,6 +34,22 @@ class DatasheetTemplate extends AbstractProductionEntity
     ])]
     private bool $active = true;
 
+    /** @var Collection<int, SystemTemplate> */
+    #[ORM\ManyToMany(targetEntity: SystemTemplate::class)]
+    #[ORM\JoinTable(name: 'production_datasheet_template_systems')]
+    #[ORM\JoinColumn(name: 'datasheet_template_id', referencedColumnName: 'id', onDelete: 'CASCADE')]
+    #[ORM\InverseJoinColumn(name: 'system_template_id', referencedColumnName: 'id', onDelete: 'CASCADE')]
+    #[ORM\OrderBy(['name' => 'ASC'])]
+    private Collection $systemTemplates;
+
+    /** @var Collection<int, Project> */
+    #[ORM\ManyToMany(targetEntity: Project::class)]
+    #[ORM\JoinTable(name: 'production_datasheet_template_projects')]
+    #[ORM\JoinColumn(name: 'datasheet_template_id', referencedColumnName: 'id', onDelete: 'CASCADE')]
+    #[ORM\InverseJoinColumn(name: 'project_id', referencedColumnName: 'id', onDelete: 'CASCADE')]
+    #[ORM\OrderBy(['name' => 'ASC'])]
+    private Collection $projects;
+
     /**
      * @var Collection<int, DatasheetTemplateRevision>
      */
@@ -45,6 +62,62 @@ class DatasheetTemplate extends AbstractProductionEntity
     public function __construct()
     {
         $this->revisions = new ArrayCollection();
+        $this->systemTemplates = new ArrayCollection();
+        $this->projects = new ArrayCollection();
+    }
+
+    /** @return Collection<int, SystemTemplate> */
+    public function getSystemTemplates(): Collection
+    {
+        return $this->systemTemplates;
+    }
+
+    public function addSystemTemplate(SystemTemplate $system): self
+    {
+        if (! $this->systemTemplates->contains($system)) {
+            $this->systemTemplates->add($system);
+        }
+
+        return $this;
+    }
+
+    public function removeSystemTemplate(SystemTemplate $system): self
+    {
+        $this->systemTemplates->removeElement($system);
+
+        return $this;
+    }
+
+    /** @return Collection<int, Project> */
+    public function getProjects(): Collection
+    {
+        return $this->projects;
+    }
+
+    public function addProject(Project $project): self
+    {
+        if (! $this->projects->contains($project)) {
+            $this->projects->add($project);
+        }
+
+        return $this;
+    }
+
+    public function removeProject(Project $project): self
+    {
+        $this->projects->removeElement($project);
+
+        return $this;
+    }
+
+    public function appliesTo(BuildInstance $instance): bool
+    {
+        // Assign the actual build type, never an ancestor, component or base project of a system.
+        if (null !== $instance->getSystemTemplate()) {
+            return $this->systemTemplates->contains($instance->getSystemTemplate());
+        }
+
+        return null !== $instance->getTemplateProject() && $this->projects->contains($instance->getTemplateProject());
     }
 
     public function __toString(): string
