@@ -31,7 +31,7 @@ final class ManufacturingDefinition
     /** @return array<int, ManufacturingSlot> */
     public function getSlots(): array { return $this->slots; }
     public function getSlot(int $id): ?ManufacturingSlot { return $this->slots[$id] ?? null; }
-    /** @return list<array{part_id: int, name: string, quantity: float}> */
+    /** @return list<array{part_id: int|null, name: string, quantity: float}> */
     public function getBom(): array { return array_map(static fn(array $row): array => [...$row, 'quantity' => (float) $row['quantity']], $this->data['bom']); }
     /** @return list<int> */
     public function getProjectIds(): array { return $this->data['project_ids']; }
@@ -45,6 +45,9 @@ final class ManufacturingDefinition
     {
         $rows = [];
         foreach ($this->getBom() as $row) {
+            if (null === $row['part_id']) {
+                continue; // A named non-part entry has no inventory to reserve or withdraw.
+            }
             $part = $this->snapshot->getPart($row['part_id']);
             if (null === $part) { throw new \DomainException('Ein Bauteil des gespeicherten Fertigungsstands wurde gelöscht: '.$row['name']); }
             $rows[] = ['part' => $part, 'quantity' => $row['quantity']];

@@ -1,7 +1,25 @@
 {% extends 'base.html.twig' %}
 {% trans_default_domain 'production' %}
 
-{% macro position_rows(position, depth, number, build_status_class) %}
+{% macro note_marker(notes) %}{% if notes %}<i class="fa-solid fa-note-sticky text-warning ms-1" title="{{ notes }}" aria-label="{{ 'production.project_position.has_notes'|trans }}"></i>{% endif %}{% endmacro %}
+
+{% macro material_status(accessory, material_plan) %}
+    {% if material_plan is null or not accessory.part %}
+        <span class="text-muted">–</span>
+    {% elseif not accessory.customerProject.productionSite %}
+        <span class="badge bg-secondary" data-material-status="unknown">{{ 'production.material_plan.site_missing'|trans }}</span>
+    {% else %}
+        {% set item = material_plan.items|filter(item => item.part.id == accessory.part.id)|first %}
+        {% if item %}
+            <span class="badge {{ item.missing > 0 ? 'bg-danger' : 'bg-success' }}" data-material-status="{{ item.missing > 0 ? 'missing' : 'covered' }}"
+                  title="{{ 'production.material_plan.order_part_breakdown'|trans({'%site%': accessory.customerProject.productionSite.fullPath, '%required%': item.required|number_format, '%available%': item.available|number_format, '%reserved%': item.reserved_covered_local|number_format, '%allocated%': item.allocated|number_format, '%consumed%': item.consumed|number_format}) }}">{% if item.missing > 0 %}{{ 'production.material_plan.order_part_missing'|trans({'%count%': item.missing|number_format}) }}{% else %}{{ 'production.material_plan.order_part_covered'|trans }}{% endif %}</span>
+        {% else %}
+            <span class="text-muted">–</span>
+        {% endif %}
+    {% endif %}
+{% endmacro %}
+
+{% macro position_rows(position, depth, number, build_status_class, material_plan) %}
     {% set indent = depth * 1.5 %}
     <tr data-production-position-row data-position-id="{{ position.id }}"{% if position.parent %} data-parent-id="{{ position.parent.id }}"{% endif %}{% if depth > 1 %} hidden{% endif %}>
         <td class="text-nowrap">{{ number }}</td>
@@ -13,7 +31,7 @@
                 </button>
             {% endif %}
             <strong>{{ position.name }}</strong>
-            {% if position.notes %}<i class="fa-solid fa-note-sticky text-warning ms-1" title="{{ position.notes }}" aria-label="{{ 'production.project_position.has_notes'|trans }}"></i>{% endif %}
+            {{ _self.note_marker(position.notes) }}
             {% if position.systemTemplate %}<span class="badge text-bg-light border">{{ 'production.system_template.label'|trans }}</span>{% endif %}
             {% if position.parent and not position.sourceSlot %}<span class="badge bg-warning text-dark">{{ 'production.project_position.detached_from_template'|trans }}</span>{% endif %}
         </td>
@@ -42,7 +60,7 @@
         <td class="text-center">
             {% if is_granted('@production_build_instances.read') %}
             {% for instance in position.buildInstances|filter(instance => is_granted('read', instance)) %}
-                <a class="badge text-bg-light border text-decoration-none" href="{{ path('production_build_instance_show', {id: instance.id}) }}">{{ instance.displayIdentifier }}</a>
+                <span class="d-inline-block text-nowrap" data-order-instance="{{ instance.id }}"><a class="badge text-bg-light border text-decoration-none" href="{{ path('production_build_instance_show', {id: instance.id}) }}">{{ instance.displayIdentifier }}</a>{{ _self.note_marker(instance.notes) }}</span>
             {% else %}
                 {% if is_granted('@production_orders.edit') and is_granted('@production_build_instances.assign') and position.customerProject.status.value == 'in_production' and (position.systemTemplate or position.templateProject) %}
                     <a class="btn btn-sm btn-outline-primary" href="{{ path('production_project_position_assign_instance', {id: position.id}) }}"><i class="fa-solid fa-link fa-fw"></i> {{ 'production.build_instance.assign'|trans }}</a>
@@ -90,14 +108,14 @@
             {% set slot_choice_count = slot.allowedSystemTemplates|length + slot.allowedProjects|length + slot.allowedParts|length %}
             {% if assignments is not empty %}
                 {% for child in assignments %}
-                    {{ _self.position_rows(child, depth + 1, number ~ '.' ~ (slot_offset + loop.index0), build_status_class) }}
+                    {{ _self.position_rows(child, depth + 1, number ~ '.' ~ (slot_offset + loop.index0), build_status_class, material_plan) }}
                 {% endfor %}
             {% elseif part_assignment %}
                 <tr data-production-position-row data-parent-id="{{ position.id }}"{% if depth > 0 %} hidden{% endif %}>
                     <td class="text-nowrap">{{ number }}.{{ slot_offset }}</td>
                     <td style="padding-left: {{ indent + 2 }}rem"><i class="fa-solid fa-turn-up fa-rotate-90 text-muted fa-fw me-1"></i><strong>{{ slot.name }}</strong></td>
-                    <td>{% if part_assignment.part %}<a href="{{ path('part_info', {id: part_assignment.part.id}) }}">{{ part_assignment.part.name }}</a>{% else %}<span class="text-muted">{{ part_assignment.partName }} ({{ 'production.common.deleted_reference'|trans }})</span>{% endif %} × {{ part_assignment.quantity }}{% if part_assignment.serialTracking %} <span class="badge bg-info text-dark"><i class="fa-solid fa-barcode fa-fw"></i></span>{% endif %}</td>
-                    <td class="text-center">{% if part_assignment.part %}{% set part_is_available = part_assignment.part.amountSum >= part_assignment.quantity %}<span class="badge {{ part_is_available ? 'bg-success' : 'bg-danger' }}" title="{{ part_assignment.part.amountSum|number_format }} / {{ part_assignment.quantity }}">{{ (part_is_available ? 'production.accessory.available' : 'production.accessory.unavailable')|trans }}</span>{% else %}<span class="text-muted">–</span>{% endif %}</td>
+                    <td>{% if part_assignment.part %}<a href="{{ path('part_info', {id: part_assignment.part.id}) }}">{{ part_assignment.part.name }}</a>{% else %}<span class="text-muted">{{ part_assignment.partName }} ({{ 'production.common.deleted_reference'|trans }})</span>{% endif %} × {{ part_assignment.quantity }}{{ _self.note_marker(part_assignment.note) }}{% if part_assignment.serialTracking %} <span class="badge bg-info text-dark"><i class="fa-solid fa-barcode fa-fw"></i></span>{% endif %}</td>
+                    <td class="text-center">{{ _self.material_status(part_assignment, material_plan) }}</td>
                     <td class="text-center">–</td><td></td>
                 </tr>
             {% else %}
@@ -120,15 +138,15 @@
 
         {% set detached_offset = position.nextDisplayOffset %}
         {% for child in position.children|filter(child => child.sourceSlot is null) %}
-            {{ _self.position_rows(child, depth + 1, number ~ '.' ~ (detached_offset + loop.index0), build_status_class) }}
+            {{ _self.position_rows(child, depth + 1, number ~ '.' ~ (detached_offset + loop.index0), build_status_class, material_plan) }}
         {% endfor %}
         {% set detached_position_count = position.children|filter(child => child.sourceSlot is null)|length %}
         {% for part_assignment in position.partAssignments|filter(assignment => assignment.sourceSlot is null) %}
             <tr class="table-warning" data-production-position-row data-parent-id="{{ position.id }}"{% if depth > 0 %} hidden{% endif %}>
                 <td class="text-nowrap">{{ number }}.{{ detached_offset + detached_position_count + loop.index0 }}</td>
                 <td style="padding-left: {{ indent + 2 }}rem"><i class="fa-solid fa-turn-up fa-rotate-90 text-muted fa-fw me-1"></i><span class="badge bg-warning text-dark">{{ 'production.project_position.detached_from_template'|trans }}</span></td>
-                <td>{% if part_assignment.part %}<a href="{{ path('part_info', {id: part_assignment.part.id}) }}">{{ part_assignment.part.name }}</a>{% else %}<span class="text-muted">{{ part_assignment.partName }} ({{ 'production.common.deleted_reference'|trans }})</span>{% endif %} × {{ part_assignment.quantity }}{% if part_assignment.serialTracking %} <span class="badge bg-info text-dark"><i class="fa-solid fa-barcode fa-fw"></i></span>{% endif %}</td>
-                <td class="text-center">{% if part_assignment.part %}{% set part_is_available = part_assignment.part.amountSum >= part_assignment.quantity %}<span class="badge {{ part_is_available ? 'bg-success' : 'bg-danger' }}" title="{{ part_assignment.part.amountSum|number_format }} / {{ part_assignment.quantity }}">{{ (part_is_available ? 'production.accessory.available' : 'production.accessory.unavailable')|trans }}</span>{% else %}<span class="text-muted">–</span>{% endif %}</td>
+                <td>{% if part_assignment.part %}<a href="{{ path('part_info', {id: part_assignment.part.id}) }}">{{ part_assignment.part.name }}</a>{% else %}<span class="text-muted">{{ part_assignment.partName }} ({{ 'production.common.deleted_reference'|trans }})</span>{% endif %} × {{ part_assignment.quantity }}{{ _self.note_marker(part_assignment.note) }}{% if part_assignment.serialTracking %} <span class="badge bg-info text-dark"><i class="fa-solid fa-barcode fa-fw"></i></span>{% endif %}</td>
+                <td class="text-center">{{ _self.material_status(part_assignment, material_plan) }}</td>
                 <td class="text-center">–</td><td class="text-end">{% if is_granted('@production_orders.edit') %}<a class="btn btn-sm btn-outline-primary" href="{{ path('production_accessory_edit', {id: part_assignment.id}) }}" title="{{ 'production.accessory.edit'|trans }}"><i class="fa-solid fa-pen fa-fw"></i></a>{% endif %}</td>
             </tr>
         {% endfor %}
@@ -195,11 +213,11 @@
     <div class="card mb-3" data-order-section="positions">
         <div class="card-header d-flex justify-content-between align-items-center"><strong><i class="fa-solid fa-list-check fa-fw"></i> {{ 'production.project_position.plural'|trans }}</strong>{% if is_granted('@production_orders.edit') %}<a class="btn btn-sm btn-success" href="{{ path('production_project_position_new', {id: project.id}) }}"><i class="fa-solid fa-plus fa-fw"></i> {{ 'production.project_position.add_system'|trans }}</a>{% endif %}</div>
         <div class="table-responsive"><table class="table table-sm table-hover mb-0 align-middle" data-production-position-tree><thead><tr><th>#</th><th>{{ 'production.common.name'|trans }}</th><th>{{ 'production.project_position.content'|trans }}</th><th class="text-center">{{ 'production.common.status'|trans }}</th><th class="text-center">{{ 'production.build_instance.plural'|trans }}</th><th></th></tr></thead><tbody>
-        {% for position in project.rootPositions %}{{ _self.position_rows(position, 0, position.position, build_status_class) }}{% endfor %}
+        {% for position in project.rootPositions %}{{ _self.position_rows(position, 0, position.position, build_status_class, material_plan) }}{% endfor %}
         {% for line in project.unassignedImportLines %}
             <tr data-import-line="{{ line.id }}">
                 <td>PDF {{ line.lineNumber }}</td>
-                <td><strong>{{ line.description }}</strong><div class="small text-muted">{{ line.quantity }} {{ line.unitLabel }}</div></td>
+                <td><strong>{{ line.description }}</strong>{{ _self.note_marker(line.notes) }}<div class="small text-muted">{{ line.quantity }} {{ line.unitLabel }}</div></td>
                 <td>{{ ('production.import_line.' ~ line.disposition.value ~ '_help')|trans }}</td>
                 <td class="text-center"><span class="badge {{ line.disposition.value == 'pending' ? 'bg-warning text-dark' : 'bg-secondary' }}">{{ ('production.import_line.' ~ line.disposition.value)|trans }}</span></td>
                 <td class="text-center">–</td>
@@ -221,8 +239,8 @@
     </div>
 
     <div class="row g-3 mb-3">
-        <div class="col-xl-6" data-order-section="accessories"><div class="card h-100"><div class="card-header d-flex justify-content-between align-items-center"><strong><i class="fa-solid fa-box-open fa-fw"></i> {{ 'production.accessory.plural'|trans }}</strong>{% if is_granted('@production_orders.edit') %}<a class="btn btn-sm btn-success" href="{{ path('production_accessory_new', {id: project.id}) }}"><i class="fa-solid fa-plus fa-fw"></i> {{ 'production.accessory.new'|trans }}</a>{% endif %}</div><div class="table-responsive"><table class="table table-sm table-hover mb-0 align-middle"><thead><tr><th>{{ 'production.accessory.part'|trans }}</th><th>{{ 'production.accessory.quantity'|trans }}</th><th>{{ 'production.accessory.available'|trans }}</th><th></th></tr></thead><tbody>
-            {% for accessory in project.accessories|filter(a => a.projectPosition is null) %}<tr><td>{% if accessory.part %}<a href="{{ path('part_info', {id: accessory.part.id}) }}">{{ accessory.part.name }}</a>{% else %}<span class="text-muted">{{ accessory.partName }} ({{ 'production.common.deleted_reference'|trans }})</span>{% endif %}{% if accessory.note %}<br><small class="text-muted">{{ accessory.note }}</small>{% endif %}</td><td>{{ accessory.quantity }}</td><td>{% if accessory.part %}<span class="badge {{ accessory.part.amountSum >= accessory.quantity ? 'bg-success' : 'bg-danger' }}">{{ accessory.part.amountSum|number_format }}</span>{% else %}<span class="text-muted">–</span>{% endif %}</td><td class="text-end">{% if is_granted('@production_orders.edit') %}<a class="btn btn-sm btn-outline-primary" href="{{ path('production_accessory_edit', {id: accessory.id}) }}"><i class="fa-solid fa-pen fa-fw"></i></a>{% endif %}</td></tr>{% else %}<tr><td colspan="4" class="text-center text-muted py-4">{{ 'production.accessory.empty'|trans }}</td></tr>{% endfor %}
+        <div class="col-xl-6" data-order-section="accessories"><div class="card h-100"><div class="card-header d-flex justify-content-between align-items-center"><strong><i class="fa-solid fa-box-open fa-fw"></i> {{ 'production.accessory.plural'|trans }}</strong>{% if is_granted('@production_orders.edit') %}<a class="btn btn-sm btn-success" href="{{ path('production_accessory_new', {id: project.id}) }}"><i class="fa-solid fa-plus fa-fw"></i> {{ 'production.accessory.new'|trans }}</a>{% endif %}</div><div class="table-responsive"><table class="table table-sm table-hover mb-0 align-middle"><thead><tr><th>{{ 'production.accessory.part'|trans }}</th><th>{{ 'production.accessory.quantity'|trans }}</th><th>{{ 'production.material_plan.label'|trans }}</th><th></th></tr></thead><tbody>
+            {% for accessory in project.accessories|filter(a => a.projectPosition is null) %}<tr data-accessory-id="{{ accessory.id }}"><td>{% if accessory.part %}<a href="{{ path('part_info', {id: accessory.part.id}) }}">{{ accessory.part.name }}</a>{% else %}<span class="text-muted">{{ accessory.partName }} ({{ 'production.common.deleted_reference'|trans }})</span>{% endif %}{{ _self.note_marker(accessory.note) }}</td><td>{{ accessory.quantity }}</td><td>{{ _self.material_status(accessory, material_plan) }}</td><td class="text-end">{% if is_granted('@production_orders.edit') %}<a class="btn btn-sm btn-outline-primary" href="{{ path('production_accessory_edit', {id: accessory.id}) }}"><i class="fa-solid fa-pen fa-fw"></i></a>{% endif %}</td></tr>{% else %}<tr><td colspan="4" class="text-center text-muted py-4">{{ 'production.accessory.empty'|trans }}</td></tr>{% endfor %}
         </tbody></table></div></div></div>
 
         <div class="col-xl-6" data-order-section="notes">
@@ -247,7 +265,7 @@
         <div class="card-header d-flex justify-content-between align-items-center">
             <strong><i class="fa-solid fa-boxes-stacked fa-fw"></i> {{ 'production.material_plan.label'|trans }}</strong>
             {% if not project.productionSite %}
-                <span class="badge bg-secondary"><i class="fa-solid fa-location-dot fa-fw"></i> Standort nicht festgelegt</span>
+                <span class="badge bg-secondary"><i class="fa-solid fa-location-dot fa-fw"></i> {{ 'production.material_plan.site_missing'|trans }}</span>
             {% elseif not material_plan.configuration_complete %}
                 <span class="badge bg-secondary">{{ 'production.material_plan.not_configured'|trans }}</span>
             {% elseif not material_plan.complete %}
@@ -266,7 +284,7 @@
 
     <div class="row g-3">
         {% if is_granted('@production_build_instances.read') %}<div class="col-xl-6" data-order-section="build-instances"><div class="card h-100"><div class="card-header d-flex justify-content-between align-items-center"><strong><i class="fa-solid fa-layer-group fa-fw"></i> {{ 'production.project.build_instances'|trans }}</strong><a class="btn btn-sm btn-outline-primary" href="{{ path('production_build_instance_index') }}">{{ 'production.action.show_all'|trans }}</a></div><div class="table-responsive"><table class="table table-sm table-hover mb-0 align-middle" data-order-build-instances-table><thead><tr><th>{{ 'production.build_instance.serial_number'|trans }}</th><th>{{ 'production.build_instance.template'|trans }}</th><th class="text-center">{{ 'production.common.status'|trans }}</th><th class="text-center">{{ 'production.project_position.label'|trans }}</th></tr></thead><tbody>
-            {% for instance in project.buildInstances|filter(instance => is_granted('read', instance)) %}<tr><td><a href="{{ path('production_build_instance_show', {id: instance.id}) }}"><strong>{{ instance.displayIdentifier }}</strong></a></td><td>{{ instance.contentName }}{% if not instance.systemTemplate and not instance.templateProject %} <span class="text-muted">({{ 'production.common.deleted_reference'|trans }})</span>{% endif %}</td><td class="text-center"><span class="badge {{ build_status_class[instance.status.value]|default('bg-secondary') }}">{{ ('production.build_instance.status.' ~ instance.status.value)|trans }}</span></td><td class="text-center">{{ instance.projectPosition ? instance.projectPosition.name : '–' }}</td></tr>{% else %}<tr><td colspan="4" class="text-center text-muted py-4">{{ 'production.common.empty'|trans }}</td></tr>{% endfor %}
+            {% for instance in project.buildInstances|filter(instance => is_granted('read', instance)) %}<tr data-order-instance="{{ instance.id }}"><td><a href="{{ path('production_build_instance_show', {id: instance.id}) }}"><strong>{{ instance.displayIdentifier }}</strong></a>{{ _self.note_marker(instance.notes) }}</td><td>{{ instance.contentName }}{% if not instance.systemTemplate and not instance.templateProject %} <span class="text-muted">({{ 'production.common.deleted_reference'|trans }})</span>{% endif %}</td><td class="text-center"><span class="badge {{ build_status_class[instance.status.value]|default('bg-secondary') }}">{{ ('production.build_instance.status.' ~ instance.status.value)|trans }}</span></td><td class="text-center">{{ instance.projectPosition ? instance.projectPosition.name : '–' }}</td></tr>{% else %}<tr><td colspan="4" class="text-center text-muted py-4">{{ 'production.common.empty'|trans }}</td></tr>{% endfor %}
         </tbody></table></div></div></div>{% endif %}
 
         <div class="col-xl-6" data-order-section="attachments">

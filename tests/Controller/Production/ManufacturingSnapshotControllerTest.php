@@ -14,6 +14,58 @@ use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
 
 final class ManufacturingSnapshotControllerTest extends WebTestCase
 {
+    public function testNamedBomEntriesRemainFrozenWithoutCreatingMaterialRequirements(): void
+    {
+        $client = self::createClient();
+        $s = $this->scenario();
+        $em = self::getContainer()->get(EntityManagerInterface::class);
+        $named = (new ProjectBOMEntry())->setName('Synthetic assembly service')->setQuantity(2.5);
+        $s['base']->addBomEntry($named);
+        $nestedNamed = (new ProjectBOMEntry())->setName('Synthetic nested service')->setQuantity(4);
+        $s['nested']->getBaseProjects()->first()->addBomEntry($nestedNamed);
+        $optionalNamed = (new ProjectBOMEntry())->setName('Synthetic optional service')->setQuantity(6);
+        $s['optional']->addBomEntry($optionalNamed);
+        foreach ([$named, $nestedNamed, $optionalNamed] as $entry) {
+            $em->persist($entry);
+        }
+        $em->flush();
+
+        $client->loginUser($s['admin']);
+        $crawler = $client->request('GET', '/en/production/customer-projects/'.$s['order']->getId().'/positions/new');
+        $client->submit($crawler->filter('form[name="project_position"]')->form([
+            'project_position[content]' => 'system_'.$s['system']->getId(),
+            'project_position[name]' => 'Synthetic mixed BOM position',
+        ]));
+        self::assertResponseRedirects();
+        $em = self::getContainer()->get(EntityManagerInterface::class);
+        $position = $em->getRepository(ProjectPosition::class)->findOneBy(['name' => 'Synthetic mixed BOM position']);
+        self::assertNotNull($position);
+        $definition = $position->getDefinition();
+        $bom = $definition->getBom();
+        self::assertContains(['part_id' => null, 'name' => 'Synthetic assembly service', 'quantity' => 2.5], $bom);
+        self::assertCount(1, $definition->getMaterialRows());
+        self::assertSame(2.0, $definition->getMaterialRows()[0]['quantity']);
+        $snapshot = $position->getManufacturingSnapshot();
+        self::assertContains(['part_id' => null, 'name' => 'Synthetic nested service', 'quantity' => 4.0], $snapshot->getDefinition('system_'.$s['nested']->getId())->getBom());
+        self::assertContains(['part_id' => null, 'name' => 'Synthetic optional service', 'quantity' => 6.0], $snapshot->getDefinition('project_'.$s['optional']->getId())->getBom());
+
+        $em->find(ProjectBOMEntry::class, $named->getId())->setName('Changed service')->setQuantity(99);
+        $em->flush();
+        $id = $position->getId();
+        $em->clear();
+        $reloaded = $em->find(ProjectPosition::class, $id);
+        self::assertSame($bom, $reloaded->getDefinition()->getBom());
+        self::assertSame(10, self::getContainer()->get(ProductionMaterialPlanner::class)->getRequirements($reloaded->getCustomerProject())[$s['part']->getId()]['required']);
+        $draft = self::getContainer()->get(ProductionBuildWorkflow::class)->createDraft($em->find(SystemTemplate::class, $s['system']->getId()), $reloaded);
+        self::assertSame(2, self::getContainer()->get(ProductionBuildWorkflow::class)->createMaterialPlan($draft, null)['items'][0]['required']);
+
+        // A free-text row is valid; a lost reference to an actual stock part is not.
+        $missingPartSnapshot = new ManufacturingSnapshot($snapshot->getDefinitions());
+        $this->expectException(\DomainException::class);
+        $this->expectExceptionMessage('Ein Bauteil des gespeicherten Fertigungsstands wurde gelöscht:');
+        $missingPartSnapshot->getDefinition('system_'.$s['system']->getId())->getMaterialRows();
+    }
+
     private function scenario(): array
     {
         $em = self::getContainer()->get(EntityManagerInterface::class);

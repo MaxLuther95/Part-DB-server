@@ -25,6 +25,7 @@ class OrderImportLine extends AbstractProductionEntity
 
     #[ORM\Column(type: Types::INTEGER)] private int $lineNumber = 0;
     #[ORM\Column(type: Types::STRING, length: 255)] private string $description = '';
+    #[ORM\Column(type: Types::TEXT, nullable: true)] private ?string $notes = null;
     #[ORM\Column(type: Types::INTEGER)] private int $quantity = 1;
     #[ORM\Column(type: Types::STRING, length: 32)] private string $unit = OrderPositionUnit::Piece->value;
 
@@ -51,6 +52,13 @@ class OrderImportLine extends AbstractProductionEntity
     public function setLineNumber(int $lineNumber): self { $this->lineNumber = max(0, $lineNumber); return $this; }
     public function getDescription(): string { return $this->description; }
     public function setDescription(string $description): self { $this->description = trim($description); return $this; }
+    public function getNotes(): ?string { return $this->notes; }
+    public function setNotes(?string $notes): self
+    {
+        $this->notes = null === $notes || '' === trim($notes) ? null : trim($notes);
+
+        return $this;
+    }
     public function getQuantity(): int { return $this->quantity; }
     public function setQuantity(int $quantity): self { $this->quantity = max(1, $quantity); return $this; }
     public function getUnit(): string { return $this->unit; }

@@ -217,6 +217,7 @@ final class OrderImportController extends AbstractController
                             ->setMapping($mapping)
                             ->setLineNumber($line['number'])
                             ->setDescription($line['description'])
+                            ->setNotes($line['notes'])
                             ->setQuantity($line['quantity'])
                             ->setUnit($line['unit']);
                         $entityManager->persist($importLine);
@@ -443,7 +444,7 @@ final class OrderImportController extends AbstractController
         ]);
     }
 
-    /** @param array<string, mixed> $lines @return list<array{number:int,description:string,quantity:int,unit:string,mapping_id:int}> */
+    /** @param array<string, mixed> $lines @return list<array{number:int,description:string,notes:string,quantity:int,unit:string,mapping_id:int}> */
     private function sanitizeLines(array $lines): array
     {
         $result = [];
@@ -457,6 +458,7 @@ final class OrderImportController extends AbstractController
             $result[] = [
                 'number' => (int) ($line['number'] ?? 0),
                 'description' => trim(preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/u', '', (string) ($line['description'] ?? '')) ?? ''),
+                'notes' => trim(preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/u', '', str_replace(["\r\n", "\r"], "\n", (string) ($line['notes'] ?? ''))) ?? ''),
                 'quantity' => (int) ($line['quantity'] ?? 0),
                 'unit' => trim((string) ($line['unit'] ?? '')),
                 'mapping_id' => max(0, (int) ($line['mapping_id'] ?? 0)),
@@ -530,6 +532,9 @@ final class OrderImportController extends AbstractController
         }
         $generatedPositions = 0;
         foreach ($values['lines'] as $line) {
+            if (mb_strlen($line['notes']) > 50000) {
+                $errors[] = sprintf('Die Notizen der PDF-Position %d dürfen höchstens 50.000 Zeichen enthalten.', $line['number']);
+            }
             if ('' === $line['description']) {
                 $errors[] = sprintf('Die Beschreibung der PDF-Position %d darf nicht leer sein.', $line['number']);
             }

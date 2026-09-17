@@ -75,9 +75,21 @@ final readonly class ManufacturingSnapshotFactory
             $references['project_'.$project->getId()] = $project;
             foreach ($project->getBomEntries() as $entry) {
                 $part = $entry->getPart();
-                if (null === $part || null === $part->getId()) { throw new \DomainException('Die Stückliste enthält ein gelöschtes Bauteil.'); }
-                $references['part_'.$part->getId()] = $part;
-                $node['bom'][] = ['part_id' => $part->getId(), 'name' => $part->getName(), 'quantity' => (float) $entry->getQuantity()];
+                if (null !== $part) {
+                    if (null === $part->getId()) {
+                        throw new \DomainException('Stücklistenbauteile müssen vor der Auftragszuordnung gespeichert sein.');
+                    }
+                    $references['part_'.$part->getId()] = $part;
+                } elseif (null === $entry->getName()) {
+                    throw new \DomainException('Eine Stücklistenposition hat weder ein Bauteil noch eine Bezeichnung.');
+                }
+                // Native Part-DB also supports named non-part entries (e.g. services).
+                // Keep these in the frozen definition without inventing a stock part.
+                $node['bom'][] = [
+                    'part_id' => $part?->getId(),
+                    'name' => $part?->getName() ?? $entry->getName(),
+                    'quantity' => (float) $entry->getQuantity(),
+                ];
             }
         }
         $nodes[$key] = $node;

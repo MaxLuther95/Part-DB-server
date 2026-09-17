@@ -16,18 +16,36 @@ final class OrderImportControllerTest extends WebTestCase
     {
         yield 'optional descriptions' => [null];
         yield 'German lump sum' => [null, true];
+        yield 'mapped system with non-part BOM entry' => [null, false, 'system'];
+        yield 'mapped native project' => [null, false, 'project'];
+        yield 'mapped stock part accessory' => [null, false, 'part'];
         foreach (['order_number', 'customer_number', 'customer_name', 'project_number', 'order_date'] as $field) {
             yield $field => [$field];
         }
     }
 
     #[DataProvider('requiredFields')]
-    public function testImportRequirementsAndSeparateNotes(?string $missingField, bool $german = false): void
+    public function testImportRequirementsAndSeparateNotes(?string $missingField, bool $german = false, ?string $mappedTarget = null): void
     {
         $client = self::createClient();
         $em = self::getContainer()->get(EntityManagerInterface::class);
         $admin = $em->getRepository(User::class)->findOneBy(['name' => 'admin']);
         $admin->setNeedPwChange(false);
+        if (null !== $mappedTarget) {
+            $project = (new \App\Entity\ProjectSystem\Project())->setName('Synthetic service project');
+            $entry = (new \App\Entity\ProjectSystem\ProjectBOMEntry())->setName('Synthetic assembly service')->setQuantity(2);
+            $project->addBomEntry($entry);
+            $system = (new \App\Entity\Production\SystemTemplate())->setName('Synthetic imported system')->setBaseProject($project);
+            $mapping = (new \App\Entity\Production\OrderImportMapping())->setSourceDescription('Synthetic item');
+            match ($mappedTarget) {
+                'system' => $mapping->setSystemTemplate($system),
+                'project' => $mapping->setTemplateProject($project),
+                'part' => $mapping->setPart($em->getRepository(\App\Entity\Parts\Part::class)->findOneBy([])),
+            };
+            foreach ([$project, $entry, $system, $mapping] as $entity) {
+                $em->persist($entity);
+            }
+        }
         $em->flush();
         $client->loginUser($admin);
         $path = tempnam(sys_get_temp_dir(), 'order-import-test-');
@@ -37,7 +55,7 @@ final class OrderImportControllerTest extends WebTestCase
             'Document #: IMPORT-TEST-ORDER', 'Customer #: IMPORT-TEST-CUSTOMER',
             'Customer Name: Synthetic customer', 'Project #: IMPORT-TEST-PROJECT',
             'Date: 2026-09-15', 'Your Reference #: REFERENCE-TEST',
-            '1 Synthetic item 1 pcs.', 'total amount 100.00 EUR',
+            '1 Synthetic item 1 pcs.', 'Synthetic position note <script>example</script>.', 'Second position detail.', 'total amount 100.00 EUR',
             'Synthetic delivery note <script>example</script>.',
         ]));
         if ($german) {
@@ -64,6 +82,14 @@ final class OrderImportControllerTest extends WebTestCase
             self::assertSame('REFERENCE-TEST', $form['customer_reference']->getValue());
             self::assertSame($german ? 'psch' : 'pcs.', $form['lines[0][unit]']->getValue());
             self::assertSame('Synthetic delivery note <script>example</script>.', $form['notes']->getValue());
+            self::assertSame("Synthetic position note <script>example</script>.\nSecond position detail.", $form['lines[0][notes]']->getValue());
+            if (null !== $mappedTarget) {
+                $form['lines[0][notes]'] = str_repeat('A', 50001);
+                $client->submit($form);
+                self::assertResponseStatusCodeSame(422);
+                self::assertSelectorTextContains('.alert-danger', '50.000');
+                $form['lines[0][notes]'] = "Reviewed detail with \"quotes\" <script>example</script>.\n".str_repeat("Long multiline detail with Umlaut ä.\n", 12);
+            }
             if (null !== $missingField) {
                 $form[$missingField] = '   ';
             }
@@ -79,15 +105,34 @@ final class OrderImportControllerTest extends WebTestCase
                 return;
             }
             self::assertNotNull($order);
+            self::assertSame(trim($form['lines[0][notes]']->getValue()), $order->getImportLines()->first()->getNotes());
             self::assertSame($german ? 'psch' : 'pcs.', $order->getImportLines()->first()->getUnit());
             self::assertSame('', $order->getName());
             self::assertSame('', $order->getProductionProject()->getName());
             self::assertSame('REFERENCE-TEST', $order->getCustomerReference());
             self::assertSame('Synthetic delivery note <script>example</script>.', $order->getNotes());
             $client->followRedirect();
-            self::assertSelectorExists('[data-order-section="positions"] [data-import-line]');
-            self::assertSelectorTextContains('[data-import-line]', 'Assignment pending');
-            self::assertFalse($order->isReadyForCompletion());
+            if ('part' === $mappedTarget) {
+                self::assertCount(0, $order->getPositions());
+                self::assertCount(1, $order->getAccessories());
+                self::assertSame($order->getImportLines()->first()->getNotes(), $order->getAccessories()->first()->getNote());
+                self::assertSame($order->getAccessories()->first()->getNote(), $client->getCrawler()->filter('[data-order-section="accessories"] .fa-note-sticky')->attr('title'));
+                self::assertSelectorNotExists('[data-order-section="accessories"] script');
+                self::assertSelectorNotExists('[data-order-section="accessories"] small');
+            } elseif (null !== $mappedTarget) {
+                self::assertCount(1, $order->getPositions());
+                self::assertSame($order->getImportLines()->first()->getNotes(), $order->getPositions()->first()->getNotes());
+                self::assertSelectorExists('[data-production-position-row] .fa-note-sticky');
+                self::assertSame($order->getPositions()->first()->getNotes(), $client->getCrawler()->filter('[data-production-position-row] .fa-note-sticky')->attr('title'));
+                self::assertSelectorNotExists('[data-production-position-row] script');
+                $definition = $order->getPositions()->first()->getDefinition();
+                self::assertSame([['part_id' => null, 'name' => 'Synthetic assembly service', 'quantity' => 2.0]], $definition->getBom());
+                self::assertSame([], $definition->getMaterialRows());
+            } else {
+                self::assertSelectorExists('[data-order-section="positions"] [data-import-line]');
+                self::assertSelectorTextContains('[data-import-line]', 'Assignment pending');
+            }
+            self::assertSame('part' === $mappedTarget, $order->isReadyForCompletion());
             self::assertSelectorTextContains('[data-order-customer-reference]', 'REFERENCE-TEST');
             self::assertSelectorTextContains('[data-order-section="notes"]', 'Synthetic delivery note');
             self::assertSelectorNotExists('[data-order-section="notes"] script');

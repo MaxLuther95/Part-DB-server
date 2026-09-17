@@ -21,6 +21,7 @@ import {Controller} from "@hotwired/stimulus";
 import "tom-select/dist/css/tom-select.bootstrap5.css";
 import '../../css/components/tom-select_extensions.css';
 import TomSelect from "tom-select";
+import placeholderSettings from '../../tomselect/placeholder_settings';
 import TomSelect_form_reset_handler from '../../tomselect/form_reset_handler/form_reset_handler'
 
 TomSelect.define('form_reset_handler', TomSelect_form_reset_handler)
@@ -29,18 +30,11 @@ export default class extends Controller {
 
     _tomSelect;
 
-    _emptyMessage;
-
     connect() {
         this._init();
     }
 
     _init() {
-        this._emptyMessage = this.element.getAttribute("data-empty-message") ?? "";
-        if (this._emptyMessage === "" && this.element.hasAttribute('title')) {
-            this._emptyMessage = this.element.getAttribute('title');
-        }
-
         let dropdownParent = "body";
         if (this.element.closest('.modal')) {
             dropdownParent = null
@@ -48,7 +42,7 @@ export default class extends Controller {
 
         let settings = {
             plugins: ["clear_button", "form_reset_handler"],
-            allowEmptyOption: true,
+            ...placeholderSettings(this.element),
             selectOnTab: true,
             maxOptions: null,
             dropdownParent: dropdownParent,
@@ -85,30 +79,10 @@ export default class extends Controller {
     }
 
     renderItem(data, escape) {
-        //The empty option is rendered muted
-        if (data.value === "") {
-            let text = data.text;
-            //If no text was defined on the option, we use the empty message
-            if (!text) {
-                text = this._emptyMessage;
-            }
-            //And if that is not defined, we use a space to make the option visible
-            if (!text) {
-                text = " ";
-            }
-            return '<div class="text-muted">' + escape(text) + '</div>';
-
-        }
-
         return '<div>' + escape(data.text) + '</div>';
     }
 
     renderOption(data, escape) {
-        //The empty option is rendered muted
-        if (data.value === "" && data.text === "") {
-            return '<div>&nbsp;</div>';
-        }
-
         return '<div>' + escape(data.text) + '</div>';
     }
 

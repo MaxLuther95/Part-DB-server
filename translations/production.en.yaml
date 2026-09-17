@@ -39,6 +39,7 @@ production:
     description: Description
     notes: Notes
     no_notes: No notes available.
+    add_note: Add note
     status: Status
     yes: Yes
     no: No
@@ -265,6 +266,10 @@ production:
     note: Note
     inventory_part: Inventory part
   material_plan:
+    site_missing: Production site not set
+    order_part_covered: Order demand covered
+    order_part_missing: 'Missing for order: %count%'
+    order_part_breakdown: 'Total order demand for this part: %required%. Site: %site%. Free: %available%; covered reservations at site: %reserved%; provided: %allocated%; installed: %consumed%.'
     release_confirm: Release all open material reservations for this project?
     label: Material availability
     complete: All parts available

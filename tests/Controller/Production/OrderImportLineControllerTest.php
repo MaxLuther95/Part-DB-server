@@ -22,7 +22,7 @@ final class OrderImportLineControllerTest extends WebTestCase
         $customer = (new Customer())->setName('Synthetic customer')->setCustomerNumber('OPEN-C');
         $project = (new ProductionProject())->setName('Synthetic project')->setProjectNumber('OPEN-P');
         $order = (new CustomerProject())->setName('Synthetic order')->setOrderNumber('OPEN-O')->setCustomer($customer)->setProductionProject($project)->setStatus(CustomerProjectStatus::Commissioned);
-        $line = (new OrderImportLine())->setOrder($order)->setDescription('Custom item <script>unsafe</script>')->setLineNumber(7)->setQuantity(2);
+        $line = (new OrderImportLine())->setOrder($order)->setDescription('Custom item <script>unsafe</script>')->setLineNumber(7)->setQuantity(2)->setNotes("Synthetic detail <script>example</script>.\n".str_repeat("Long detail with quotes \" and Umlaut ä.\n", 12));
         foreach ([$customer, $project, $order, $line] as $entity) {
             $em->persist($entity);
         }
@@ -41,6 +41,7 @@ final class OrderImportLineControllerTest extends WebTestCase
         self::assertSelectorExists('[data-order-section="positions"] [data-import-line]');
         self::assertSelectorNotExists('[data-order-section="accessories"] [data-import-line]');
         self::assertSelectorNotExists('[data-import-line] script');
+        self::assertSame($line->getNotes(), $crawler->filter('[data-import-line] .fa-note-sticky')->attr('title'));
         self::assertSelectorTextContains('[data-import-line]', 'Assignment pending');
         $note = $crawler->filter('[data-import-line] form')->form();
         $edit = $client->request('GET', $url.'/edit');
@@ -106,10 +107,69 @@ final class OrderImportLineControllerTest extends WebTestCase
         self::assertCount('part' === $field ? 1 : 0, $accessories);
         if ('part' === $field) {
             self::assertSame(2, $accessories[0]->getQuantity());
+            self::assertSame($line->getNotes(), $accessories[0]->getNote());
+            self::assertSame($line->getNotes(), $client->getCrawler()->filter('[data-order-section="accessories"] .fa-note-sticky')->attr('title'));
+            self::assertSelectorNotExists('[data-order-section="accessories"] script');
         } else {
+            foreach ($positions as $position) { self::assertSame($line->getNotes(), $position->getNotes()); }
             self::assertSame([0, 1], array_map(static fn(ProjectPosition $position): int => $position->getPosition(), $positions));
             self::assertFalse($em->find(CustomerProject::class, $order->getId())->isReadyForCompletion());
         }
+    }
+
+    public function testAccessoryNotesCanBeEditedAndClearedWithoutTruncation(): void
+    {
+        $client = self::createClient();
+        [$admin, $order, $line] = $this->seed();
+        $client->loginUser($admin);
+        $em = self::getContainer()->get(EntityManagerInterface::class);
+        $part = $em->getRepository(Part::class)->findOneBy([]);
+        $crawler = $client->request('GET', '/en/production/import-lines/'.$line->getId().'/assign');
+        $client->submit($crawler->filter('form[name="order_import_line_assignment"]')->form([
+            'order_import_line_assignment[part]' => (string) $part->getId(),
+        ]));
+        $em = self::getContainer()->get(EntityManagerInterface::class);
+        $accessory = $em->getRepository(ProjectAccessory::class)->findOneBy(['customerProject' => $order->getId()]);
+        $url = '/en/production/accessories/'.$accessory->getId().'/edit';
+        $crawler = $client->request('GET', $url);
+        self::assertSelectorExists('textarea[name="project_accessory[note]"][maxlength="50000"]');
+        self::assertSame($line->getNotes(), $crawler->filter('form[name="project_accessory"]')->form()['project_accessory[note]']->getValue());
+        $client->submit($crawler->filter('form[name="project_accessory"]')->form(['project_accessory[note]' => str_repeat('A', 50001)]));
+        self::assertFalse($client->getResponse()->isRedirect());
+        $em = self::getContainer()->get(EntityManagerInterface::class);
+        $em->clear();
+        self::assertSame($line->getNotes(), $em->find(ProjectAccessory::class, $accessory->getId())->getNote());
+        foreach (["Manually edited <script>example</script>.\n".str_repeat('Long detail. ', 30), ''] as $notes) {
+            $crawler = $client->request('GET', $url);
+            $client->submit($crawler->filter('form[name="project_accessory"]')->form(['project_accessory[note]' => $notes]));
+            self::assertResponseRedirects('/en/production/customer-projects/'.$order->getId());
+            $crawler = $client->followRedirect();
+            self::assertSelectorNotExists('[data-order-section="accessories"] script');
+            if ('' === $notes) {
+                self::assertSelectorNotExists('[data-order-section="accessories"] .fa-note-sticky');
+            } else {
+                self::assertSame(trim($notes), $crawler->filter('[data-order-section="accessories"] .fa-note-sticky')->attr('title'));
+            }
+        }
+    }
+
+    public function testEmptyImportedNotesDoNotGenerateAccessoryNotes(): void
+    {
+        $client = self::createClient();
+        [$admin, $order, $line] = $this->seed();
+        $em = self::getContainer()->get(EntityManagerInterface::class);
+        $line->setNotes(null);
+        $part = $em->getRepository(Part::class)->findOneBy([]);
+        $em->flush();
+        $client->loginUser($admin);
+        $crawler = $client->request('GET', '/en/production/import-lines/'.$line->getId().'/assign');
+        $client->submit($crawler->filter('form[name="order_import_line_assignment"]')->form([
+            'order_import_line_assignment[part]' => (string) $part->getId(),
+        ]));
+        $client->followRedirect();
+        self::assertSelectorNotExists('[data-order-section="accessories"] .fa-note-sticky');
+        $em = self::getContainer()->get(EntityManagerInterface::class);
+        self::assertSame('', $em->getRepository(ProjectAccessory::class)->findOneBy(['customerProject' => $order->getId()])->getNote());
     }
 
     public function testInvalidSelectionAndCsrfCannotChangePosition(): void

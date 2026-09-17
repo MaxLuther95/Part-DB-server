@@ -53,8 +53,8 @@ class ProjectAccessory extends AbstractProductionEntity
     #[ORM\Column(name: 'serial_tracking', type: Types::BOOLEAN, options: ['default' => false])]
     private bool $serialTracking = false;
 
-    #[ORM\Column(type: Types::STRING, length: 255, options: ['default' => ''])]
-    #[Assert\Length(max: 255)]
+    #[ORM\Column(type: Types::TEXT, options: ['default' => ''])]
+    #[Assert\Length(max: 50000)]
     private string $note = '';
 
     public function getCustomerProject(): ?CustomerProject

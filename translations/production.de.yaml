@@ -39,6 +39,7 @@ production:
     description: Beschreibung
     notes: Notizen
     no_notes: Keine Notizen vorhanden.
+    add_note: Notiz hinzufügen
     status: Status
     yes: Ja
     no: Nein
@@ -265,6 +266,10 @@ production:
     note: Notiz
     inventory_part: Lagerteil
   material_plan:
+    site_missing: Standort nicht festgelegt
+    order_part_covered: Auftragsbedarf gedeckt
+    order_part_missing: 'Im Auftrag fehlen: %count%'
+    order_part_breakdown: 'Gesamter Auftragsbedarf dieses Teils: %required%. Standort: %site%. Frei: %available%; gedeckt reserviert am Standort: %reserved%; bereitgestellt: %allocated%; verbaut: %consumed%.'
     release_confirm: Alle offenen Materialreservierungen dieses Projekts freigeben?
     label: Materialverfügbarkeit
     complete: Alle Teile verfügbar

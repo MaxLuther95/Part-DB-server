@@ -44,6 +44,21 @@ final class OrderImportSecurityTest extends TestCase
         self::assertSame('DEMO-SYSTEM-20/3', $result['lines'][0]['description']);
     }
 
+    public function testPdfTextContainingOperatorNamesIsNotTruncated(): void
+    {
+        $path = $this->writeTemporaryPdf(implode("\n", [
+            'BT (Document #: SYNTHETIC-ORDER) Tj ET',
+            'BT (1 ETHERNET SET 1 pcs.) Tj ET',
+            'BT (A literal ET command and BT text belong to this note.) Tj ET',
+            'BT (Escaped \\(ET\\) stays in the note.) Tj ET',
+            'BT (total amount 100 EUR) Tj ET',
+        ]));
+        $result = $this->createParser()->parseFile($path);
+        self::assertSame('SYNTHETIC-ORDER', $result['order_number']);
+        self::assertSame('ETHERNET SET', $result['lines'][0]['description']);
+        self::assertSame("A literal ET command and BT text belong to this note.\nEscaped (ET) stays in the note.", $result['lines'][0]['notes']);
+    }
+
     public function testPositionedOrderConfirmationIsReconstructedInVisualOrder(): void
     {
         $path = $this->writeTemporaryPdf(implode("\n", [
@@ -93,7 +108,7 @@ final class OrderImportSecurityTest extends TestCase
         self::assertSame('PROJECT-DEMO-02', $result['project_number']);
         self::assertSame('2026-04-22', $result['order_date']);
         self::assertSame('REFERENCE-DEMO-02', $result['reference']);
-        self::assertSame([['number' => 1, 'description' => 'DEMO-SYSTEM-6/1', 'quantity' => 1, 'unit' => 'set']], $result['lines']);
+        self::assertSame([['number' => 1, 'description' => 'DEMO-SYSTEM-6/1', 'notes' => '', 'quantity' => 1, 'unit' => 'set']], $result['lines']);
     }
 
     public function testGermanColumnsKeepVatOutOfQuantityAndFooterOutOfNotes(): void
@@ -140,6 +155,62 @@ final class OrderImportSecurityTest extends TestCase
         self::assertSame('', $this->createParser()->parseText("Customer #:\nProject #: SYNTHETIC-P\nDate: 2026-09-15")['customer_number']);
         self::assertSame('', $this->createParser()->parseText('Datum: 31.02.2026')['order_date']);
         self::assertSame('REF TWO WORDS', $this->createParser()->parseText('Your Reference #: REF TWO WORDS from 2026-09-15')['reference']);
+    }
+
+    public function testPositionNotesStayWithTheirPositionAcrossPages(): void
+    {
+        $header = [[300, 2200, 'Bezeichnung'], [1200, 2200, 'Menge'], [1300, 2200, 'Einh.'], [1450, 2200, 'MwSt.']];
+        $first = [...$header,
+            [200, 2100, '1'], [300, 2100, 'First item'], [1260, 2100, '2 '], [1300, 2100, 'Stk.'],
+            [300, 2050, 'First detail <script>example</script>.'],
+            [300, 2000, 'Second detail.'],
+            [200, 200, 'Example company '], [1700, 200, 'Sitz: Example city'],
+            [300, 150, 'Footer must not become a position note.'],
+        ];
+        $second = [[200, 2500, 'Seite 2'], ...$header,
+            [300, 2150, 'Continuation of first item.'],
+            [200, 2050, '2'], [300, 2050, 'Second item'], [1260, 2050, '1 '], [1300, 2050, 'psch'],
+            [300, 2000, 'Only the second item.'],
+            [1600, 1900, 'Gesamtbetrag'], [1900, 1900, '100,00 EUR'],
+            [300, 1800, 'General order note.'],
+        ];
+        $stream = static fn(array $rows): string => implode("\n", array_map(static fn(array $row): string => sprintf('BT 1 0 0 1 %d %d Tm (%s) Tj ET', ...$row), $rows));
+        $pdf = $this->writeTemporaryPdf($stream($first)."\nendstream\nendobj\n2 0 obj <<>>\nstream\n".$stream($second));
+        $result = $this->createParser()->parseFile($pdf);
+        self::assertCount(2, $result['lines']);
+        self::assertSame("First detail <script>example</script>.\nSecond detail.\nContinuation of first item.", $result['lines'][0]['notes']);
+        self::assertSame('Only the second item.', $result['lines'][1]['notes']);
+        self::assertSame('General order note.', $result['notes']);
+    }
+
+    public function testPlainAndVerticalPositionNotesRemainSeparateFromTotals(): void
+    {
+        foreach (["1 First item 2 pcs.", "1\nFirst item\n2\npcs."] as $position) {
+            $result = $this->createParser()->parseText($position."\nDescription of this item.\nSecond detail.\n100.00 EUR\nGesamtbetrag 100 EUR\n3 Not a position 1 pcs.");
+            self::assertCount(1, $result['lines']);
+            self::assertSame("Description of this item.\nSecond detail.", $result['lines'][0]['notes']);
+            self::assertSame('3 Not a position 1 pcs.', $result['notes']);
+        }
+    }
+
+    public function testInvalidNumberedPositionCannotLeakIntoPreviousNotes(): void
+    {
+        $rows = [[300, 2200, 'Bezeichnung'], [1200, 2200, 'Menge'], [1300, 2200, 'Einh.'], [1450, 2200, 'MwSt.'],
+            [200, 2100, '1'], [300, 2100, 'Valid item'], [1260, 2100, '2 '], [1300, 2100, 'Stk.'],
+            [300, 2050, 'Valid detail.'],
+            [200, 1950, '2'], [300, 1950, 'Unrecognized quantity'], [1260, 1950, 'one '], [1300, 1950, 'Stk.'],
+            [300, 1900, 'Must not be attached to item one.'],
+        ];
+        $stream = implode("\n", array_map(static fn(array $row): string => sprintf('BT 1 0 0 1 %d %d Tm (%s) Tj ET', ...$row), $rows));
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('keine sicher erkennbare Anzahl');
+        $this->createParser()->parseFile($this->writeTemporaryPdf($stream));
+    }
+
+    public function testExcessivePositionNotesAreRejectedInsteadOfTruncated(): void
+    {
+        $this->expectException(\RuntimeException::class);
+        $this->createParser()->parseText("1 Synthetic 1 pcs.\n".str_repeat('A', 50001));
     }
 
     public function testExecutableExtensionAndIncompletePdfAreRejected(): void

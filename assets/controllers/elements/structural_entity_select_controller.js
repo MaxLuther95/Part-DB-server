@@ -20,6 +20,7 @@
 import "tom-select/dist/css/tom-select.bootstrap5.css";
 import '../../css/components/tom-select_extensions.css';
 import TomSelect from "tom-select";
+import placeholderSettings from '../../tomselect/placeholder_settings';
 import {Controller} from "@hotwired/stimulus";
 
 import {trans} from '../../translator.js'
@@ -32,12 +33,7 @@ TomSelect.define('form_reset_handler', TomSelect_form_reset_handler)
 export default class extends Controller {
     _tomSelect;
 
-    _emptyMessage;
-
     connect() {
-
-        //Extract empty message from data attribute
-        this._emptyMessage = this.element.getAttribute("data-empty-message") ?? "";
 
         const allowAdd = this.element.getAttribute("data-allow-add") === "true";
         const addHint = this.element.getAttribute("data-add-hint") ?? "";
@@ -49,7 +45,7 @@ export default class extends Controller {
 
 
         let settings = {
-            allowEmptyOption: true,
+            ...placeholderSettings(this.element),
             selectOnTab: true,
             maxOptions: null,
             create: allowAdd ? this.createItem.bind(this) : false,
@@ -76,7 +72,7 @@ export default class extends Controller {
                     //This here handles the display part, while the createItem function handles the actual creation
                     if (data.input.startsWith("->")) {
                         //Get current selected value
-                        const current = this._tomSelect.getItem(this._tomSelect.getValue()).textContent.replaceAll("→", "->").trim();
+                        const current = this._tomSelect.getItem(this._tomSelect.getValue())?.textContent.replaceAll("→", "->").trim() ?? '';
                         //Prepend it to the input
                         if (current) {
                             data.input = current + " " + data.input;
@@ -109,8 +105,6 @@ export default class extends Controller {
 
         this._tomSelect = new TomSelect(this.element, settings);
 
-        //Do not do a sync here as this breaks the initial rendering of the empty option
-        //this._tomSelect.sync();
     }
 
     createItem(input, callback) {
@@ -118,7 +112,7 @@ export default class extends Controller {
         //If the input starts with "->", we prepend the current selected value, for easier extension of existing values
         if (input.startsWith("->")) {
             //Get current selected value
-            let current = this._tomSelect.getItem(this._tomSelect.getValue()).textContent.replaceAll("→", "->").trim();
+            let current = this._tomSelect.getItem(this._tomSelect.getValue())?.textContent.replaceAll("→", "->").trim() ?? '';
             //Replace no break spaces with normal spaces
             current = current.replaceAll("\u00A0", " ");
             //Prepend it to the input
@@ -182,15 +176,6 @@ export default class extends Controller {
     }
 
     renderItem(data, escape) {
-        //Render empty option as full row
-        if (data.value === "") {
-            if (this._emptyMessage) {
-                return '<div class="tom-select-empty-option"><span class="text-muted"><b>' + escape(this._emptyMessage) + '</b></span></div>';
-            } else {
-                return '<div>&nbsp;</div>';
-            }
-        }
-
         if (data.short) {
             let short = escape(data.short)
 
@@ -218,16 +203,6 @@ export default class extends Controller {
     }
 
     renderOption(data, escape) {
-        //Render empty option as full row
-        if (data.value === "") {
-            if (this._emptyMessage) {
-                return '<div class="tom-select-empty-option"><span class="text-muted">' + escape(this._emptyMessage) + '</span></div>';
-            } else {
-                return '<div>&nbsp;</div>';
-            }
-        }
-
-
         //Indent the option according to the level
         let level_html = '&nbsp;&nbsp;&nbsp;'.repeat(data.level);
 

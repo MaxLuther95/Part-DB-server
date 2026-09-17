@@ -9,7 +9,7 @@ use App\Entity\Production\ProjectAccessory;
 use Symfony\Bridge\Doctrine\Form\Type\EntityType;
 use Symfony\Component\Form\AbstractType;
 use Symfony\Component\Form\Extension\Core\Type\IntegerType;
-use Symfony\Component\Form\Extension\Core\Type\TextType;
+use Symfony\Component\Form\Extension\Core\Type\TextareaType;
 use Symfony\Component\Form\FormBuilderInterface;
 use Symfony\Component\OptionsResolver\OptionsResolver;
 
@@ -27,10 +27,11 @@ final class ProjectAccessoryType extends AbstractType
                 'label' => 'production.accessory.quantity',
                 'attr' => ['min' => 1],
             ])
-            ->add('note', TextType::class, [
+            ->add('note', TextareaType::class, [
                 'label' => 'production.accessory.note',
                 'required' => false,
                 'empty_data' => '',
+                'attr' => ['rows' => 4, 'maxlength' => 50000],
             ]);
     }
 

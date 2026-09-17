@@ -4,6 +4,7 @@
 {% block card_content %}
     <p>PDF-Position {{ line.lineNumber }}: <strong>{{ line.description }}</strong> · {{ line.quantity }} {{ line.unitLabel }}</p>
     <p class="text-muted">Genau ein Ziel auswählen. Systemvorlagen und Bauprojekte erzeugen Fertigungspositionen. Lagerteile erscheinen als zusätzliches Zubehör im Materialbedarf.</p>
+    {% if line.notes %}<div class="mb-3 text-break">{{ line.notes|nl2br }}</div>{% endif %}
     {{ form_start(form) }}
     {{ form_widget(form) }}
     <button type="submit" class="btn btn-success">Zuordnung übernehmen</button>

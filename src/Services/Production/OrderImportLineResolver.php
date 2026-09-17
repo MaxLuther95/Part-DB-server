@@ -40,7 +40,7 @@ final readonly class OrderImportLineResolver
         if ($target instanceof Part) {
             $this->entityManager->persist((new ProjectAccessory())
                 ->setCustomerProject($order)->setPart($target)->setQuantity($line->getQuantity())
-                ->setNote(sprintf('PDF-Position %d: %s', $line->getLineNumber(), $line->getDescription())));
+                ->setNote($line->getNotes() ?? ''));
         } else {
             $snapshot = $this->snapshots->capture($target);
             $this->entityManager->persist($snapshot);
@@ -48,6 +48,7 @@ final readonly class OrderImportLineResolver
             $number = [] === $positions ? 0 : max(array_map(static fn(ProjectPosition $position): int => $position->getPosition(), $positions)) + 1;
             for ($index = 1; $index <= $line->getQuantity(); ++$index) {
                 $position = (new ProjectPosition())->setCustomerProject($order)->setPosition($number++)->setQuantity(1)
+                    ->setNotes($line->getNotes())
                     ->setName($line->getQuantity() > 1 ? sprintf('%s %d', $line->getDescription(), $index) : $line->getDescription());
                 if ($target instanceof SystemTemplate) {
                     $position->setSystemTemplate($target);

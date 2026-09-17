@@ -19,6 +19,7 @@
 
 import {Controller} from "@hotwired/stimulus";
 import TomSelect from "tom-select";
+import placeholderSettings from '../../tomselect/placeholder_settings';
 
 // TODO: Merge with select_controller.js
 
@@ -33,7 +34,7 @@ export default class extends Controller {
 
         this._tomSelect = new TomSelect(this.element, {
             maxItems: 1000,
-            allowEmptyOption: true,
+            ...placeholderSettings(this.element),
             dropdownParent: dropdownParent,
             selectOnTab: true,
             clearAfterSelect: true,
