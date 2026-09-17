@@ -32,7 +32,14 @@ final class ManufacturingDefinition
     public function getSlots(): array { return $this->slots; }
     public function getSlot(int $id): ?ManufacturingSlot { return $this->slots[$id] ?? null; }
     /** @return list<array{part_id: int|null, name: string, quantity: float}> */
-    public function getBom(): array { return array_map(static fn(array $row): array => [...$row, 'quantity' => (float) $row['quantity']], $this->data['bom']); }
+    public function getBom(): array
+    {
+        return array_map(static fn(array $row): array => [
+            'part_id' => $row['part_id'],
+            'name' => $row['name'],
+            'quantity' => (float) $row['quantity'],
+        ], $this->data['bom']);
+    }
     /** @return list<int> */
     public function getProjectIds(): array { return $this->data['project_ids']; }
     /** @return list<Project> */
@@ -54,6 +61,31 @@ final class ManufacturingDefinition
         }
         return $rows;
     }
-    public function getFingerprint(): string { return hash('sha256', json_encode($this->data, JSON_THROW_ON_ERROR)); }
+    public function getFingerprint(): string
+    {
+        return hash('sha256', json_encode(self::canonicalize($this->data), JSON_THROW_ON_ERROR));
+    }
+
+    /**
+     * MySQL stores JSON object keys in its own order. Object key order must not
+     * invalidate a reviewed build; list order and every value remain significant.
+     *
+     * @param array<array-key, mixed> $data
+     * @return array<array-key, mixed>
+     */
+    private static function canonicalize(array $data): array
+    {
+        foreach ($data as &$value) {
+            if (is_array($value)) {
+                $value = self::canonicalize($value);
+            }
+        }
+        unset($value);
+        if (!array_is_list($data)) {
+            ksort($data, SORT_STRING);
+        }
+
+        return $data;
+    }
     public function getSnapshot(): ManufacturingSnapshot { return $this->snapshot; }
 }

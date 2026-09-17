@@ -4,14 +4,7 @@ permissions:
     contents: read
 
 on:
-  push:
-    branches:
-      - '*'
-      - "!l10n_*" # Dont test localization branches
-  pull_request:
-    branches:
-      - '*'
-      - "!l10n_*"
+  workflow_call:
 
 jobs:
   phpunit:
@@ -39,11 +32,11 @@ jobs:
         if: matrix.db-type == 'mysql'
 
       - name: Set Database env for SQLite
-        run: echo "DATABASE_URL="sqlite:///%kernel.project_dir%/var/app_test.db"" >> $GITHUB_ENV
+        run: echo "DATABASE_URL=sqlite:///%kernel.project_dir%/var/app_test.db" >> $GITHUB_ENV
         if: matrix.db-type == 'sqlite'
 
       - name: Set Database env for PostgreSQL
-        run: echo "DATABASE_URL=postgresql://postgres:postgres @127.0.0.1:5432/partdb?serverVersion=14&charset=utf8" >> $GITHUB_ENV
+        run: echo "DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:5432/partdb?serverVersion=14&charset=utf8" >> $GITHUB_ENV
         if: matrix.db-type == 'postgres'
 
       - name: Checkout

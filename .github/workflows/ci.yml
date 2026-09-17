@@ -1,0 +1,33 @@
+name: CI
+
+on:
+  push:
+    branches: ['**', '!l10n_**']
+  pull_request:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    uses: ./.github/workflows/tests.yml
+  analysis:
+    uses: ./.github/workflows/static_analysis.yml
+  upgrade:
+    uses: ./.github/workflows/upgrade_test.yml
+  checks:
+    name: Release checks
+    if: always()
+    needs: [tests, analysis, upgrade]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every check to succeed
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          python3 - <<'PY'
+          import json, os
+          results = json.loads(os.environ['RESULTS'])
+          assert results and all(job['result'] == 'success' for job in results.values()), 'Required checks did not all succeed'
+          PY

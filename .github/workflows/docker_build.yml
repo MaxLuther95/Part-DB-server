@@ -1,165 +1,124 @@
-name: Docker Image Build
-
-permissions:
-    contents: read
-    packages: write
+name: Build release images
 
 on:
-  #schedule:
-  #  - cron: '0 10 * * *' # everyday at 10am
-  push:
-    branches:
-      - '**'
-      - '!l10n_**'
-    tags:
-      - 'v*.*.*'
-      - 'v*.*.*-**'
+  workflow_call:
+    inputs:
+      version:
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  packages: write
 
 jobs:
   build:
     strategy:
+      fail-fast: false
       matrix:
+        variant: [apache, frankenphp]
+        arch: [amd64, arm64]
         include:
-          - platform: linux/amd64
+          - arch: amd64
             runner: ubuntu-latest
-            platform-slug: amd64
-          - platform: linux/arm64
+          - arch: arm64
             runner: ubuntu-24.04-arm
-            platform-slug: arm64
+          - variant: apache
+            dockerfile: Dockerfile
+            image: ghcr.io/maxluther95/part-db-server
+          - variant: frankenphp
+            dockerfile: Dockerfile-frankenphp
+            image: ghcr.io/maxluther95/part-db-server-frankenphp
     runs-on: ${{ matrix.runner }}
     steps:
-      -
-        name: Checkout
-        uses: actions/checkout@v7
-
-      - name: Check source privacy
-        run: python3 .github/privacy/check_source_privacy.py --ref HEAD
-      -
-        name: Docker meta
-        id: docker_meta
-        uses: docker/metadata-action@v6
+      - uses: actions/checkout@v7
         with:
-          # list of Docker images to use as base name for tags
-          images: |
-            ghcr.io/maxluther95/part-db-server
-          # Mark the image build from master as latest (as we dont have really releases yet)
-          tags: |
-            type=edge,branch=master
-            type=raw,value=current,enable=${{ github.ref == 'refs/heads/ProjectManager' }}
-            type=ref,event=branch
-            type=ref,event=tag
-            type=schedule
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
-            type=ref,event=pr
-          labels: |
-            org.opencontainers.image.source=${{ github.event.repository.clone_url }}
-            org.opencontainers.image.revision=${{ github.sha }}
-            org.opencontainers.image.title=Part-DB
-            org.opencontainers.image.description=Part-DB is a web application for managing electronic components and your inventory.
-            org.opencontainers.image.url=https://github.com/Part-DB/Part-DB-symfony
-            org.opencontainers.image.source=https://github.com/Part-DB/Part-DB-symfony
-            org.opencontainers.image.authors=Jan Böhmer
-            org.opencontainers.licenses=AGPL-3.0-or-later
-          # Disable automatic 'latest' tag in build jobs - it will be created in merge job
-          flavor: |
-            latest=false
-
-      -
-        name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
-      -
-        name: Login to GitHub Container Registry
-        if: github.event_name != 'pull_request'
-        uses: docker/login-action@v4
+          persist-credentials: false
+      - name: Check source and create isolated build context
+        run: |
+          python3 .github/privacy/check_source_privacy.py --ref HEAD
+          mkdir "$RUNNER_TEMP/release-source"
+          git archive HEAD | tar -x -C "$RUNNER_TEMP/release-source"
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-
-      -
-        name: Build and push by digest
+      - name: Build and push by digest
         id: build
         uses: docker/build-push-action@v7
         with:
-          context: .
-          platforms: ${{ matrix.platform }}
-          labels: ${{ steps.docker_meta.outputs.labels }}
-          outputs: type=image,name=ghcr.io/maxluther95/part-db-server,push-by-digest=true,name-canonical=true,push=${{ github.event_name != 'pull_request' }}
-          cache-from: type=gha,scope=build-${{ matrix.platform }}
-          cache-to: type=gha,mode=max,scope=build-${{ matrix.platform }}
-
-      -
-        name: Export digest
-        if: github.event_name != 'pull_request'
+          context: ${{ runner.temp }}/release-source
+          file: ${{ runner.temp }}/release-source/${{ matrix.dockerfile }}
+          platforms: linux/${{ matrix.arch }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.url=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ inputs.version }}
+            org.opencontainers.image.title=Part-DB with production extension
+            org.opencontainers.image.licenses=AGPL-3.0-or-later
+          outputs: type=image,name=${{ matrix.image }},push-by-digest=true,name-canonical=true,push=true
+          cache-from: type=gha,scope=release-${{ matrix.variant }}-${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=release-${{ matrix.variant }}-${{ matrix.arch }}
+      - name: Export digest
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
         run: |
-          mkdir -p /tmp/digests
-          digest="${{ steps.build.outputs.digest }}"
-          touch "/tmp/digests/${digest#sha256:}"
-
-      -
-        name: Upload digest
-        if: github.event_name != 'pull_request'
-        uses: actions/upload-artifact@v7
+          mkdir -p "$RUNNER_TEMP/digests"
+          touch "$RUNNER_TEMP/digests/${DIGEST#sha256:}"
+      - uses: actions/upload-artifact@v7
         with:
-          name: digests-${{ matrix.platform-slug }}
-          path: /tmp/digests/*
+          name: digests-${{ matrix.variant }}-${{ matrix.arch }}
+          path: ${{ runner.temp }}/digests/*
           if-no-files-found: error
           retention-days: 1
 
-  merge:
+  publish:
+    needs: build
+    strategy:
+      matrix:
+        include:
+          - variant: apache
+            image: ghcr.io/maxluther95/part-db-server
+          - variant: frankenphp
+            image: ghcr.io/maxluther95/part-db-server-frankenphp
     runs-on: ubuntu-latest
-    needs:
-      - build
-    if: github.event_name != 'pull_request'
     steps:
-      -
-        name: Download digests
-        uses: actions/download-artifact@v8
+      - uses: actions/checkout@v7
         with:
-          path: /tmp/digests
-          pattern: digests-*
+          persist-credentials: false
+      - uses: actions/download-artifact@v8
+        with:
+          path: ${{ runner.temp }}/digests
+          pattern: digests-${{ matrix.variant }}-*
           merge-multiple: true
-
-      -
-        name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
-
-      -
-        name: Docker meta
-        id: docker_meta
-        uses: docker/metadata-action@v6
-        with:
-          images: |
-            ghcr.io/maxluther95/part-db-server
-          tags: |
-            type=edge,branch=master
-            type=raw,value=current,enable=${{ github.ref == 'refs/heads/ProjectManager' }}
-            type=ref,event=branch
-            type=ref,event=tag
-            type=schedule
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
-            type=ref,event=pr
-
-      -
-        name: Login to GitHub Container Registry
-        uses: docker/login-action@v4
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-
-      -
-        name: Create manifest list and push
-        working-directory: /tmp/digests
+      - name: Refuse replacing an existing version
+        env:
+          GHCR_USER: ${{ github.actor }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_IMAGE: ${{ matrix.image }}
+          RELEASE_VERSION: ${{ inputs.version }}
+        run: python3 .github/release/check_release.py --image-only
+      - name: Publish version manifest
+        env:
+          RELEASE_IMAGE: ${{ matrix.image }}
+          RELEASE_VERSION: ${{ inputs.version }}
         run: |
-          docker buildx imagetools create $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
-            $(printf 'ghcr.io/maxluther95/part-db-server@sha256:%s ' *)
-
-      -
-        name: Inspect image
-        run: |
-          docker buildx imagetools inspect ghcr.io/maxluther95/part-db-server:${{ steps.docker_meta.outputs.version }}
+          python3 - <<'PY'
+          import os, pathlib, re, subprocess
+          digests = sorted(p.name for p in (pathlib.Path(os.environ['RUNNER_TEMP']) / 'digests').iterdir())
+          assert len(digests) == 2 and all(re.fullmatch('[0-9a-f]{64}', d) for d in digests)
+          image = os.environ['RELEASE_IMAGE']
+          tag = image + ':' + os.environ['RELEASE_VERSION']
+          subprocess.run(['docker', 'buildx', 'imagetools', 'create', '--tag', tag,
+                          *[image + '@sha256:' + d for d in digests]], check=True)
+          subprocess.run(['docker', 'buildx', 'imagetools', 'inspect', tag], check=True)
+          PY

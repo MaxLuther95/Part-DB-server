@@ -103,8 +103,15 @@ final readonly class SerialNumberManager
 
     private function exists(string $serial, ?int $except = null): bool
     {
+        $sql = 'SELECT id FROM production_build_instances WHERE serial_number = ?';
+        $parameters = [$serial];
+        if (null !== $except) {
+            $sql .= ' AND id <> ?';
+            $parameters[] = $except;
+        }
+
         return false !== $this->em->getConnection()
-            ->fetchOne('SELECT id FROM production_build_instances WHERE serial_number = ? AND (? IS NULL OR id <> ?)', [$serial, $except, $except]);
+            ->fetchOne($sql, $parameters);
     }
 
     public function validate(SystemTemplate|Project|null $content, ?string $serial): void
@@ -195,7 +202,13 @@ final readonly class SerialNumberManager
         $range = $this->em->find(SerialNumberRange::class, $current['id']);
         $number = $this->ordinal($serial, (string) $current['prefix'], (int) $current['minimum_digits']);
         // A locking read sees concurrent commits even under MariaDB REPEATABLE READ.
-        if (false !== $db->fetchOne('SELECT id FROM production_build_instances WHERE (serial_number = ? OR (serial_number_range_id = ? AND serial_ordinal = ?)) AND (? IS NULL OR id <> ?)'.$lock, [$serial, $current['id'], $number, $instance->getId(), $instance->getId()])) {
+        $sql = 'SELECT id FROM production_build_instances WHERE (serial_number = ? OR (serial_number_range_id = ? AND serial_ordinal = ?))';
+        $parameters = [$serial, $current['id'], $number];
+        if (null !== $instance->getId()) {
+            $sql .= ' AND id <> ?';
+            $parameters[] = $instance->getId();
+        }
+        if (false !== $db->fetchOne($sql.$lock, $parameters)) {
             throw new \RuntimeException('Diese Seriennummer wurde inzwischen vergeben. Bitte eine andere Nummer prüfen und bestätigen.');
         }
         $db->executeStatement('UPDATE production_serial_number_ranges SET next_number = ?, version = version + 1 WHERE id = ?', [max((int) $current['next_number'], $number + 1), $current['id']]);

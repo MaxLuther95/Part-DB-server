@@ -6,22 +6,19 @@ permissions:
 on:
   push:
     branches:
-      - '*'
-      - "!l10n_*" # Dont test localization branches
-    tags:
-      - 'v*.*.*'
-      - 'v*.*.*-**'
+      - '**'
+      - "!l10n_**" # Dont test localization branches
   pull_request:
     branches:
-      - '*'
-      - "!l10n_*"
+      - '**'
+      - "!l10n_**"
 
 jobs:
   assets_artifact_build:
     name: Build assets artifact
     runs-on: ubuntu-22.04
     permissions:
-      contents: write
+      contents: read
 
     env:
       APP_ENV: prod
@@ -81,8 +78,10 @@ jobs:
       - name: Remove node_modules/ folder
         run: rm -rf node_modules/
 
-      - name: Zip the current folder
-        run: zip -r /tmp/partdb_with_assets.zip . -x .git/\* -x var/\* -x node_modules/\*
+      - name: Package reviewed source with dependencies and built assets
+        run: |
+          git archive --format=zip --output=/tmp/partdb_with_assets.zip HEAD
+          zip -r /tmp/partdb_with_assets.zip public/build/ vendor/
 
       - name: Zip only the assets folder (include public/build/ and vendor/)
         run: zip -r /tmp/partdb_assets.zip public/build/ vendor/
@@ -98,10 +97,3 @@ jobs:
         with:
           name: Full Part-DB including dependencies and built assets
           path: /tmp/partdb_with_assets.zip
-
-      - name: Upload assets as release attachment
-        if: startsWith(github.ref, 'refs/tags/')
-        run: |
-          gh release upload "${{ github.ref_name }}" /tmp/partdb_assets.zip /tmp/partdb_with_assets.zip --clobber
-        env:
-          GH_TOKEN: ${{ github.token }}

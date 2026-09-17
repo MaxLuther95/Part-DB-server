@@ -26,7 +26,7 @@ use App\Repository\Production\ProjectMaterialReservationRepository;
 
 final readonly class ProductionBuildWorkflow
 {
-    public const DRAFT_VERSION = 5;
+    public const DRAFT_VERSION = 6;
 
     public function __construct(
         private EntityManagerInterface $entityManager,

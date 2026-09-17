@@ -1,0 +1,47 @@
+name: Publish production images
+
+on:
+  push:
+    tags: ['production-v*']
+
+# Serialize releases, including retries. Published version tags are never replaced.
+concurrency:
+  group: production-image-publication
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    if: github.repository == 'MaxLuther95/Part-DB-server'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+    outputs:
+      version: ${{ steps.release.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Check source privacy
+        run: python3 .github/privacy/check_source_privacy.py --ref HEAD
+      - name: Validate version, main ancestry and unused image tags
+        id: release
+        env:
+          GHCR_USER: ${{ github.actor }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python3 .github/release/check_release.py
+  checks:
+    needs: validate
+    uses: ./.github/workflows/ci.yml
+  publish:
+    needs: [validate, checks]
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/docker_build.yml
+    with:
+      version: ${{ needs.validate.outputs.version }}

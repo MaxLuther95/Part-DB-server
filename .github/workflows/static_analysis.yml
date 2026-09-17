@@ -4,14 +4,7 @@ permissions:
     contents: read
 
 on:
-  push:
-    branches:
-      - '*'
-      - "!l10n_*" # Dont test localization branches
-  pull_request:
-    branches:
-      - '*'
-      - "!l10n_*"
+  workflow_call:
 
 jobs:
   phpstan:
@@ -25,6 +18,7 @@ jobs:
       run: |
         python3 .github/privacy/check_source_privacy.py --ref HEAD
         python3 .github/privacy/test_source_privacy.py
+        python3 .github/release/test_release.py
 
     - name: Setup PHP
       uses: shivammathur/setup-php@v2

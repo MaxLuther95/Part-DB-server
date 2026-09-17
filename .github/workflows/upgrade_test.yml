@@ -1,0 +1,78 @@
+name: MariaDB upgrade
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  upgrade:
+    name: Official Part-DB upgrade and MariaDB 12.3.3 tests
+    runs-on: ubuntu-latest
+    services:
+      mariadb:
+        image: mariadb:12.3.3
+        env:
+          MARIADB_ROOT_PASSWORD: synthetic-ci-only
+          MARIADB_DATABASE: partdb_upgrade_test
+        ports: ['3306:3306']
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=5s --health-timeout=5s --health-retries=30
+    env:
+      APP_ENV: test
+      APP_DEBUG: '1'
+      DATABASE_URL: mysql://root:synthetic-ci-only@127.0.0.1:3306/partdb_upgrade?serverVersion=12.3.3-MariaDB&charset=utf8mb4
+      CI_UPGRADE_TEST: '1'
+      CHECK_FOR_UPDATES: '0'
+      SYMFONY_DEPRECATIONS_HELPER: disabled
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Check source privacy
+        run: python3 .github/privacy/check_source_privacy.py --ref HEAD
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          coverage: none
+          extensions: mbstring, intl, gd, xsl, gmp, bcmath, pdo_mysql, pdo_sqlite, :php-psr
+      - run: composer install --prefer-dist --no-progress
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+      - run: yarn install --frozen-lockfile && yarn build
+      - name: Prepare synthetic fixture state
+        run: |
+          mkdir "$RUNNER_TEMP/upgrade-state"
+          echo "UPGRADE_STATE=$RUNNER_TEMP/upgrade-state/inventory.json" >> "$GITHUB_ENV"
+      - name: Initialize official v2.12.3 with synthetic inventory
+        run: |
+          docker run --rm --network host \
+            --tmpfs /var/www/html/uploads:mode=1777 \
+            --tmpfs /var/www/html/public/media:mode=1777 \
+            -v "$PWD/.github/release:/checks:ro" \
+            -v "$RUNNER_TEMP/upgrade-state:/upgrade-state" \
+            -e APP_ENV=prod -e APP_DEBUG=0 -e CI_UPGRADE_TEST=1 \
+            -e CHECK_FOR_UPDATES=0 -e INITIAL_ADMIN_PW=synthetic-ci-only \
+            -e UPGRADE_STATE=/upgrade-state/inventory.json \
+            -e 'DATABASE_URL=mysql://root:synthetic-ci-only@127.0.0.1:3306/partdb_upgrade_test?serverVersion=12.3.3-MariaDB&charset=utf8mb4' \
+            --entrypoint sh jbtronics/part-db1:v2.12.3 -ec \
+            'php bin/console doctrine:migrations:migrate -n && php /checks/upgrade_fixture.php seed'
+      - name: Reproduce interrupted production index migration
+        run: |
+          php bin/console doctrine:migrations:migrate 'DoctrineMigrations\Version20260831123000' -n
+          php .github/release/upgrade_fixture.php interrupt
+      - name: Complete upgrade and verify preserved inventory
+        run: |
+          php bin/console doctrine:migrations:migrate -n
+          php bin/console doctrine:migrations:up-to-date -n
+          php .github/release/upgrade_fixture.php verify
+          php bin/console doctrine:migrations:migrate -n
+          php .github/release/upgrade_fixture.php verify
+      - name: Test complete application on MariaDB
+        run: |
+          php bin/console partdb:fixtures:load -n
+          php bin/console partdb:oauth:generate-keys -n
+          ./bin/phpunit

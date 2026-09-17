@@ -76,6 +76,22 @@ class SourcePrivacyTest(unittest.TestCase):
         self.stage(".github/assets/legacy_import/db_minimal.sql", b"SELECT 'synthetic replacement';")
         self.assertEqual(self.check("--staged").returncode, 1)
 
+    def test_push_rejects_leak_in_intermediate_commit_even_after_removal(self):
+        self.stage('src/example.php', b'<?php\n')
+        self.git('-c', 'user.name=Synthetic', '-c', 'user.email=synthetic@example.invalid', 'commit', '-qm', 'Synthetic base')
+        self.git('update-ref', 'refs/remotes/origin/main', 'HEAD')
+        self.stage('var/synthetic.db', b'synthetic-only')
+        self.git('-c', 'user.name=Synthetic', '-c', 'user.email=synthetic@example.invalid', 'commit', '-qm', 'Synthetic leak')
+        self.git('rm', 'var/synthetic.db')
+        self.git('-c', 'user.name=Synthetic', '-c', 'user.email=synthetic@example.invalid', 'commit', '-qm', 'Synthetic removal')
+        tip = self.git('rev-parse', 'HEAD').decode().strip()
+        result = subprocess.run(
+            ['python3', str(SCRIPT.with_name('check_push_privacy.py'))], cwd=self.root,
+            input=f'refs/heads/main {tip} refs/heads/main {"0" * 40}\n', text=True, capture_output=True,
+        )
+        self.assertNotEqual(result.returncode, 0)
+        self.assertNotIn('synthetic.db', result.stdout + result.stderr)
+
 
 if __name__ == "__main__":
     unittest.main()

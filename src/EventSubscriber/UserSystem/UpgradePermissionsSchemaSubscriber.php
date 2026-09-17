@@ -88,7 +88,7 @@ readonly class UpgradePermissionsSchemaSubscriber implements EventSubscriberInte
         // the upgraded JSON columns on the already existing user/group rows.
         $this->entityManager->getConnection()
             ->transactional(function (Connection $connection) use ($user): void {
-                $connection->update('users', [
+                $connection->update($connection->quoteIdentifier('users'), [
                     'permissions_data' => $user->getPermissions()
                         ->toPersistenceArray(),
                 ], [
@@ -100,7 +100,7 @@ readonly class UpgradePermissionsSchemaSubscriber implements EventSubscriberInte
 
                 $group = $user->getGroup();
                 while ($group instanceof Group && null !== $group->getId()) {
-                    $connection->update('groups', [
+                    $connection->update($connection->quoteIdentifier('groups'), [
                         'permissions_data' => $group->getPermissions()
                             ->toPersistenceArray(),
                     ], [
